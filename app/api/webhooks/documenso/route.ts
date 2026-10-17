@@ -54,7 +54,6 @@ export async function POST(request: NextRequest) {
           where: { id: data.bookingId },
           data: {
             status: "AGREEMENT_OUT",
-            agreementStatus: "OUT_FOR_SIGNATURE",
           },
         });
       }
@@ -72,7 +71,6 @@ export async function POST(request: NextRequest) {
         await prisma.booking.update({
           where: { id: data.bookingId },
           data: {
-            agreementStatus: "SIGNED",
             status: "CONTRACT_SIGNED_PENDING_PAYMENT",
           },
         });

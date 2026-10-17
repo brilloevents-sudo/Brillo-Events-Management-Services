@@ -7,17 +7,7 @@ export async function GET(request: NextRequest) {
   try {
     const clients = await prisma.client.findMany({
       include: {
-        bookings: {
-          select: {
-            id: true,
-            bookingNumber: true,
-            eventName: true,
-            mallOrVenue: true,
-            eventDate: true,
-            status: true,
-            clientQuotedAmount: true,
-          },
-        },
+        bookings: true,
       },
       orderBy: { createdAt: "desc" },
     });

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { StaticApiFallback } from "@/components/static-api-fallback";
 
 export const metadata: Metadata = {
   title: "Brillo Events Santa Operations Hub",
@@ -14,6 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="bg-obsidian-950 text-slate-100 antialiased min-h-screen">
+        <StaticApiFallback />
         {children}
       </body>
     </html>

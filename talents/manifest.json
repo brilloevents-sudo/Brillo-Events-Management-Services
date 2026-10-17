@@ -1,0 +1,341 @@
+[
+  {
+    "talentName": "Guilio",
+    "sourceFileName": "Guilio.docx",
+    "parsedAge": null,
+    "parsedHeight": "6’4",
+    "parsedNationality": "Italian",
+    "rawText": "First Name: Guilio Talent type: Real beard Age: Height: 6’4 Nationality: Italian 476250 257175",
+    "imageCount": 1,
+    "images": [
+      {
+        "originalName": "image1.jpg",
+        "fileName": "guilio_photo_1.jpg",
+        "relativePath": "Guilio/guilio_photo_1.jpg",
+        "sizeBytes": 64659,
+        "isPrimary": true
+      }
+    ]
+  },
+  {
+    "talentName": "Randy",
+    "sourceFileName": "Randy.docx",
+    "parsedAge": null,
+    "parsedHeight": "6ft",
+    "parsedNationality": "USA / American",
+    "rawText": "First Name: Randy Talent type: Real beard Age: Height: 6ft Nationality: USA / American 2. -666749 247650 3121819 247650",
+    "imageCount": 2,
+    "images": [
+      {
+        "originalName": "image2.jpg",
+        "fileName": "randy_photo_1.jpg",
+        "relativePath": "Randy/randy_photo_1.jpg",
+        "sizeBytes": 61773,
+        "isPrimary": true
+      },
+      {
+        "originalName": "image1.jpg",
+        "fileName": "randy_photo_2.jpg",
+        "relativePath": "Randy/randy_photo_2.jpg",
+        "sizeBytes": 56360,
+        "isPrimary": false
+      }
+    ]
+  },
+  {
+    "talentName": "Vic",
+    "sourceFileName": "Vic.docx",
+    "parsedAge": null,
+    "parsedHeight": "5’11",
+    "parsedNationality": "USA",
+    "rawText": "First Name: Vic Talent type: Real beard Age: Height: 5’11 Nationality: USA 857250 187036",
+    "imageCount": 1,
+    "images": [
+      {
+        "originalName": "image1.jpg",
+        "fileName": "vic_photo_1.jpg",
+        "relativePath": "Vic/vic_photo_1.jpg",
+        "sizeBytes": 123662,
+        "isPrimary": true
+      }
+    ]
+  },
+  {
+    "talentName": "Benito",
+    "sourceFileName": "Benito.docx",
+    "parsedAge": null,
+    "parsedHeight": "5’11",
+    "parsedNationality": "Italian",
+    "rawText": "First Name: Benito Talent type: Real beard Age: Height: 5’11 Nationality: Italian 933450 200025",
+    "imageCount": 1,
+    "images": [
+      {
+        "originalName": "image1.jpg",
+        "fileName": "benito_photo_1.jpg",
+        "relativePath": "Benito/benito_photo_1.jpg",
+        "sizeBytes": 108591,
+        "isPrimary": true
+      }
+    ]
+  },
+  {
+    "talentName": "Edwin",
+    "sourceFileName": "Edwin.docx",
+    "parsedAge": null,
+    "parsedHeight": "6ft",
+    "parsedNationality": "Netherlands",
+    "rawText": "First Name: Edwin Talent type: Real beard Age: Height: 6ft Nationality: Netherlands 747110 257175 838200 114300",
+    "imageCount": 2,
+    "images": [
+      {
+        "originalName": "image2.jpg",
+        "fileName": "edwin_photo_1.jpg",
+        "relativePath": "Edwin/edwin_photo_1.jpg",
+        "sizeBytes": 68637,
+        "isPrimary": true
+      },
+      {
+        "originalName": "image1.jpg",
+        "fileName": "edwin_photo_2.jpg",
+        "relativePath": "Edwin/edwin_photo_2.jpg",
+        "sizeBytes": 66045,
+        "isPrimary": false
+      }
+    ]
+  },
+  {
+    "talentName": "Mickeyver",
+    "sourceFileName": "Mickeyver.docx",
+    "parsedAge": null,
+    "parsedHeight": "5’10",
+    "parsedNationality": null,
+    "rawText": "First Name: Mickeyver Talent type: Real beard Age: Height: 5’10 Nationality: 1447800 123825",
+    "imageCount": 1,
+    "images": [
+      {
+        "originalName": "image1.jpg",
+        "fileName": "mickeyver_photo_1.jpg",
+        "relativePath": "Mickeyver/mickeyver_photo_1.jpg",
+        "sizeBytes": 121630,
+        "isPrimary": true
+      }
+    ]
+  },
+  {
+    "talentName": "Liam",
+    "sourceFileName": "Liam.docx",
+    "parsedAge": 56,
+    "parsedHeight": "5’11",
+    "parsedNationality": "Dutch",
+    "rawText": "First Name: Liam Talent type: Real beard Age: 56 Height: 5’11 Nationality: Dutch 409575 197021",
+    "imageCount": 1,
+    "images": [
+      {
+        "originalName": "image1.jpg",
+        "fileName": "liam_photo_1.jpg",
+        "relativePath": "Liam/liam_photo_1.jpg",
+        "sizeBytes": 353795,
+        "isPrimary": true
+      }
+    ]
+  },
+  {
+    "talentName": "Perry",
+    "sourceFileName": "Perry.docx",
+    "parsedAge": 67,
+    "parsedHeight": "5’11",
+    "parsedNationality": "Denmark",
+    "rawText": "First Name: Perry Talent type: Real beard Age: 67 Height: 5’11 Nationality: Denmark 2. 2828925 133350 -828674 200025 Perry's video 2933700 114300 -819149 281987",
+    "imageCount": 4,
+    "images": [
+      {
+        "originalName": "image4.jpg",
+        "fileName": "perry_photo_1.jpg",
+        "relativePath": "Perry/perry_photo_1.jpg",
+        "sizeBytes": 119716,
+        "isPrimary": true
+      },
+      {
+        "originalName": "image2.jpg",
+        "fileName": "perry_photo_2.jpg",
+        "relativePath": "Perry/perry_photo_2.jpg",
+        "sizeBytes": 174193,
+        "isPrimary": false
+      },
+      {
+        "originalName": "image1.jpg",
+        "fileName": "perry_photo_3.jpg",
+        "relativePath": "Perry/perry_photo_3.jpg",
+        "sizeBytes": 123032,
+        "isPrimary": false
+      },
+      {
+        "originalName": "image3.jpg",
+        "fileName": "perry_photo_4.jpg",
+        "relativePath": "Perry/perry_photo_4.jpg",
+        "sizeBytes": 78494,
+        "isPrimary": false
+      }
+    ]
+  },
+  {
+    "talentName": "Richard",
+    "sourceFileName": "Richard.docx",
+    "parsedAge": null,
+    "parsedHeight": "5’10",
+    "parsedNationality": "USA / American",
+    "rawText": "First Name: Richard Talent type: Real beard Age: Height: 5’10 Nationality: USA / American 2. 3162300 200025 -666749 238125",
+    "imageCount": 2,
+    "images": [
+      {
+        "originalName": "image2.jpg",
+        "fileName": "richard_photo_1.jpg",
+        "relativePath": "Richard/richard_photo_1.jpg",
+        "sizeBytes": 157647,
+        "isPrimary": true
+      },
+      {
+        "originalName": "image1.jpg",
+        "fileName": "richard_photo_2.jpg",
+        "relativePath": "Richard/richard_photo_2.jpg",
+        "sizeBytes": 92714,
+        "isPrimary": false
+      }
+    ]
+  },
+  {
+    "talentName": "Terry",
+    "sourceFileName": "Terry.docx",
+    "parsedAge": 71,
+    "parsedHeight": "5’11",
+    "parsedNationality": "USA",
+    "rawText": "First Name: Terry Talent type: Real beard Age: 71 Height: 5’11 Nationality: USA 2. -657224 247650 2914650 247650",
+    "imageCount": 2,
+    "images": [
+      {
+        "originalName": "image2.jpg",
+        "fileName": "terry_photo_1.jpg",
+        "relativePath": "Terry/terry_photo_1.jpg",
+        "sizeBytes": 429453,
+        "isPrimary": true
+      },
+      {
+        "originalName": "image1.jpg",
+        "fileName": "terry_photo_2.jpg",
+        "relativePath": "Terry/terry_photo_2.jpg",
+        "sizeBytes": 54065,
+        "isPrimary": false
+      }
+    ]
+  },
+  {
+    "talentName": "Bob",
+    "sourceFileName": "Bob.docx",
+    "parsedAge": null,
+    "parsedHeight": "6ft",
+    "parsedNationality": "American",
+    "rawText": "First Name: Bob Talent type: Real beard Age: Height: 6ft Nationality: American 1376363 238125 1443038 3330301 2381250 216476 1276350 228600 4. 5. 1314450 180975",
+    "imageCount": 5,
+    "images": [
+      {
+        "originalName": "image2.png",
+        "fileName": "bob_photo_1.png",
+        "relativePath": "Bob/bob_photo_1.png",
+        "sizeBytes": 2681439,
+        "isPrimary": true
+      },
+      {
+        "originalName": "image5.jpg",
+        "fileName": "bob_photo_2.jpg",
+        "relativePath": "Bob/bob_photo_2.jpg",
+        "sizeBytes": 333592,
+        "isPrimary": false
+      },
+      {
+        "originalName": "image4.jpg",
+        "fileName": "bob_photo_3.jpg",
+        "relativePath": "Bob/bob_photo_3.jpg",
+        "sizeBytes": 34516,
+        "isPrimary": false
+      },
+      {
+        "originalName": "image1.jpg",
+        "fileName": "bob_photo_4.jpg",
+        "relativePath": "Bob/bob_photo_4.jpg",
+        "sizeBytes": 34643,
+        "isPrimary": false
+      },
+      {
+        "originalName": "image3.jpg",
+        "fileName": "bob_photo_5.jpg",
+        "relativePath": "Bob/bob_photo_5.jpg",
+        "sizeBytes": 172886,
+        "isPrimary": false
+      }
+    ]
+  },
+  {
+    "talentName": "Roy",
+    "sourceFileName": "Roy.docx",
+    "parsedAge": null,
+    "parsedHeight": "6’2",
+    "parsedNationality": "USA / American",
+    "rawText": "First Name: Roy Talent type: Real beard Age: Height: 6’2 Nationality: USA / American 2. -180974 151642 2962275 152400",
+    "imageCount": 3,
+    "images": [
+      {
+        "originalName": "image2.jpg",
+        "fileName": "roy_photo_1.jpg",
+        "relativePath": "Roy/roy_photo_1.jpg",
+        "sizeBytes": 55477,
+        "isPrimary": true
+      },
+      {
+        "originalName": "image1.jpg",
+        "fileName": "roy_photo_2.jpg",
+        "relativePath": "Roy/roy_photo_2.jpg",
+        "sizeBytes": 36374,
+        "isPrimary": false
+      },
+      {
+        "originalName": "image3.jpg",
+        "fileName": "roy_photo_3.jpg",
+        "relativePath": "Roy/roy_photo_3.jpg",
+        "sizeBytes": 110985,
+        "isPrimary": false
+      }
+    ]
+  },
+  {
+    "talentName": "Cedric",
+    "sourceFileName": "Cedric.docx",
+    "parsedAge": null,
+    "parsedHeight": "5’11",
+    "parsedNationality": "USA / American",
+    "rawText": "First Name: Cedric Talent type:Real beard Age: Height: 5’11 Nationality: USA / American 2. 3228975 253412 -590549 243887",
+    "imageCount": 3,
+    "images": [
+      {
+        "originalName": "image2.jpg",
+        "fileName": "cedric_photo_1.jpg",
+        "relativePath": "Cedric/cedric_photo_1.jpg",
+        "sizeBytes": 51841,
+        "isPrimary": true
+      },
+      {
+        "originalName": "image1.jpg",
+        "fileName": "cedric_photo_2.jpg",
+        "relativePath": "Cedric/cedric_photo_2.jpg",
+        "sizeBytes": 53228,
+        "isPrimary": false
+      },
+      {
+        "originalName": "image3.jpg",
+        "fileName": "cedric_photo_3.jpg",
+        "relativePath": "Cedric/cedric_photo_3.jpg",
+        "sizeBytes": 213166,
+        "isPrimary": false
+      }
+    ]
+  }
+]

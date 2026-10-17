@@ -41,7 +41,16 @@ export function AdminNav({ onOpenQuickAction }: AdminNavProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   // Exactly matching Section 5 of the Codex Master Prompt (22 items in order)
-  const navGroups = [
+  const navGroups: Array<{
+    group: string;
+    items: Array<{
+      href: string;
+      label: string;
+      icon: any;
+      badge?: string;
+      badgeAlert?: string;
+    }>;
+  }> = [
     {
       group: "PIPELINE & INQUIRIES",
       items: [

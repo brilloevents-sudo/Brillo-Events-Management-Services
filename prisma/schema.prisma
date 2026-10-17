@@ -1,0 +1,540 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// -------------------------------------------------------------
+// USER & ROLE-BASED ACCESS CONTROL
+// -------------------------------------------------------------
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  name         String
+  passwordHash String?
+  role         String      @default("READ_ONLY") // ADMIN, SALES, OPERATIONS, FINANCE, TALENT_PA, READ_ONLY
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  auditLogs    AuditLog[]
+  paymentsVerified Payment[] @relation("PaymentVerifier")
+  quotesApproved   Quote[]   @relation("QuoteApprover")
+  ledgerApproved   TalentLedgerEntry[] @relation("LedgerApprover")
+}
+
+// -------------------------------------------------------------
+// CLIENTS & CONTACTS
+// -------------------------------------------------------------
+
+model Client {
+  id              String         @id @default(cuid())
+  companyName     String?
+  clientType      String         @default("CORPORATE") // CORPORATE, MALL, HOTEL, PRIVATE, AGENCY
+  primaryContact  String
+  email           String
+  phone           String
+  address         String?
+  city            String?
+  province        String?
+  notes           String?
+  sourceReference String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  bookings        Booking[]
+  quotes          Quote[]
+  contracts       Contract[]
+  emailThreads    EmailThread[]
+}
+
+// -------------------------------------------------------------
+// TALENT (SANTA & PRODUCTION ASSISTANTS)
+// -------------------------------------------------------------
+
+model Talent {
+  id                      String         @id @default(cuid())
+  canonicalId             String         @unique // e.g. TAL-BOB, TAL-EDWIN
+  sourceName              String         // Original from rate sheet or docx
+  displayName             String         // Staff-confirmed public/internal name
+  talentType              String         @default("REAL_BEARD") // REAL_BEARD, REGULAR_SANTA, OTHER
+  status                  String         @default("PENDING_VERIFICATION") // ACTIVE, INACTIVE, PENDING_VERIFICATION
+  age                     Int?
+  height                  String?
+  weight                  String?
+  nationality             String?
+  phone                   String?
+  address                 String?
+  bio                     String?
+  approvedForPublicDisplay Boolean       @default(false)
+
+  // Rate Card Defaults (in PHP)
+  baseTalentFee           Decimal?       // Internal TF
+  metroManilaRate         Decimal?       // Quoted package
+  provincialRate          Decimal?       // Quoted out-of-town
+  holidayRate             Decimal?       // Dec 24/25 rate
+  specialRateNote         String?        // e.g. "Marquee 13k, SM Mega 14k"
+  rateSourceNote          String?        // Traceability to sheet
+
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+
+  aliases                 TalentAlias[]
+  images                  TalentImage[]
+  documents               TalentDocument[]
+  assignments             TalentAssignment[]
+  ledgerEntries           TalentLedgerEntry[]
+}
+
+model TalentAlias {
+  id          String   @id @default(cuid())
+  talentId    String
+  alias       String   // e.g. "BOB HALMITON", "Santa Bob", "Santa Rob"
+  sourceSheet String?  // "Santa Rate", "Confirmed Booking", etc.
+  createdAt   DateTime @default(now())
+
+  talent      Talent   @relation(fields: [talentId], references: [id], onDelete: Cascade)
+}
+
+model TalentImage {
+  id                String   @id @default(cuid())
+  talentId          String
+  fileName          String
+  originalPath      String   // Original path inside DOCX or upload
+  publicUrl         String   // Served URL
+  sizeBytes         Int?
+  isPrimary         Boolean  @default(false)
+  caption           String?
+  approvedForClient Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  talent            Talent   @relation(fields: [talentId], references: [id], onDelete: Cascade)
+}
+
+model TalentDocument {
+  id          String   @id @default(cuid())
+  talentId    String
+  title       String
+  fileUrl     String
+  sourceName  String?
+  createdAt   DateTime @default(now())
+
+  talent      Talent   @relation(fields: [talentId], references: [id], onDelete: Cascade)
+}
+
+model PA {
+  id          String         @id @default(cuid())
+  name        String
+  phone       String?
+  address     String?
+  defaultFee  Decimal?       @default(1500)
+  status      String         @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  assignments PAAssignment[]
+}
+
+// -------------------------------------------------------------
+// BOOKING & OPERATIONAL PIPELINE
+// -------------------------------------------------------------
+
+model Booking {
+  id                  String         @id @default(cuid())
+  bookingNumber       String         @unique // e.g. BR-2026-001
+  secureToken         String         @unique // For client status lookup
+  clientId            String
+  bookingType         String         @default("CORPORATE") // CORPORATE, PRIVATE, MALL_TOUR, PHOTOSHOOT, VOICEOVER
+  eventName           String
+  eventDate           DateTime
+  startTime           String?        // e.g. "14:00"
+  endTime             String?        // e.g. "18:00"
+  durationHours       Decimal        @default(4.0)
+  callTime            String?        // e.g. "13:00"
+
+  // Location & Venue
+  mallOrVenue         String
+  venueAddress        String?
+  city                String?
+  province            String?
+  isProvincial        Boolean        @default(false)
+  isHoliday           Boolean        @default(false) // Dec 24 or 25
+  venueNotes          String?
+
+  // Client Logistics
+  onGroundContactName String?
+  onGroundContactPhone String?
+  expectedAudience    String?
+  specialRequests     String?
+  runOfShowUrl        String?
+  transportProvided   Boolean        @default(false)
+  transportAllowance  Decimal?       @default(0)
+
+  // Operational State Model (22 States)
+  status              String         @default("INQUIRY_RECEIVED")
+  // Broad Operational Pipeline Group (1: Lead/Pending DP, 2: Secured & Assign, 3: Deployment, 4: Awaiting Balance, 5: Settled/Payout)
+  pipelineStage       Int            @default(1)
+
+  // Hold Management
+  holdCreatedAt       DateTime?
+  holdExpiresAt       DateTime?      // 24 hours by default
+  isHoldExpired       Boolean        @default(false)
+  holdExtensionReason String?
+
+  // Financial Summary
+  totalContractAmount Decimal        @default(0)
+  depositRequired     Decimal        @default(0) // Standard 50% or custom contract
+  depositPaid         Decimal        @default(0)
+  balanceDue          Decimal        @default(0)
+  totalDirectCost     Decimal        @default(0) // TF + PA + Transpo + direct expenses
+  projectedGrossProfit Decimal       @default(0)
+
+  // Provenance / Historical Import Meta
+  isHistoricalImport  Boolean        @default(false)
+  sourceSheet         String?
+  sourceRowIndex      Int?
+  internalNotes       String?
+
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  client              Client         @relation(fields: [clientId], references: [id])
+  talentAssignments   TalentAssignment[]
+  paAssignments       PAAssignment[]
+  statusHistory       BookingStatusHistory[]
+  quotes              Quote[]
+  contracts           Contract[]
+  payments            Payment[]
+  expenses            Expense[]
+  checklistItems      EventChecklistItem[]
+  ledgerEntries       TalentLedgerEntry[]
+  emailThreads        EmailThread[]
+}
+
+model TalentAssignment {
+  id              String    @id @default(cuid())
+  bookingId       String
+  talentId        String
+  assignedRole    String    @default("SANTA_CLAUS")
+  agreedTalentFee Decimal   // Agreed internal TF for this specific booking
+  callTime        String?
+  status          String    @default("CONFIRMED") // PENDING, CONFIRMED, DECLINED, COMPLETED, REASSIGNED
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  booking         Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  talent          Talent    @relation(fields: [talentId], references: [id])
+}
+
+model PAAssignment {
+  id              String    @id @default(cuid())
+  bookingId       String
+  paId            String
+  fee             Decimal   @default(1500)
+  callTime        String?
+  status          String    @default("CONFIRMED")
+  createdAt       DateTime  @default(now())
+
+  booking         Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  pa              PA        @relation(fields: [paId], references: [id])
+}
+
+model BookingStatusHistory {
+  id          String   @id @default(cuid())
+  bookingId   String
+  fromStatus  String
+  toStatus    String
+  actor       String   // User name or "SYSTEM"
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+// -------------------------------------------------------------
+// COST ESTIMATES & QUOTATIONS
+// -------------------------------------------------------------
+
+model Quote {
+  id                  String         @id @default(cuid())
+  quoteNumber         String         @unique // e.g. QT-2026-001
+  bookingId           String
+  clientId            String
+  version             Int            @default(1)
+  status              String         @default("DRAFT") // DRAFT, SENT, ACCEPTED, SUPERSEDED, DECLINED
+
+  // Financial Breakdown (in PHP)
+  clientQuotedAmount  Decimal
+  internalTalentFee   Decimal        @default(0)
+  internalPaFee       Decimal        @default(0)
+  transportAllowance  Decimal        @default(0)
+  wardrobeAllowance   Decimal        @default(0)
+  otherDirectCosts    Decimal        @default(0)
+  discountAmount      Decimal        @default(0)
+  discountReason      String?
+
+  totalDirectCost     Decimal        @default(0)
+  grossProfit         Decimal        @default(0)
+  grossMarginPercent  Decimal        @default(0)
+
+  depositPercentage   Decimal        @default(50.0) // 50% standard
+  depositAmount       Decimal        @default(0)
+  balanceAmount       Decimal        @default(0)
+
+  validUntil          DateTime?
+  approvedById        String?
+  scopeInclusions     String?
+  scopeExclusions     String?
+  termsAndConditions  String?
+
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  booking             Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  client              Client         @relation(fields: [clientId], references: [id])
+  approvedBy          User?          @relation("QuoteApprover", fields: [approvedById], references: [id])
+}
+
+// -------------------------------------------------------------
+// CONTRACTS & SIGNATURES
+// -------------------------------------------------------------
+
+model Contract {
+  id                  String         @id @default(cuid())
+  contractNumber      String         @unique // e.g. CTR-2026-001
+  bookingId           String
+  clientId            String
+  templateType        String         @default("WITH_DP") // WITH_DP, NO_DP, SM_CUSTOM, AMENDMENT
+  title               String
+  status              String         @default("DRAFT") // DRAFT, SENT, SIGNED, DECLINED, EXPIRED, MANUALLY_ARCHIVED
+  version             Int            @default(1)
+
+  contentHtml         String?
+  documentFileUrl     String?        // Rendered PDF or original file
+  signedFileUrl       String?        // Signed document evidence
+
+  // E-Signature Integration / Manual Fallback
+  signProvider        String         @default("MANUAL") // MANUAL, DOCUMENSO, DOCUSIGN
+  envelopeId          String?
+  signerName          String?
+  signerEmail         String?
+  signedAt            DateTime?
+  manualUploadedBy    String?
+  notes               String?
+
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  booking             Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  client              Client         @relation(fields: [clientId], references: [id])
+}
+
+// -------------------------------------------------------------
+// PAYMENTS & RECEIVABLES
+// -------------------------------------------------------------
+
+model Payment {
+  id              String    @id @default(cuid())
+  bookingId       String
+  paymentType     String    @default("DOWNPAYMENT") // DOWNPAYMENT, BALANCE, FULL_PAYMENT, ADJUSTMENT
+  amount          Decimal
+  paymentMethod   String    @default("BANK_TRANSFER") // BANK_TRANSFER, GCASH, CHECK, CASH, OTHER
+  referenceNumber String?
+  paymentDate     DateTime  @default(now())
+  proofFileUrl    String?   // Uploaded screenshot or receipt
+  
+  // Verification Gate (Uploading is NOT verification)
+  status          String    @default("PENDING_VERIFICATION") // PENDING_VERIFICATION, VERIFIED, REJECTED
+  verifiedById    String?
+  verifiedAt      DateTime?
+  verificationNotes String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  booking         Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  verifiedBy      User?     @relation("PaymentVerifier", fields: [verifiedById], references: [id])
+}
+
+// -------------------------------------------------------------
+// EXPENSES & PALUWAL (TALENT ADVANCES) LEDGER
+// -------------------------------------------------------------
+
+model Expense {
+  id              String    @id @default(cuid())
+  bookingId       String?   // Nullable for general operational expenses
+  expenseDate     DateTime  @default(now())
+  payee           String    // e.g. Leona, Wifi, Gasul, Electric Bill
+  amount          Decimal
+  category        String    @default("OPERATIONAL") // TALENT_TRANSPO, WARDROBE, FOOD, UTILITY, LOAN_PAYMENT, OFFICE, OTHER
+  notes           String?
+  proofFileUrl    String?
+  createdAt       DateTime  @default(now())
+
+  booking         Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+}
+
+model TalentLedgerEntry {
+  id              String    @id @default(cuid())
+  talentId        String
+  bookingId       String?
+  entryType       String    // ADVANCE (Paluwal given), DEDUCTION (Recovered), FEE_EARNED, PAYOUT (Cash release)
+  amount          Decimal
+  reason          String    // e.g. "Cash Advance for Events - 4k", "Transport allowance"
+  entryDate       DateTime  @default(now())
+  
+  status          String    @default("APPROVED") // PENDING, APPROVED, REJECTED, SETTLED
+  approvedById    String?
+  proofFileUrl    String?
+  notes           String?
+
+  createdAt       DateTime  @default(now())
+
+  talent          Talent    @relation(fields: [talentId], references: [id], onDelete: Cascade)
+  booking         Booking?  @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  approvedBy      User?     @relation("LedgerApprover", fields: [approvedById], references: [id])
+}
+
+// -------------------------------------------------------------
+// EVENT DELIVERY CHECKLIST
+// -------------------------------------------------------------
+
+model EventChecklistItem {
+  id          String   @id @default(cuid())
+  bookingId   String
+  itemKey     String   // e.g. RUN_OF_SHOW, VENUE_ACCESS, HOLDING_ROOM, CLIENT_CONTACT, TRANSPORT_PLAN, CALL_TIME, WARDROBE
+  label       String
+  isCompleted Boolean  @default(false)
+  completedAt DateTime?
+  completedBy String?
+  notes       String?
+
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+// -------------------------------------------------------------
+// EXCEL IMPORT & SOURCE DATA RECONCILIATION
+// -------------------------------------------------------------
+
+model ImportBatch {
+  id              String         @id @default(cuid())
+  fileName        String
+  fileSize        Int?
+  sheetName       String
+  totalRows       Int            @default(0)
+  importedCount   Int            @default(0)
+  skippedCount    Int            @default(0)
+  conflictCount   Int            @default(0)
+  status          String         @default("COMPLETED") // PREVIEW, COMMITTED, ROLLED_BACK
+  importedBy      String         @default("ADMIN")
+  createdAt       DateTime       @default(now())
+
+  rows            ImportRow[]
+  conflicts       DataConflict[]
+}
+
+model ImportRow {
+  id              String       @id @default(cuid())
+  batchId         String
+  sheetName       String
+  rowIndex        Int
+  cellCoordinates String?      // e.g. "Confirmed Booking!A3:W3"
+  rawJson         String       // JSON encoded raw row values
+  status          String       @default("IMPORTED") // IMPORTED, SKIPPED, CONFLICT, UNMAPPED
+
+  batch           ImportBatch  @relation(fields: [batchId], references: [id], onDelete: Cascade)
+}
+
+model DataConflict {
+  id                  String       @id @default(cuid())
+  batchId             String?
+  category            String       // TALENT_NAME_MISMATCH, RATE_CONFLICT, AMBIGUOUS_CELL, DATE_TYPO, UNVERIFIED_DEBT
+  sourceCoordinates   String       // e.g. "Santa Rate!A2", "Confirmed Booking!C3"
+  rawText             String
+  description         String
+  suggestedResolution String?
+  resolvedResolution  String?
+  status              String       @default("PENDING_REVIEW") // PENDING_REVIEW, RESOLVED, IGNORED
+  resolvedBy          String?
+  resolvedAt          DateTime?
+  createdAt           DateTime     @default(now())
+
+  batch               ImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+}
+
+// -------------------------------------------------------------
+// SHARED EMAIL INBOX & AUTOMATION
+// -------------------------------------------------------------
+
+model EmailThread {
+  id              String         @id @default(cuid())
+  subject         String
+  clientId        String?
+  bookingId       String?
+  assignedTo      String?        // Staff member
+  lastActivityAt  DateTime       @default(now())
+  isUnread        Boolean        @default(false)
+  status          String         @default("ACTIVE") // ACTIVE, ARCHIVED, SPAM
+  createdAt       DateTime       @default(now())
+
+  client          Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  booking         Booking?       @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  messages        EmailMessage[]
+}
+
+model EmailMessage {
+  id              String         @id @default(cuid())
+  threadId        String
+  direction       String         @default("OUTBOUND") // INBOUND, OUTBOUND
+  sender          String
+  recipient       String
+  subject         String
+  bodyText        String
+  bodyHtml        String?
+  sentAt          DateTime       @default(now())
+  deliveryStatus  String         @default("SENT") // QUEUED, SENT, DELIVERED, FAILED, BOUNCED
+  providerMessageId String?
+  errorMessage    String?
+
+  thread          EmailThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
+}
+
+model EmailTemplate {
+  id          String   @id @default(cuid())
+  triggerKey  String   @unique // INQUIRY_RECEIVED, QUOTE_SENT, HOLD_CREATED, HOLD_EXPIRING_15M, PAYMENT_VERIFIED, BOOKING_SECURED, DEPLOYMENT_24H
+  name        String
+  subject     String
+  bodyTemplate String
+  isActive    Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+}
+
+// -------------------------------------------------------------
+// SYSTEM SETTINGS & AUDIT LOGS
+// -------------------------------------------------------------
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  actorName   String   @default("SYSTEM")
+  action      String   // e.g. BOOKING_CONFIRM, HOLD_EXTEND, PAYMENT_VERIFY, PALUWAL_CREATE
+  entityType  String   // Booking, Payment, Talent, Contract, etc.
+  entityId    String?
+  detailsJson String?  // Diff or input payload
+  createdAt   DateTime @default(now())
+
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}

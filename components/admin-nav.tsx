@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -16,8 +17,19 @@ import {
   PlusCircle,
   FileText,
   UserCheck,
-  Clock,
+  Building2,
+  DollarSign,
+  TrendingUp,
+  History,
+  ShieldCheck,
+  ChevronLeft,
+  ChevronRight,
   Sparkles,
+  Inbox,
+  KanbanSquare,
+  Truck,
+  ShieldAlert,
+  UserCog,
 } from "lucide-react";
 
 interface AdminNavProps {
@@ -26,112 +38,149 @@ interface AdminNavProps {
 
 export function AdminNav({ onOpenQuickAction }: AdminNavProps) {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
 
-  const navSections = [
+  // Exactly matching Section 5 of the Codex Master Prompt (22 items in order)
+  const navGroups = [
     {
-      title: "OPERATIONS",
+      group: "PIPELINE & INQUIRIES",
       items: [
-        { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/admin", label: "1. Overview", icon: LayoutDashboard },
+        { href: "/admin/leads", label: "2. Leads & Inquiries", icon: Inbox },
+        { href: "/admin/pipeline", label: "3. CRM Pipeline", icon: KanbanSquare },
+        { href: "/admin/calendar", label: "4. Booking Calendar", icon: CalendarDays },
+      ],
+    },
+    {
+      group: "BOOKINGS & OPERATIONS",
+      items: [
+        { href: "/admin/bookings", label: "5. Bookings", icon: FileText },
         {
           href: "/admin/individual-talent-bookings",
-          label: "Individual Talent Bookings",
+          label: "6. Individual Talent Bookings",
           icon: UserCheck,
-          badge: "Mandatory",
+          badge: "Direct",
         },
-        { href: "/admin/bookings", label: "Bookings & Pipeline", icon: FileText },
-        { href: "/admin/calendar", label: "Deployment Calendar", icon: CalendarDays },
+        { href: "/admin/talents", label: "7. Santa Talent", icon: Users2 },
+        { href: "/admin/pa-crew", label: "8. PA & Crew", icon: UserCog },
+        { href: "/admin/clients", label: "9. Clients & Agencies", icon: Building2 },
       ],
     },
     {
-      title: "ROSTER & TALENT",
+      group: "COMMERCIAL & FINANCE",
       items: [
-        { href: "/admin/talents", label: "Talent Roster & Photos", icon: Users2 },
+        { href: "/admin/quotes", label: "10. Quotes & Costing", icon: DollarSign },
+        { href: "/admin/contracts", label: "11. Contracts & E-signatures", icon: FileCheck2 },
+        { href: "/admin/payments", label: "12. Payments & Receivables", icon: Receipt },
+        { href: "/admin/expenses", label: "13. Expenses", icon: Receipt },
+        { href: "/admin/paluwal", label: "14. Talent Advances / Paluwal", icon: Wallet },
       ],
     },
     {
-      title: "SALES & CONTRACTS",
+      group: "DISPATCH & COMMUNICATIONS",
       items: [
-        { href: "/admin/quotes", label: "Quotes & Costing", icon: Receipt },
-        { href: "/admin/contracts", label: "Contracts & Signatures", icon: FileCheck2 },
+        { href: "/admin/deployment", label: "15. Event Deployment", icon: Truck },
+        { href: "/admin/inbox", label: "16. Email Center", icon: Mail },
+        { href: "/admin/import", label: "17. Excel Import Center", icon: FileSpreadsheet },
+        { href: "/admin/conflicts", label: "18. Source Conflicts", icon: AlertTriangle, badgeAlert: "13" },
       ],
     },
     {
-      title: "FINANCE & LEDGER",
+      group: "MANAGEMENT & GOVERNANCE",
       items: [
-        { href: "/admin/payments", label: "Payments & Verification", icon: Receipt },
-        { href: "/admin/paluwal", label: "Paluwal (Advance Ledger)", icon: Wallet },
-        { href: "/admin/expenses", label: "Expenses", icon: Receipt },
-      ],
-    },
-    {
-      title: "SYSTEM & DATA",
-      items: [
-        { href: "/admin/inbox", label: "Shared Mailbox", icon: Mail },
-        { href: "/admin/import", label: "12-Sheet Excel Import", icon: FileSpreadsheet },
-        { href: "/admin/conflicts", label: "Source Conflicts", icon: AlertTriangle },
-        { href: "/admin/settings", label: "Audit Log & Settings", icon: Settings },
+        { href: "/admin/reports", label: "19. Reports", icon: TrendingUp },
+        { href: "/admin/audit-log", label: "20. Audit Log", icon: History },
+        { href: "/admin/users", label: "21. Users & Roles", icon: ShieldCheck },
+        { href: "/admin/settings", label: "22. Settings", icon: Settings },
       ],
     },
   ];
 
   return (
-    <aside className="w-64 bg-obsidian-900 border-r border-slate-800 flex flex-col h-screen sticky top-0">
+    <aside
+      className={`${
+        collapsed ? "w-16" : "w-64"
+      } bg-[#171A18] text-[#FBF9F4] border-r border-[#2C312D] flex flex-col h-screen sticky top-0 transition-all duration-200 select-none z-30 shrink-0`}
+    >
       {/* Brand Header */}
-      <div className="h-16 border-b border-slate-800 flex items-center justify-between px-4">
-        <Link href="/admin" className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded bg-crimson-800 border border-crimson-600/40 flex items-center justify-center">
-            <Sparkles className="w-4 h-4 text-gold-400" />
+      <div className="h-16 border-b border-[#2C312D] flex items-center justify-between px-3">
+        <Link href="/admin" className="flex items-center space-x-2.5 overflow-hidden">
+          <div className="w-8 h-8 rounded bg-[#8E252F] border border-[#B99A5B]/40 flex items-center justify-center shrink-0">
+            <Sparkles className="w-4 h-4 text-[#D4B473]" />
           </div>
-          <div>
-            <span className="font-bold text-sm text-white block">BRILLO HUB</span>
-            <span className="text-[10px] text-gold-400 uppercase tracking-widest block font-mono">
-              STAFF CRM
-            </span>
-          </div>
+          {!collapsed && (
+            <div className="truncate">
+              <span className="font-serif font-bold text-sm tracking-wide text-white block">
+                BRILLO HUB
+              </span>
+              <span className="text-[9px] text-[#B99A5B] uppercase tracking-widest block font-mono">
+                SANTA OPERATIONS
+              </span>
+            </div>
+          )}
         </Link>
-        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
-          Admin
-        </span>
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="text-[#6B706C] hover:text-white p-1 rounded hover:bg-[#202421] transition"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+        </button>
       </div>
 
       {/* Quick Action Button */}
-      <div className="p-3 border-b border-slate-800/80">
+      <div className="p-2.5 border-b border-[#2C312D]">
         <button
           onClick={onOpenQuickAction}
-          className="w-full py-2.5 px-3 rounded-lg bg-gradient-to-r from-crimson-700 to-crimson-800 hover:from-crimson-600 hover:to-crimson-700 text-white font-medium text-xs flex items-center justify-center shadow-md shadow-crimson-950 border border-crimson-600/40 transition active:scale-[0.99]"
+          className={`w-full py-2 px-2 rounded-lg bg-[#A92F3A] hover:bg-[#8E252F] text-white font-medium text-xs flex items-center justify-center shadow-sm border border-[#A92F3A]/40 transition active:scale-[0.99] ${
+            collapsed ? "px-0" : ""
+          }`}
+          title="Open Universal Quick Actions"
         >
-          <PlusCircle className="w-4 h-4 mr-2 text-gold-300" />
-          + Quick Action
+          <PlusCircle className="w-4 h-4 text-[#E7CE97] shrink-0" />
+          {!collapsed && <span className="ml-2 font-medium tracking-wide">Quick Action</span>}
         </button>
       </div>
 
       {/* Navigation Sections */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-5">
-        {navSections.map((sec, i) => (
-          <div key={i} className="space-y-1">
-            <div className="px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500 font-mono">
-              {sec.title}
-            </div>
-            {sec.items.map((item) => {
+      <nav className="flex-1 overflow-y-auto sidebar-scroll px-2 py-3 space-y-4">
+        {navGroups.map((grp, idx) => (
+          <div key={idx} className="space-y-0.5">
+            {!collapsed && (
+              <div className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-[#6B706C] font-mono">
+                {grp.group}
+              </div>
+            )}
+            {grp.items.map((item) => {
               const Icon = item.icon;
-              const active = pathname === item.href;
+              const active = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href));
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
+                  title={collapsed ? item.label : undefined}
+                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium transition ${
                     active
-                      ? "bg-crimson-900/30 text-gold-300 border border-crimson-800/50 shadow-sm"
-                      : "text-slate-300 hover:text-white hover:bg-obsidian-800"
+                      ? "bg-[#202421] text-[#E7CE97] border-l-2 border-[#B99A5B] font-semibold"
+                      : "text-[#C5C0B4] hover:text-white hover:bg-[#202421]/60"
                   }`}
                 >
                   <div className="flex items-center space-x-2.5 truncate">
-                    <Icon className={`w-4 h-4 ${active ? "text-gold-400" : "text-slate-400"}`} />
-                    <span className="truncate">{item.label}</span>
+                    <Icon
+                      className={`w-4 h-4 shrink-0 ${
+                        active ? "text-[#D4B473]" : "text-[#6B706C] group-hover:text-white"
+                      }`}
+                    />
+                    {!collapsed && <span className="truncate">{item.label}</span>}
                   </div>
-                  {item.badge && (
-                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-gold-950 text-gold-400 border border-gold-800/60 font-semibold uppercase">
+                  {!collapsed && item.badge && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#202421] text-[#D4B473] border border-[#B99A5B]/30 font-semibold uppercase">
                       {item.badge}
+                    </span>
+                  )}
+                  {!collapsed && item.badgeAlert && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800/60 font-semibold font-mono">
+                      {item.badgeAlert}
                     </span>
                   )}
                 </Link>
@@ -139,14 +188,22 @@ export function AdminNav({ onOpenQuickAction }: AdminNavProps) {
             })}
           </div>
         ))}
-      </div>
+      </nav>
 
       {/* Footer / Public Link */}
-      <div className="p-3 border-t border-slate-800 bg-obsidian-950/60 flex items-center justify-between text-xs text-slate-400">
-        <Link href="/" target="_blank" className="hover:text-gold-300 text-[11px] flex items-center">
-          ↗ View Public Site
-        </Link>
-        <span className="text-[10px] text-slate-500 font-mono">v1.0.0</span>
+      <div className="p-3 border-t border-[#2C312D] bg-[#101211] flex items-center justify-between text-xs text-[#6B706C]">
+        {!collapsed ? (
+          <>
+            <Link href="/" target="_blank" className="hover:text-[#D4B473] text-[11px] flex items-center transition">
+              ↗ Public Portal
+            </Link>
+            <span className="text-[10px] text-[#6B706C] font-mono">v2.0 (Codex)</span>
+          </>
+        ) : (
+          <Link href="/" target="_blank" className="mx-auto hover:text-[#D4B473]" title="View Public Portal">
+            ↗
+          </Link>
+        )}
       </div>
     </aside>
   );

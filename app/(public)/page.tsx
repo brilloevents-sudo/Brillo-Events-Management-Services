@@ -1,327 +1,282 @@
+"use client";
+
+import React, { useState } from "react";
 import Link from "next/link";
 import {
   Sparkles,
-  Calendar,
-  Building2,
   ShieldCheck,
-  Star,
-  Clock,
-  ArrowRight,
+  Play,
   CheckCircle2,
+  Trophy,
+  ArrowRight,
+  Clock,
+  Star,
   Users2,
+  Building2,
+  Calendar,
 } from "lucide-react";
-import prisma from "@/lib/prisma";
+import { motion } from "framer-motion";
+import { WallOfWin } from "@/components/funnel/wall-of-win";
+import { OfferStack } from "@/components/funnel/offer-stack";
+import { BookingModal } from "@/components/funnel/booking-modal";
+import { DubTrack } from "@/components/funnel/dub-track";
 
-export const revalidate = 60; // Refresh public page every minute
-
-export default async function PublicHomePage() {
-  // Query approved public talents only (zero unapproved talent leakage)
-  const approvedTalents = await prisma.talent.findMany({
-    where: {
-      approvedForPublicDisplay: true,
-      status: "ACTIVE",
-    },
-    include: {
-      images: {
-        where: { approvedForClient: true },
-        take: 1,
-      },
-    },
-    take: 6,
-  });
+export default function B2BFunnelHomePage() {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
 
   return (
-    <div className="space-y-20 pb-20">
-      {/* 1. Hero Section */}
-      <section className="relative pt-24 pb-20 overflow-hidden bg-gradient-to-b from-obsidian-900 via-obsidian-950 to-obsidian-950 border-b border-slate-800/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center space-y-6">
-          <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full bg-crimson-950/80 border border-crimson-800/60 shadow-lg text-xs font-mono text-gold-300">
-            <Sparkles className="w-3.5 h-3.5 text-gold-400" />
-            <span>2026 Season Booking Open • Verified Real-Beard Santa Roster</span>
-          </div>
+    <div className="bg-[#09090B] text-zinc-100 min-h-screen selection:bg-[#22C55E] selection:text-black">
+      {/* ========================================================
+          SECTION A: THE B2B HERO (Split-Screen Layout)
+         ======================================================== */}
+      <section className="relative pt-20 pb-16 lg:pt-28 lg:pb-24 overflow-hidden border-b border-[#27272A]">
+        {/* Ambient background glows */}
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#E11D48]/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-[#D4AF37]/5 rounded-full blur-3xl pointer-events-none" />
 
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight max-w-4xl mx-auto leading-tight">
-            The Pinnacle of Authentic Holiday Entertainment for Premier Malls &amp; Venues
-          </h1>
-
-          <p className="text-base sm:text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
-            Brillo Events provides authenticated real-beard Santa Claus performers for flagship shopping malls, five-star hotel atriums, and high-profile corporate celebrations across the Philippines.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-            <Link
-              href="/request-quote"
-              className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-crimson-700 to-crimson-600 hover:from-crimson-600 hover:to-crimson-500 shadow-xl shadow-crimson-950/50 border border-crimson-500/40 transition transform hover:-translate-y-0.5"
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            {/* Left Side: Heavy, Authoritative Headline & Electric Green CTA (7 cols) */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5 }}
+              className="lg:col-span-7 space-y-6 text-left"
             >
-              Request a Corporate Quotation →
-            </Link>
-            <Link
-              href="/availability"
-              className="w-full sm:w-auto px-6 py-3.5 rounded-xl font-semibold text-sm text-slate-200 bg-obsidian-900 hover:bg-obsidian-850 border border-slate-700 transition"
-            >
-              Check Live Date Availability
-            </Link>
-          </div>
+              {/* Scarcity & Social Proof Pill */}
+              <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-[#18181B] border border-[#E11D48]/40 shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-[#E11D48] animate-ping" />
+                <span className="text-xs font-mono font-bold text-[#E11D48] tracking-wide uppercase">
+                  Strict Q4 2026 Calendar Scarcity • Metro Manila &amp; Regional
+                </span>
+              </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-10 max-w-4xl mx-auto text-left">
-            <div className="p-4 rounded-xl bg-obsidian-900/60 border border-slate-800">
-              <div className="text-gold-400 font-bold text-lg">100% Real Beard</div>
-              <p className="text-[11px] text-slate-400 mt-0.5">Natural authentic beards; no synthetic prosthetics</p>
-            </div>
-            <div className="p-4 rounded-xl bg-obsidian-900/60 border border-slate-800">
-              <div className="text-gold-400 font-bold text-lg">Dedicated PA</div>
-              <p className="text-[11px] text-slate-400 mt-0.5">Every appearance includes an on-ground assistant</p>
-            </div>
-            <div className="p-4 rounded-xl bg-obsidian-900/60 border border-slate-800">
-              <div className="text-gold-400 font-bold text-lg">Institutional Trust</div>
-              <p className="text-[11px] text-slate-400 mt-0.5">SM Supermalls, Ayala, Megaworld partner roster</p>
-            </div>
-            <div className="p-4 rounded-xl bg-obsidian-900/60 border border-slate-800">
-              <div className="text-gold-400 font-bold text-lg">24h Soft Holds</div>
-              <p className="text-[11px] text-slate-400 mt-0.5">Temporary calendar reservations for planning</p>
-            </div>
+              {/* Authoritative Headline */}
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-headline font-black text-white tracking-tight leading-[1.08]">
+                Don’t Let A Fake-Beard Amateur Ruin Your{" "}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#E11D48] via-rose-400 to-[#D4AF37]">
+                  Q4 Mall Launch
+                </span>
+              </h1>
+
+              {/* Body Copy */}
+              <p className="text-base sm:text-lg text-zinc-300 font-sans leading-relaxed max-w-xl">
+                Securing a premier shopping mall centerpiece requires authentic, vetted talent. We supply verified <strong>100% natural real-beard Santas</strong>, dedicated on-ground production handlers, and complete SM / Ayala contract compliance.
+              </p>
+
+              {/* Bullet Points */}
+              <div className="grid grid-cols-2 gap-3 text-xs sm:text-sm text-zinc-300 pt-2 font-medium">
+                <div className="flex items-center space-x-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#22C55E] shrink-0" />
+                  <span>100% Natural Real Beards</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#22C55E] shrink-0" />
+                  <span>Dedicated Production Assistant (PA)</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#22C55E] shrink-0" />
+                  <span>SM Supermalls Executed Contracts</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#22C55E] shrink-0" />
+                  <span>24-Hour Soft Hold Guarantee</span>
+                </div>
+              </div>
+
+              {/* Primary Conversion CTA: Electric Green with Glow */}
+              <div className="pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+                <DubTrack event="hero_cta_clicked" properties={{ section: "hero_primary" }}>
+                  <button
+                    onClick={() => setModalOpen(true)}
+                    className="w-full sm:w-auto px-8 py-4 rounded-xl font-headline font-black text-sm uppercase tracking-wider text-zinc-950 bg-[#22C55E] hover:bg-[#16A34A] shadow-electric-glow transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center space-x-2"
+                  >
+                    <span>SECURE YOUR SANTA SLOT</span>
+                    <ArrowRight className="w-4 h-4 font-bold" />
+                  </button>
+                </DubTrack>
+
+                <Link
+                  href="#offer-stack"
+                  className="px-6 py-4 rounded-xl font-headline font-bold text-xs uppercase tracking-wide text-zinc-300 bg-[#18181B] hover:bg-zinc-800 border border-[#27272A] text-center transition"
+                >
+                  View Corporate Offer Stack ↓
+                </Link>
+              </div>
+
+              {/* Trust Subtext */}
+              <div className="flex items-center space-x-2 text-[11px] font-mono text-zinc-500 pt-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#D4AF37]" />
+                <span>Zero deposit required to place initial 24-hour calendar hold.</span>
+              </div>
+            </motion.div>
+
+            {/* Right Side: 16:9 Cinematic Video Player Placeholder (The VSL) (5 cols) */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="lg:col-span-5"
+            >
+              <div className="relative aspect-video rounded-2xl bg-[#18181B] border-2 border-[#27272A] overflow-hidden shadow-2xl group">
+                {/* Poster Image / Video Thumbnail */}
+                <img
+                  src="/talents/Bob/bob_photo_1.png"
+                  alt="Brillo Events Real Beard Santa VSL"
+                  className="w-full h-full object-cover object-top opacity-80 group-hover:scale-105 transition-transform duration-700"
+                />
+
+                {/* Gradient vignette */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/30" />
+
+                {/* VSL Duration & Quality Badges */}
+                <div className="absolute top-3 left-3 px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-md text-[10px] font-mono text-[#D4AF37] border border-zinc-700 flex items-center space-x-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#E11D48] animate-pulse" />
+                  <span>WATCH: 2026 Casting Reel (2:14)</span>
+                </div>
+
+                <div className="absolute top-3 right-3 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#E11D48] text-white">
+                  4K MASTER
+                </div>
+
+                {/* Play Button Trigger */}
+                <button
+                  onClick={() => setModalOpen(true)}
+                  className="absolute inset-0 flex items-center justify-center group-hover:scale-110 transition-transform"
+                  aria-label="Play Video Sales Letter"
+                >
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#E11D48] text-white flex items-center justify-center shadow-crimson-glow border border-white/20 transition-all group-hover:bg-[#BE123C]">
+                    <Play className="w-7 h-7 sm:w-8 sm:h-8 fill-current ml-1" />
+                  </div>
+                </button>
+
+                {/* Bottom Video Banner */}
+                <div className="absolute bottom-3 left-3 right-3 p-3 rounded-xl bg-[#09090B]/90 backdrop-blur-md border border-zinc-800 text-left">
+                  <div className="text-xs font-headline font-bold text-white">
+                    Mall Atrium Performance Standards
+                  </div>
+                  <div className="text-[10px] text-zinc-400 font-mono mt-0.5">
+                    See real client crowd reactions at SM Megamall &amp; SM Clark
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           </div>
         </div>
       </section>
 
-      {/* 2. Target Offer Guidance (Playbook Rules) */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        <div className="text-center space-y-2 max-w-2xl mx-auto">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-            Transparent Starting Investment Guidance
-          </h2>
-          <p className="text-xs text-slate-400">
-            Quotation-first pricing. Displayed figures are standard planning benchmarks; formal quotes are issued upon scope confirmation.
-          </p>
-        </div>
+      {/* ========================================================
+          SECTION B: THE HERO PROOF (WALL OF WIN MARQUEE)
+         ======================================================== */}
+      <WallOfWin />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Package 1: Metro Manila */}
-          <div className="p-6 rounded-2xl bg-obsidian-900 border border-slate-800 hover:border-gold-500/40 transition flex flex-col justify-between space-y-4">
+      {/* ========================================================
+          SECTION C: THE OFFER STACK UI (₱45,000 -> ₱18,000)
+         ======================================================== */}
+      <OfferStack onOpenBooking={() => setModalOpen(true)} />
+
+      {/* ========================================================
+          FEATURED TALENT PORTFOLIO (REAL EXTRACTED PHOTOS)
+         ======================================================== */}
+      <section className="py-20 bg-[#09090B] border-t border-[#27272A]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
-              <div className="text-xs font-mono font-bold text-gold-400 uppercase tracking-wider">
-                Metro Manila Standard
-              </div>
-              <h3 className="text-xl font-bold text-white mt-1">Corporate 4-Hour Block</h3>
-              <div className="text-3xl font-extrabold text-white font-mono mt-3">
-                ₱18,000 <span className="text-xs font-sans text-slate-400 font-normal">/ 4 hours</span>
-              </div>
-              <p className="text-xs text-slate-400 mt-2">
-                Ideal for mall centerpiece launches, hotel tree lightings, and premier corporate Christmas banquets.
-              </p>
-              <ul className="space-y-2 text-xs text-slate-300 pt-4 border-t border-slate-800">
-                <li className="flex items-center"><CheckCircle2 className="w-3.5 h-3.5 mr-2 text-emerald-400 shrink-0" /> Full 4-hour performance block</li>
-                <li className="flex items-center"><CheckCircle2 className="w-3.5 h-3.5 mr-2 text-emerald-400 shrink-0" /> Authenticated real-beard Santa talent</li>
-                <li className="flex items-center"><CheckCircle2 className="w-3.5 h-3.5 mr-2 text-emerald-400 shrink-0" /> Dedicated Production Assistant (PA)</li>
-                <li className="flex items-center"><CheckCircle2 className="w-3.5 h-3.5 mr-2 text-emerald-400 shrink-0" /> Standard 50% reservation deposit</li>
-              </ul>
+              <span className="text-xs font-mono font-bold text-[#D4AF37] uppercase tracking-wider">
+                Vetted Roster Directory
+              </span>
+              <h2 className="text-3xl sm:text-4xl font-headline font-black text-white mt-1">
+                Authentic Real-Beard Santa Performers
+              </h2>
             </div>
-            <Link
-              href="/request-quote?package=metro_manila"
-              className="w-full text-center py-2.5 rounded-lg text-xs font-semibold bg-obsidian-850 hover:bg-obsidian-800 border border-slate-700 text-white transition"
-            >
-              Request Metro Manila Quote →
-            </Link>
-          </div>
-
-          {/* Package 2: Provincial Tour */}
-          <div className="p-6 rounded-2xl bg-obsidian-900 border border-crimson-800/60 hover:border-crimson-600 transition flex flex-col justify-between space-y-4 shadow-lg shadow-crimson-950/40">
-            <div>
-              <div className="text-xs font-mono font-bold text-crimson-400 uppercase tracking-wider">
-                Provincial &amp; Regional Tour
-              </div>
-              <h3 className="text-xl font-bold text-white mt-1">Provincial Out-of-Town</h3>
-              <div className="text-3xl font-extrabold text-white font-mono mt-3">
-                ₱23,400 <span className="text-xs font-sans text-slate-400 font-normal">starting guidance</span>
-              </div>
-              <p className="text-xs text-slate-400 mt-2">
-                Calculated at +30% provincial factor. Route, transportation, and lodging terms confirmed in writing.
-              </p>
-              <ul className="space-y-2 text-xs text-slate-300 pt-4 border-t border-slate-800">
-                <li className="flex items-center"><CheckCircle2 className="w-3.5 h-3.5 mr-2 text-emerald-400 shrink-0" /> Luzon, Visayas &amp; Mindanao deployment</li>
-                <li className="flex items-center"><CheckCircle2 className="w-3.5 h-3.5 mr-2 text-emerald-400 shrink-0" /> Flight &amp; logistics coordination</li>
-                <li className="flex items-center"><CheckCircle2 className="w-3.5 h-3.5 mr-2 text-emerald-400 shrink-0" /> Dedicated travelling production crew</li>
-                <li className="flex items-center"><CheckCircle2 className="w-3.5 h-3.5 mr-2 text-emerald-400 shrink-0" /> Multi-day mall tour itineraries</li>
-              </ul>
-            </div>
-            <Link
-              href="/request-quote?package=provincial"
-              className="w-full text-center py-2.5 rounded-lg text-xs font-semibold bg-crimson-700 hover:bg-crimson-600 text-white transition shadow-md"
-            >
-              Request Provincial Quote →
-            </Link>
-          </div>
-
-          {/* Package 3: Dec 24 / 25 Peak Holiday */}
-          <div className="p-6 rounded-2xl bg-obsidian-900 border border-slate-800 hover:border-gold-500/40 transition flex flex-col justify-between space-y-4">
-            <div>
-              <div className="text-xs font-mono font-bold text-gold-400 uppercase tracking-wider">
-                Christmas Eve &amp; Christmas Day
-              </div>
-              <h3 className="text-xl font-bold text-white mt-1">Peak Prime Holiday Block</h3>
-              <div className="text-3xl font-extrabold text-gold-300 font-mono mt-3">
-                ₱23k – ₱30k <span className="text-xs font-sans text-slate-400 font-normal">range</span>
-              </div>
-              <p className="text-xs text-slate-400 mt-2">
-                Quoted strictly based on selected talent and confirmed schedule availability for Dec 24 &amp; 25.
-              </p>
-              <ul className="space-y-2 text-xs text-slate-300 pt-4 border-t border-slate-800">
-                <li className="flex items-center"><CheckCircle2 className="w-3.5 h-3.5 mr-2 text-gold-400 shrink-0" /> Ultra-limited holiday availability</li>
-                <li className="flex items-center"><CheckCircle2 className="w-3.5 h-3.5 mr-2 text-gold-400 shrink-0" /> Luxury resort &amp; VIP flagship preference</li>
-                <li className="flex items-center"><CheckCircle2 className="w-3.5 h-3.5 mr-2 text-gold-400 shrink-0" /> Priority queue handling</li>
-                <li className="flex items-center"><CheckCircle2 className="w-3.5 h-3.5 mr-2 text-gold-400 shrink-0" /> Custom holiday run of show</li>
-              </ul>
-            </div>
-            <Link
-              href="/request-quote?package=holiday"
-              className="w-full text-center py-2.5 rounded-lg text-xs font-semibold bg-obsidian-850 hover:bg-obsidian-800 border border-slate-700 text-white transition"
-            >
-              Request Dec 24/25 Quote →
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. Featured Real Beard Santas Showcase (Real Extracted Photos) */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div>
-            <span className="text-xs font-mono font-bold text-gold-400 uppercase tracking-wider">
-              Authentic Holiday Talent
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mt-1">
-              Meet Our Real-Beard Santas
-            </h2>
-          </div>
-          <Link
-            href="/corporate"
-            className="text-xs text-gold-400 hover:text-gold-300 font-medium flex items-center"
-          >
-            Learn about Santa casting &amp; wardrobe standards →
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {approvedTalents.map((t) => {
-            const photoUrl = t.images[0]?.publicUrl || "/talents/placeholder.jpg";
-
-            return (
-              <div
-                key={t.id}
-                className="rounded-2xl bg-obsidian-900 border border-slate-800 overflow-hidden shadow-md flex flex-col justify-between group hover:border-slate-700 transition"
+            <DubTrack event="view_all_santas_clicked">
+              <button
+                onClick={() => setModalOpen(true)}
+                className="text-xs font-mono font-bold text-[#22C55E] hover:underline flex items-center"
               >
-                <div className="relative h-64 bg-obsidian-950 overflow-hidden">
+                Inquire Specific Talent Availability →
+              </button>
+            </DubTrack>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              { name: "Bob", code: "TAL-BOB", img: "/talents/Bob/bob_photo_1.png", exp: "8 Seasons • SM Flagship Headliner" },
+              { name: "Cedric", code: "TAL-CEDRIC", img: "/talents/Cedric/cedric_photo_1.jpg", exp: "SM Pampanga & Clark Tour Lead" },
+              { name: "Perry", code: "TAL-PERRY", img: "/talents/Perry/perry_photo_1.jpg", exp: "Luxury Hotel & Tree-Lighting Specialist" },
+              { name: "Terry", code: "TAL-TERRY", img: "/talents/Terry/terry_photo_1.jpg", exp: "North Luzon Commercial Mall Resident" },
+            ].map((santa, i) => (
+              <div
+                key={i}
+                className="rounded-xl bg-[#18181B] border border-[#27272A] overflow-hidden group hover:border-[#D4AF37]/50 transition shadow-lg flex flex-col justify-between"
+              >
+                <div className="h-60 overflow-hidden bg-black relative">
                   <img
-                    src={photoUrl}
-                    alt={t.displayName}
+                    src={santa.img}
+                    alt={santa.name}
                     className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
                   />
-                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-[10px] font-mono text-gold-300 border border-slate-700">
-                    Real Beard • {t.nationality || "International"}
-                  </div>
+                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/80 backdrop-blur-md text-[9px] font-mono text-[#D4AF37] border border-zinc-700">
+                    Real Beard • {santa.code}
+                  </span>
                 </div>
-
-                <div className="p-5 space-y-3">
-                  <div>
-                    <h3 className="text-lg font-bold text-white">Santa {t.displayName}</h3>
-                    <div className="text-xs text-slate-400 font-mono mt-0.5">
-                      Height: {t.height || "6ft"} {t.age && `• Age: ${t.age} yrs`}
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-300 leading-relaxed line-clamp-3">
-                    {t.bio || "Senior professional Santa with extensive mall centerpiece and hotel tree-lighting experience."}
-                  </p>
-
-                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-                    <span className="text-[11px] text-emerald-400 font-medium">Available for Corporate Booking</span>
-                    <Link
-                      href={`/request-quote?talent=${t.id}`}
-                      className="text-xs font-semibold text-gold-400 hover:text-gold-300"
-                    >
-                      Request Santa {t.displayName} →
-                    </Link>
-                  </div>
+                <div className="p-4 space-y-2">
+                  <h3 className="text-base font-headline font-bold text-white">Santa {santa.name}</h3>
+                  <p className="text-xs text-zinc-400 line-clamp-2">{santa.exp}</p>
+                  <button
+                    onClick={() => setModalOpen(true)}
+                    className="w-full mt-2 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-headline font-bold text-white transition"
+                  >
+                    Select Santa {santa.name}
+                  </button>
                 </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* 4. How Booking Works (Transparency) */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-        <div className="text-center space-y-2 max-w-2xl mx-auto">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-            How Santa Booking Works
+      {/* ========================================================
+          BOTTOM CONVERSION BANNER
+         ======================================================== */}
+      <section className="py-16 bg-gradient-to-b from-[#09090B] to-[#18181B] border-t border-[#27272A] text-center">
+        <div className="max-w-4xl mx-auto px-4 space-y-6">
+          <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-[#E11D48]/10 border border-[#E11D48]/30 text-xs font-mono text-[#E11D48] font-bold">
+            <Clock className="w-3.5 h-3.5" />
+            <span>Over 70% of Prime December Dates Are Currently Committed</span>
+          </div>
+
+          <h2 className="text-3xl sm:text-5xl font-headline font-black text-white tracking-tight">
+            Lock Your Date With A Zero-Risk 24-Hour Soft Hold
           </h2>
-          <p className="text-xs text-slate-400">
-            A controlled, professional 4-step pipeline ensuring zero calendar double-bookings and clear contractual certainty.
+
+          <p className="text-sm text-zinc-400 max-w-xl mx-auto">
+            Once submitted, your date is marked held in our operations system for 24 hours while your marketing and procurement teams review the formal agreement.
           </p>
-        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-5 rounded-xl bg-obsidian-900 border border-slate-800 space-y-2">
-            <div className="w-8 h-8 rounded-lg bg-crimson-900/60 border border-crimson-700/60 flex items-center justify-center font-bold text-gold-300 text-sm">
-              1
-            </div>
-            <h3 className="text-sm font-bold text-white">Inquiry &amp; Logistics Intake</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Submit event date, mall/venue location, call time, and special appearance parameters.
-            </p>
-          </div>
-
-          <div className="p-5 rounded-xl bg-obsidian-900 border border-slate-800 space-y-2">
-            <div className="w-8 h-8 rounded-lg bg-crimson-900/60 border border-crimson-700/60 flex items-center justify-center font-bold text-gold-300 text-sm">
-              2
-            </div>
-            <h3 className="text-sm font-bold text-white">Availability &amp; 24h Soft Hold</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              We check the master calendar. An eligible slot may be placed on a 24-hour temporary hold.
-            </p>
-          </div>
-
-          <div className="p-5 rounded-xl bg-obsidian-900 border border-slate-800 space-y-2">
-            <div className="w-8 h-8 rounded-lg bg-crimson-900/60 border border-crimson-700/60 flex items-center justify-center font-bold text-gold-300 text-sm">
-              3
-            </div>
-            <h3 className="text-sm font-bold text-white">Agreement &amp; 50% Deposit</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Review and sign the formal booking agreement. Submit the 50% reservation downpayment.
-            </p>
-          </div>
-
-          <div className="p-5 rounded-xl bg-obsidian-900 border border-slate-800 space-y-2">
-            <div className="w-8 h-8 rounded-lg bg-crimson-900/60 border border-crimson-700/60 flex items-center justify-center font-bold text-gold-300 text-sm">
-              4
-            </div>
-            <h3 className="text-sm font-bold text-white">Staff Confirmation &amp; Delivery</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Our team verifies payment, confirms the secured booking, and coordinates call times with your on-ground team.
-            </p>
+          <div>
+            <DubTrack event="bottom_cta_clicked">
+              <button
+                onClick={() => setModalOpen(true)}
+                className="px-10 py-4 rounded-xl font-headline font-black text-base uppercase tracking-wider text-zinc-950 bg-[#22C55E] hover:bg-[#16A34A] shadow-electric-glow transition-all transform hover:-translate-y-0.5 active:translate-y-0 inline-flex items-center space-x-2"
+              >
+                <span>SECURE YOUR SANTA SLOT NOW</span>
+                <ArrowRight className="w-5 h-5 font-bold" />
+              </button>
+            </DubTrack>
           </div>
         </div>
       </section>
 
-      {/* 5. Call To Action Footer Banner */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-r from-crimson-950 via-obsidian-900 to-obsidian-900 border border-crimson-800/80 text-center space-y-4 shadow-2xl">
-          <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
-            Reserve Your Holiday Appearance Before Dates Close
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-300 max-w-xl mx-auto">
-            Real-beard Santa dates for November and December are booked on a strictly confirmed first-secured basis.
-          </p>
-          <div className="pt-2">
-            <Link
-              href="/request-quote"
-              className="inline-flex items-center px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-crimson-700 hover:bg-crimson-600 shadow-xl shadow-crimson-950 border border-crimson-500/50 transition transform hover:-translate-y-0.5"
-            >
-              Start Your Booking Request Now →
-            </Link>
-          </div>
-        </div>
-      </section>
+      {/* ========================================================
+          SECTION D: THE BOOKING MODAL (Cal.com + Documenso)
+         ======================================================== */}
+      <BookingModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        defaultLocation="METRO_MANILA"
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { XENDIT_PH_CHANNELS, buildQrPhString } from "@/lib/xendit";
 
 let cachedSnapshot: any = null;
 let snapshotPromise: Promise<any> | null = null;
@@ -50,6 +51,93 @@ export function StaticApiFallback() {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
+
+      let parsedBody: any = {};
+      if (init?.body && typeof init.body === "string") {
+        try {
+          parsedBody = JSON.parse(init.body);
+        } catch {
+          parsedBody = {};
+        }
+      }
+
+      // Handle Xendit Checkout Invoice Creation & Settlement on Static GitHub Pages
+      if (pathname === "/api/xendit/checkout" && method === "POST") {
+        const bookingNum = parsedBody.bookingNumber || `B2026-${Math.floor(1000 + Math.random() * 9000)}`;
+        const externalId = `XEN-${bookingNum}-${Date.now().toString().slice(-5)}`;
+        const invoiceId = `xen_inv_${Date.now().toString(36)}`;
+        const amount = Number(parsedBody.amount || 9000);
+        const preferredChannel = parsedBody.preferredChannel || "GCASH";
+
+        // Check if user configured a live Xendit Secret Key in localStorage
+        const storedKey =
+          parsedBody.secretKey ||
+          (typeof localStorage !== "undefined" ? localStorage.getItem("brillo_xendit_secret_key") : "") ||
+          "";
+
+        return jsonResponse({
+          success: true,
+          invoice: {
+            invoiceId,
+            externalId,
+            invoiceUrl: `https://checkout.xendit.co/web/${invoiceId}`,
+            isLiveXenditApi: Boolean(storedKey && storedKey.startsWith("xnd_")),
+            status: "PENDING",
+            amount,
+            currency: "PHP",
+            preferredChannel,
+            availablePaymentMethods: ["GCASH", "DD_BPI", "DD_UBP", "PAYMAYA", "QRPH", "BDO", "CREDIT_CARD"],
+            expiryDate: new Date(Date.now() + 86400 * 1000).toISOString(),
+            merchantName: "Brillo Events Management Services",
+            qrPhPayload: buildQrPhString({ externalId, amount }),
+          },
+          channels: XENDIT_PH_CHANNELS,
+        });
+      }
+
+      if (pathname === "/api/xendit/checkout" && method === "PATCH") {
+        const channelCode = parsedBody.channelCode || "GCASH";
+        const channelObj =
+          XENDIT_PH_CHANNELS.find((c) => c.code === channelCode) || XENDIT_PH_CHANNELS[0];
+        const refNumber =
+          parsedBody.payerReference ||
+          `XENDIT-${channelCode}-${Math.floor(100000 + Math.random() * 900000)}`;
+        const amount = Number(parsedBody.amount || 9000);
+
+        const newPayment = {
+          id: `pay_${Date.now()}`,
+          bookingId: parsedBody.bookingId || "static-booking",
+          paymentType: parsedBody.paymentOption === "FULL_100" ? "FULL_PAYMENT" : "DOWNPAYMENT",
+          amount,
+          paymentMethod: `XENDIT_${channelCode}`,
+          referenceNumber: refNumber,
+          paymentDate: new Date().toISOString(),
+          status: "VERIFIED",
+          verifiedAt: new Date().toISOString(),
+          verificationNotes: `Auto-verified via Xendit PH Gateway (${channelObj.name} -> ${channelObj.settlementBankName})`,
+          booking: {
+            bookingNumber: parsedBody.bookingNumber || "B2026-XEN",
+            mallOrVenue: parsedBody.mallOrVenue || "Corporate Venue",
+            client: {
+              companyName: parsedBody.mallOrVenue || "Corporate Partner",
+              primaryContact: parsedBody.payerName || "Authorized Representative",
+            },
+          },
+        };
+
+        if (snap.payments?.payments) {
+          snap.payments.payments.unshift(newPayment);
+        }
+
+        return jsonResponse({
+          success: true,
+          status: "PAID",
+          referenceNumber: refNumber,
+          settledAt: new Date().toISOString(),
+          channel: channelObj,
+          payment: newPayment,
+        });
+      }
 
       if (method !== "GET") {
         const refNum = `B2026-${Math.floor(1000 + Math.random() * 9000)}`;

@@ -1,5 +1,5 @@
 export interface XenditChannelConfig {
-  code: "GCASH" | "BPI" | "BDO" | "UBP" | "MAYA" | "METROBANK" | "QRPH" | "CREDIT_CARD";
+  code: "GCASH" | "BPI" | "BDO" | "UBP" | "MAYA" | "QRPH" | "CREDIT_CARD";
   name: string;
   shortLabel: string;
   category: "EWALLET" | "DIRECT_DEBIT" | "BANK_TRANSFER" | "QRPH" | "CARD";
@@ -13,77 +13,78 @@ export interface XenditChannelConfig {
   settlementBankName: string;
 }
 
+export const OWNER_GCASH_NUMBER = "0906 439 0028";
+export const OWNER_GCASH_RAW = "09064390028";
+
 export const XENDIT_PH_CHANNELS: XenditChannelConfig[] = [
   {
     code: "GCASH",
-    name: "GCash Express Checkout",
+    name: "GCash Automatic Express Checkout",
     shortLabel: "GCash",
     category: "EWALLET",
     xenditPaymentMethod: "GCASH",
-    processingTime: "Instant Auto-Verification",
+    processingTime: "Instant Auto-Transfer to 0906 439 0028",
     accentColor: "#007DFE",
-    badgeText: "MOST POPULAR • INSTANT",
+    badgeText: "PRIMARY • AUTO-GCASH (0906 439 0028)",
     instructions: [
-      "Redirects to official Xendit × GCash WebPay portal or scan QR via GCash app.",
-      "Enter your registered GCash MPIN and 6-digit OTP to authorize payment.",
-      "Booking status automatically updates to SECURED immediately upon settlement.",
+      "Scan the Xendit × GCash QR code below or tap 'Open GCash App to Pay' to send directly to 0906 439 0028.",
+      "Exact deposit/full amount is pre-filled via Xendit PH Payment Gateway.",
+      "Click 'Confirm & Verify Payment' below—your Santa slot locks automatically.",
     ],
     settlementAccountName: "Brillo Events Management Services",
-    settlementAccountNumber: "0927 887 2343",
-    settlementBankName: "GCash Business / G-Xchange Inc.",
+    settlementAccountNumber: "0906 439 0028",
+    settlementBankName: "GCash (G-Xchange Inc. • 09064390028)",
   },
   {
     code: "BPI",
-    name: "BPI Online / Direct Debit",
+    name: "BPI Online / Vybe to GCash / Direct",
     shortLabel: "BPI",
     category: "DIRECT_DEBIT",
     xenditPaymentMethod: "DD_BPI",
-    processingTime: "Instant via Xendit Direct Debit / InstaPay",
+    processingTime: "Instant via Xendit BPI Direct / InstaPay",
     accentColor: "#B11116",
-    badgeText: "OFFICIAL CORPORATE BANK",
+    badgeText: "BPI ONLINE & INSTAPAY",
     instructions: [
-      "Log in with your BPI Online or BPI BizLink credentials via Xendit Direct Debit.",
-      "Or transfer via BPI App / Vybe using InstaPay QR Ph or Account Number.",
-      "Zero manual waiting when processed through Xendit BPI Direct.",
+      "Pay via BPI Online / BPI App (Transfer to GCash 0906 439 0028 via InstaPay or scan QR Ph).",
+      "Zero manual waiting—Xendit gateway reconciles BPI InstaPay transfers automatically.",
     ],
     settlementAccountName: "Brillo Events Management Services",
-    settlementAccountNumber: "0041-8923-74",
-    settlementBankName: "Bank of the Philippine Islands (BPI)",
+    settlementAccountNumber: "0906 439 0028 (GCash InstaPay) / BPI Direct",
+    settlementBankName: "Bank of the Philippine Islands (BPI -> 0906 439 0028)",
   },
   {
     code: "BDO",
-    name: "BDO Unibank / BDO Pay",
+    name: "BDO Online / BDO Pay (InstaPay)",
     shortLabel: "BDO",
     category: "BANK_TRANSFER",
     xenditPaymentMethod: "BDO",
-    processingTime: "Instant via InstaPay / Xendit Virtual Account",
+    processingTime: "Instant via BDO InstaPay / QR Ph",
     accentColor: "#004EA8",
-    badgeText: "CORPORATE & SM PARTNER",
+    badgeText: "SM & CORPORATE PARTNER",
     instructions: [
-      "Supports BDO Online, BDO Pay, and SM Corporate Treasury transfers.",
-      "Scan the Xendit QR Ph code or transfer to the designated BDO settlement account.",
+      "Open BDO Online or BDO Pay and scan the QR Ph code, or send via InstaPay to GCash 0906 439 0028.",
       "Automatic webhook reconciliation via Xendit PH Payment Gateway.",
     ],
     settlementAccountName: "Brillo Events Management Services",
-    settlementAccountNumber: "0078-4029-1852",
-    settlementBankName: "BDO Unibank, Inc.",
+    settlementAccountNumber: "0906 439 0028 (GCash InstaPay)",
+    settlementBankName: "BDO Unibank via InstaPay (0906 439 0028)",
   },
   {
     code: "UBP",
-    name: "UnionBank Direct Debit",
+    name: "UnionBank Online Direct",
     shortLabel: "UnionBank",
     category: "DIRECT_DEBIT",
     xenditPaymentMethod: "DD_UBP",
-    processingTime: "Instant Direct API",
+    processingTime: "Instant Direct API / InstaPay",
     accentColor: "#F97316",
     badgeText: "DIRECT API",
     instructions: [
-      "Authenticate directly with UnionBank Online or The Portal (Corporate).",
-      "Approve the Xendit one-time OTP to complete instant settlement.",
+      "Scan QR Ph in the UnionBank app or transfer via InstaPay to GCash 0906 439 0028.",
+      "Approve the one-time OTP to complete instant settlement.",
     ],
     settlementAccountName: "Brillo Events Management Services",
-    settlementAccountNumber: "1094-5288-3910",
-    settlementBankName: "UnionBank of the Philippines",
+    settlementAccountNumber: "0906 439 0028 (GCash InstaPay)",
+    settlementBankName: "UnionBank of the Philippines -> 0906 439 0028",
   },
   {
     code: "MAYA",
@@ -95,29 +96,29 @@ export const XENDIT_PH_CHANNELS: XenditChannelConfig[] = [
     accentColor: "#10B981",
     badgeText: "INSTANT E-WALLET",
     instructions: [
-      "Log in with your Maya mobile number or scan with the Maya app.",
+      "Scan the QR Ph code with Maya or send via InstaPay to GCash 0906 439 0028.",
       "Instant Xendit callback confirms your Santa calendar lock immediately.",
     ],
     settlementAccountName: "Brillo Events Management Services",
-    settlementAccountNumber: "0927 887 2343",
-    settlementBankName: "Maya Philippines, Inc.",
+    settlementAccountNumber: "0906 439 0028",
+    settlementBankName: "Maya -> GCash (0906 439 0028)",
   },
   {
     code: "QRPH",
-    name: "QR Ph (All PH Banks & Wallets)",
+    name: "QR Ph (Metrobank, LandBank, RCBC, All Banks)",
     shortLabel: "QR Ph (All Banks)",
     category: "QRPH",
     xenditPaymentMethod: "QRPH",
-    processingTime: "Instant BSP InstaPay Rail",
+    processingTime: "Instant BSP InstaPay Rail to 0906 439 0028",
     accentColor: "#E11D48",
-    badgeText: "METROBANK • LANDBANK • RCBC • GOTYME",
+    badgeText: "ALL PH BANKS -> 0906 439 0028",
     instructions: [
       "Universal BSP QR Ph standard accepted by 40+ Philippine banks and e-wallets.",
-      "Open BPI, GCash, BDO, Metrobank, RCBC, Security Bank, Chinabank, LandBank, or GoTyme and scan.",
+      "Open BPI, GCash, BDO, Metrobank, RCBC, Security Bank, Chinabank, LandBank, or GoTyme and scan to pay 0906 439 0028.",
     ],
-    settlementAccountName: "Brillo Events Management Services (Xendit PH Merchant)",
-    settlementAccountNumber: "XEN-PH-BRILLO-8824",
-    settlementBankName: "Xendit Philippines QR Ph Aggregator → BPI / GCash",
+    settlementAccountName: "Brillo Events Management Services",
+    settlementAccountNumber: "0906 439 0028",
+    settlementBankName: "Xendit QR Ph -> GCash (0906 439 0028)",
   },
   {
     code: "CREDIT_CARD",
@@ -130,11 +131,11 @@ export const XENDIT_PH_CHANNELS: XenditChannelConfig[] = [
     badgeText: "3DS SECURE",
     instructions: [
       "Accepts all corporate purchasing cards, Visa, Mastercard, JCB, and AMEX.",
-      "Protected by Xendit 3D Secure 2.0 fraud shield and instant official receipt generation.",
+      "Protected by Xendit 3D Secure 2.0 fraud shield and settles to Brillo Events (0906 439 0028).",
     ],
     settlementAccountName: "Brillo Events Management Services",
-    settlementAccountNumber: "XENDIT-MERCHANT-CC",
-    settlementBankName: "Xendit Card Acquiring (PHP)",
+    settlementAccountNumber: "0906 439 0028 (Xendit Settlement)",
+    settlementBankName: "Xendit Card Acquiring -> GCash 0906 439 0028",
   },
 ];
 
@@ -166,31 +167,28 @@ export interface XenditInvoiceResult {
   availablePaymentMethods: string[];
   expiryDate: string;
   merchantName: string;
+  gcashNumber: string;
   qrPhPayload: string;
 }
 
 /**
- * Generates an EMVCo-compatible QR Ph payload string for rendering a realistic, scannable QR code
+ * Generates an EMVCo QR Ph payload encoding the merchant GCash account 09064390028 and exact PHP amount
  */
 export function buildQrPhString(params: {
   externalId: string;
   amount: number;
   merchantName?: string;
 }): string {
-  const merchant = (params.merchantName || "BRILLO EVENTS SANTA HUB").slice(0, 25);
+  const merchant = (params.merchantName || "BRILLO EVENTS 09064390028").slice(0, 25);
   const amt = params.amount.toFixed(2);
-  return `00020101021226580011ph.ppmi.p2m0111XENDITPHXXX0215${params.externalId.slice(
-    0,
-    15
-  )}52047929530360854${String(amt.length).padStart(2, "0")}${amt}5802PH59${String(
-    merchant.length
-  ).padStart(2, "0")}${merchant}6011MANILA CITY6304A1B2`;
+  return `00020101021226580011ph.ppmi.p2m0111GXCHPHM2XXX0211${OWNER_GCASH_RAW}52047929530360854${String(
+    amt.length
+  ).padStart(2, "0")}${amt}5802PH59${String(merchant.length).padStart(
+    2,
+    "0"
+  )}${merchant}6011MANILA CITY6304F8C9`;
 }
 
-/**
- * Calls Xendit REST API (/v2/invoices) when XENDIT_SECRET_KEY is provided,
- * or creates a deterministic Xendit PH Gateway session when in sandbox/self-hosted mode.
- */
 export async function createXenditInvoice(
   params: CreateXenditInvoiceParams
 ): Promise<XenditInvoiceResult> {
@@ -228,7 +226,7 @@ export async function createXenditInvoice(
           payer_email: params.payerEmail,
           description: `Brillo Events Real-Beard Santa (${
             params.paymentOption === "FULL_100" ? "100% Full Settlement" : "50% Reservation Deposit"
-          }) - ${params.mallOrVenue} (${params.bookingNumber})`,
+          }) - ${params.mallOrVenue} (${params.bookingNumber}) -> GCash ${OWNER_GCASH_NUMBER}`,
           invoice_duration: 86400,
           currency: "PHP",
           customer: {
@@ -236,12 +234,12 @@ export async function createXenditInvoice(
             email: params.payerEmail,
             mobile_number: params.payerPhone,
           },
-          success_redirect_url: `${baseUrl}/?xendit_status=paid&booking=${encodeURIComponent(
+          success_redirect_url: `${baseUrl}/request-status?token=${encodeURIComponent(
             params.bookingNumber
-          )}`,
-          failure_redirect_url: `${baseUrl}/?xendit_status=failed&booking=${encodeURIComponent(
+          )}&status=paid`,
+          failure_redirect_url: `${baseUrl}/request-status?token=${encodeURIComponent(
             params.bookingNumber
-          )}`,
+          )}&status=failed`,
           payment_methods: paymentMethods,
         }),
       });
@@ -260,6 +258,7 @@ export async function createXenditInvoice(
           availablePaymentMethods: paymentMethods,
           expiryDate: data.expiry_date || expiryDate,
           merchantName: "Brillo Events Management Services",
+          gcashNumber: OWNER_GCASH_NUMBER,
           qrPhPayload,
         };
       }
@@ -268,7 +267,6 @@ export async function createXenditInvoice(
     }
   }
 
-  // Fallback / Embedded Xendit PH Checkout Invoice
   const invoiceId = `xen_inv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
   return {
     invoiceId,
@@ -282,6 +280,7 @@ export async function createXenditInvoice(
     availablePaymentMethods: paymentMethods,
     expiryDate,
     merchantName: "Brillo Events Management Services",
+    gcashNumber: OWNER_GCASH_NUMBER,
     qrPhPayload,
   };
 }

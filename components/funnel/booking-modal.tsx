@@ -8,9 +8,6 @@ import {
   Sparkles,
   Lock,
   Smartphone,
-  Building2,
-  QrCode,
-  CreditCard,
   Copy,
   Check,
   ExternalLink,
@@ -22,6 +19,8 @@ import {
   XENDIT_PH_CHANNELS,
   XenditChannelConfig,
   XenditInvoiceResult,
+  OWNER_GCASH_NUMBER,
+  OWNER_GCASH_RAW,
 } from "@/lib/xendit";
 
 interface BookingModalProps {
@@ -56,7 +55,6 @@ export function BookingModal({
   const [copiedAccount, setCopiedAccount] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Allow owner-customized GCash / BPI / Bank account overrides from localStorage
   const [customAccounts, setCustomAccounts] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -80,13 +78,13 @@ export function BookingModal({
     XENDIT_PH_CHANNELS.find((c) => c.code === selectedChannel) || XENDIT_PH_CHANNELS[0];
 
   const displayAccountNumber =
-    customAccounts[selectedChannel] || activeChannelObj.settlementAccountNumber;
+    customAccounts[selectedChannel] || OWNER_GCASH_NUMBER;
   const displayAccountName =
     customAccounts.ACCOUNT_NAME || activeChannelObj.settlementAccountName;
 
   const handleCopyAccount = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(displayAccountNumber);
+      navigator.clipboard.writeText(OWNER_GCASH_RAW);
       setCopiedAccount(true);
       setTimeout(() => setCopiedAccount(false), 2000);
     }
@@ -98,7 +96,7 @@ export function BookingModal({
     setErrorMsg(null);
 
     try {
-      // 1. Submit to Public Request Quote API (persisting lead and booking)
+      // 1. Submit to Public Request Quote API
       const res = await fetch("/api/public/request-quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -112,12 +110,30 @@ export function BookingModal({
           locationCity: isProvincial ? "Provincial Venue" : "Metro Manila",
           isProvincial,
           clientQuotedAmount: baseRate,
-          notes: `Slot: ${selectedSlot} | Xendit Gateway: ${selectedChannel} (${paymentOption}) | Source: Direct Response B2B Funnel`,
+          notes: `Slot: ${selectedSlot} | Xendit Gateway: ${selectedChannel} -> GCash ${OWNER_GCASH_NUMBER} (${paymentOption})`,
         }),
       });
 
       const data = await res.json();
       if (!data.success) throw new Error(data.error || "Failed to create reservation");
+
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem(
+            "brillo_last_booking",
+            JSON.stringify({
+              bookingId: data.bookingId,
+              bookingNumber: data.bookingNumber,
+              lookupToken: data.lookupToken,
+              mallOrVenue,
+              eventDate,
+              baseRate,
+            })
+          );
+        } catch {
+          // ignore
+        }
+      }
 
       // 2. Trigger Documenso eSignature API Webhook
       fetch("/api/webhooks/documenso", {
@@ -138,7 +154,7 @@ export function BookingModal({
         }),
       }).catch((err) => console.warn("Documenso webhook dispatch warning:", err));
 
-      // 3. Create Xendit Automatic Payment Gateway Invoice (GCash / BPI / BDO / UnionBank / QR Ph)
+      // 3. Create Xendit Automatic Payment Gateway Invoice for GCash 0906 439 0028
       const storedSecretKey =
         typeof window !== "undefined"
           ? localStorage.getItem("brillo_xendit_secret_key") || undefined
@@ -220,6 +236,14 @@ export function BookingModal({
 
   if (!isOpen) return null;
 
+  const statusPortalUrl = bookingData
+    ? `/request-status?token=${encodeURIComponent(
+        bookingData.lookupToken
+      )}&booking=${encodeURIComponent(bookingData.bookingNumber)}&amount=${baseRate}&venue=${encodeURIComponent(
+        mallOrVenue
+      )}`
+    : "/request-status";
+
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-center justify-center p-4 sm:p-6">
@@ -235,13 +259,13 @@ export function BookingModal({
             <div>
               <div className="inline-flex items-center space-x-2 text-[11px] font-mono text-[#D4AF37] uppercase tracking-wider font-bold">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Cal.com Scheduling × Xendit PH Payment Gateway</span>
+                <span>Xendit PH Gateway • Auto-GCash ({OWNER_GCASH_NUMBER})</span>
               </div>
               <h2 className="text-xl sm:text-2xl font-headline font-black text-white mt-0.5">
                 {settledReceipt
-                  ? "Xendit Payment Verified & Slot Locked"
+                  ? "GCash / Xendit Payment Verified!"
                   : xenditInvoice
-                  ? "Xendit PH Automatic Payment Checkout"
+                  ? `Automatic Payment to GCash (${OWNER_GCASH_NUMBER})`
                   : "Secure Your Corporate Santa Appearance"}
               </h2>
             </div>
@@ -264,7 +288,7 @@ export function BookingModal({
               <div className="space-y-1.5">
                 <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-[#22C55E]/10 border border-[#22C55E]/30 text-[#22C55E] text-[11px] font-mono font-bold">
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>XENDIT GATEWAY VERIFIED • {activeChannelObj.shortLabel.toUpperCase()}</span>
+                  <span>PAID TO GCASH {OWNER_GCASH_NUMBER} • SLOT LOCKED</span>
                 </div>
                 <h3 className="text-2xl font-headline font-black text-white">
                   Corporate Santa Slot Officially Locked!
@@ -273,8 +297,8 @@ export function BookingModal({
                   Booking Reference:{" "}
                   <strong className="font-mono text-[#D4AF37]">{bookingData.bookingNumber}</strong>
                   <br />
-                  Your payment has been processed via Xendit PH and routed to{" "}
-                  <strong className="text-white">{activeChannelObj.settlementBankName}</strong>.
+                  Payment settled via <strong className="text-white">{activeChannelObj.name}</strong>{" "}
+                  directly to GCash <strong className="text-[#22C55E]">{OWNER_GCASH_NUMBER}</strong>.
                 </p>
               </div>
 
@@ -284,14 +308,8 @@ export function BookingModal({
                   <span className="text-[#22C55E] font-bold">{settledReceipt.referenceNumber}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-zinc-500">Payment Channel:</span>
-                  <span className="text-white font-bold">{activeChannelObj.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Settled To Account:</span>
-                  <span className="text-zinc-200">
-                    {activeChannelObj.shortLabel} ({displayAccountNumber})
-                  </span>
+                  <span className="text-zinc-500">Receiving GCash Account:</span>
+                  <span className="text-[#22C55E] font-bold">{OWNER_GCASH_NUMBER}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-zinc-500">Venue &amp; Date:</span>
@@ -315,10 +333,10 @@ export function BookingModal({
 
               <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
                 <a
-                  href={`/request-status/${bookingData.lookupToken}`}
+                  href={statusPortalUrl}
                   className="px-6 py-3 rounded-xl bg-[#22C55E] hover:bg-[#16A34A] text-zinc-950 font-headline font-bold text-xs uppercase tracking-wide transition shadow-electric-glow"
                 >
-                  View Official Booking &amp; Contract Portal →
+                  Open Booking &amp; Payment Receipt Portal →
                 </a>
                 <button
                   onClick={handleResetAndClose}
@@ -329,7 +347,7 @@ export function BookingModal({
               </div>
             </div>
           ) : xenditInvoice && bookingData ? (
-            /* STEP 2: ACTIVE XENDIT AUTOMATIC PAYMENT GATEWAY CHECKOUT */
+            /* STEP 2: ACTIVE XENDIT AUTOMATIC PAYMENT GATEWAY CHECKOUT (0906 439 0028) */
             <div className="p-5 sm:p-6 space-y-5">
               {errorMsg && (
                 <div className="p-3 rounded-lg bg-[#E11D48]/10 border border-[#E11D48]/30 text-[#E11D48] text-xs">
@@ -341,8 +359,8 @@ export function BookingModal({
               <div className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center space-x-2">
-                    <span className="px-2 py-0.5 rounded bg-blue-500/15 border border-blue-500/30 text-blue-400 font-mono text-[10px] font-bold uppercase">
-                      Xendit PH Gateway
+                    <span className="px-2 py-0.5 rounded bg-[#007DFE]/20 border border-[#007DFE]/40 text-blue-300 font-mono text-[10px] font-bold uppercase">
+                      Auto-GCash: {OWNER_GCASH_NUMBER}
                     </span>
                     <span className="text-xs font-mono text-zinc-400">
                       Ref: <strong className="text-white">{xenditInvoice.externalId}</strong>
@@ -363,10 +381,10 @@ export function BookingModal({
                 </div>
               </div>
 
-              {/* Channel Switcher Tabs (GCash, BPI, BDO, UnionBank, Maya, QR Ph, Card) */}
+              {/* Channel Switcher Tabs */}
               <div className="space-y-2">
                 <label className="block text-[11px] font-mono uppercase tracking-wider text-zinc-400">
-                  Select Automatic Payment Channel (Instant Settlement to Brillo Events)
+                  Select Payment App (All Settle Automatically to GCash {OWNER_GCASH_NUMBER})
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {XENDIT_PH_CHANNELS.map((ch) => {
@@ -392,13 +410,7 @@ export function BookingModal({
                           />
                         </div>
                         <span className="text-[10px] text-zinc-400 mt-1 truncate">
-                          {ch.category === "EWALLET"
-                            ? "Instant e-Wallet"
-                            : ch.category === "DIRECT_DEBIT"
-                            ? "Direct Bank API"
-                            : ch.category === "QRPH"
-                            ? "All PH Banks"
-                            : "Instant Transfer"}
+                          → {OWNER_GCASH_NUMBER}
                         </span>
                       </button>
                     );
@@ -407,7 +419,7 @@ export function BookingModal({
               </div>
 
               {/* Active Channel Payment Panel */}
-              <div className="p-4 sm:p-5 rounded-xl bg-[#09090B] border border-[#27272A] space-y-4">
+              <div className="p-4 sm:p-5 rounded-xl bg-[#09090B] border-2 border-[#007DFE]/60 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-3">
                   <div className="flex items-center space-x-2.5">
                     <div
@@ -420,38 +432,38 @@ export function BookingModal({
                       <h4 className="text-sm font-headline font-bold text-white">
                         {activeChannelObj.name}
                       </h4>
-                      <p className="text-[11px] text-zinc-400">
-                        {activeChannelObj.processingTime}
+                      <p className="text-[11px] text-emerald-400 font-mono">
+                        Receiving GCash Account: {OWNER_GCASH_NUMBER}
                       </p>
                     </div>
                   </div>
                   <span className="px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-700 text-[10px] font-mono text-[#D4AF37] font-bold self-start sm:self-center">
-                    {activeChannelObj.badgeText}
+                    {OWNER_GCASH_NUMBER}
                   </span>
                 </div>
 
-                {/* QR Ph + Direct Bank / GCash Account Details */}
+                {/* QR Ph + Direct GCash 0906 439 0028 Details */}
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
-                  {/* Left: Interactive QR Ph / Xendit Scan Box */}
-                  <div className="sm:col-span-5 flex flex-col items-center justify-center p-3.5 rounded-xl bg-white text-zinc-950 space-y-2">
+                  {/* Left: Interactive QR Ph / GCash Scan Box */}
+                  <div className="sm:col-span-5 flex flex-col items-center justify-center p-3.5 rounded-xl bg-white text-zinc-950 space-y-2 shadow-lg">
                     <div className="flex items-center justify-between w-full px-1">
-                      <span className="text-[10px] font-mono font-extrabold tracking-tight text-blue-700">
-                        XENDIT × QR Ph
+                      <span className="text-[10px] font-mono font-extrabold tracking-tight text-[#007DFE]">
+                        GCASH • QR Ph
                       </span>
                       <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                        INSTAPAY
+                        {OWNER_GCASH_NUMBER}
                       </span>
                     </div>
                     <img
                       src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
                         xenditInvoice.qrPhPayload
                       )}`}
-                      alt="Xendit QR Ph Payment Code"
+                      alt="Xendit GCash 0906 439 0028 QR Code"
                       className="w-32 h-32 object-contain rounded"
                     />
                     <div className="text-center">
-                      <div className="text-[10px] font-bold text-zinc-900">
-                        Scan with {activeChannelObj.shortLabel} / Any PH Bank
+                      <div className="text-[11px] font-extrabold text-zinc-900">
+                        GCash: {OWNER_GCASH_NUMBER}
                       </div>
                       <div className="text-[9px] font-mono text-zinc-600">
                         Amount: ₱{activePayableAmount.toLocaleString()}
@@ -463,55 +475,51 @@ export function BookingModal({
                   <div className="sm:col-span-7 space-y-3 text-xs">
                     <div className="p-3 rounded-lg bg-zinc-900/90 border border-zinc-800 space-y-1.5 font-mono">
                       <div className="text-[10px] text-zinc-400 uppercase">
-                        Receiving {activeChannelObj.shortLabel} Settlement Account:
+                        Direct GCash Number (Send via GCash / BPI / BDO InstaPay):
                       </div>
-                      <div className="text-xs text-white font-bold">
-                        {activeChannelObj.settlementBankName}
-                      </div>
-                      <div className="flex items-center justify-between bg-[#09090B] px-3 py-2 rounded border border-zinc-800">
+                      <div className="flex items-center justify-between bg-[#09090B] px-3 py-2 rounded border border-[#007DFE]/50">
                         <div>
-                          <div className="text-sm font-bold text-[#22C55E] tracking-wide">
-                            {displayAccountNumber}
+                          <div className="text-base font-black text-[#22C55E] tracking-wider">
+                            {OWNER_GCASH_NUMBER}
                           </div>
                           <div className="text-[10px] text-zinc-400">{displayAccountName}</div>
                         </div>
                         <button
                           type="button"
                           onClick={handleCopyAccount}
-                          className="px-2.5 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10px] flex items-center space-x-1 transition"
+                          className="px-2.5 py-1.5 rounded bg-[#007DFE] hover:bg-blue-600 text-white text-[10px] font-bold flex items-center space-x-1 transition"
                         >
                           {copiedAccount ? (
                             <>
-                              <Check className="w-3 h-3 text-[#22C55E]" />
-                              <span>Copied</span>
+                              <Check className="w-3 h-3" />
+                              <span>Copied!</span>
                             </>
                           ) : (
                             <>
                               <Copy className="w-3 h-3" />
-                              <span>Copy</span>
+                              <span>Copy {OWNER_GCASH_RAW}</span>
                             </>
                           )}
                         </button>
                       </div>
                     </div>
 
-                    <ul className="space-y-1 text-[11px] text-zinc-300">
-                      {activeChannelObj.instructions.map((inst, idx) => (
-                        <li key={idx} className="flex items-start space-x-2">
-                          <span className="text-[#22C55E] font-bold">•</span>
-                          <span>{inst}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <a
+                      href="gcash://"
+                      onClick={() => handleCopyAccount()}
+                      className="w-full py-2.5 px-3 rounded-lg bg-[#007DFE] hover:bg-blue-600 text-white font-headline font-bold text-[11px] uppercase tracking-wider flex items-center justify-center space-x-1.5 transition"
+                    >
+                      <Smartphone className="w-3.5 h-3.5" />
+                      <span>Open GCash App &amp; Copy {OWNER_GCASH_NUMBER}</span>
+                    </a>
 
                     <div>
                       <label className="block text-[11px] text-zinc-400 mb-1">
-                        Optional: Enter {activeChannelObj.shortLabel} Reference # (or leave blank for
-                        auto-webhook)
+                        Enter {activeChannelObj.shortLabel} Reference # (or click Confirm below):
                       </label>
                       <input
                         type="text"
-                        placeholder={`e.g. ${activeChannelObj.shortLabel} Ref / InstaPay #`}
+                        placeholder={`e.g. GCash / ${activeChannelObj.shortLabel} Ref #`}
                         value={payerReference}
                         onChange={(e) => setPayerReference(e.target.value)}
                         className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-white text-xs font-mono placeholder-zinc-600 focus:outline-none focus:border-[#22C55E]"
@@ -532,8 +540,8 @@ export function BookingModal({
                   <Zap className="w-4 h-4 fill-current" />
                   <span>
                     {settlingPayment
-                      ? `VERIFYING ${activeChannelObj.shortLabel.toUpperCase()} SETTLEMENT...`
-                      : `AUTHORIZE & COMPLETE ${activeChannelObj.shortLabel.toUpperCase()} PAYMENT (₱${activePayableAmount.toLocaleString()}) →`}
+                      ? `VERIFYING PAYMENT TO ${OWNER_GCASH_NUMBER}...`
+                      : `CONFIRM PAYMENT TO ${OWNER_GCASH_NUMBER} (₱${activePayableAmount.toLocaleString()}) →`}
                   </span>
                 </button>
 
@@ -547,23 +555,11 @@ export function BookingModal({
                     <span>Back to Booking Details</span>
                   </button>
 
-                  {xenditInvoice.isLiveXenditApi && (
-                    <a
-                      href={xenditInvoice.invoiceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center space-x-1 text-[#D4AF37] hover:underline font-mono text-[11px]"
-                    >
-                      <span>Open Hosted Xendit Portal</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  )}
-
                   <a
-                    href={`/request-status/${bookingData.lookupToken}`}
-                    className="text-zinc-400 hover:text-zinc-200 underline text-[11px]"
+                    href={statusPortalUrl}
+                    className="text-[#D4AF37] hover:underline font-mono text-[11px]"
                   >
-                    Keep 24-Hr Hold &amp; Pay Later via Link →
+                    Open Full-Page Payment &amp; Status Portal →
                   </a>
                 </div>
               </div>
@@ -725,7 +721,7 @@ export function BookingModal({
                   <div className="flex items-center space-x-2">
                     <Lock className="w-3.5 h-3.5 text-[#22C55E]" />
                     <span className="text-xs font-headline font-bold text-white">
-                      Automatic Payment Gateway (Powered by Xendit PH)
+                      Automatic Payment Gateway → GCash ({OWNER_GCASH_NUMBER})
                     </span>
                   </div>
 
@@ -793,12 +789,12 @@ export function BookingModal({
                 >
                   <span>
                     {submitting
-                      ? `INITIALIZING XENDIT (${activeChannelObj.shortLabel.toUpperCase()}) GATEWAY...`
-                      : `LOCK 24-HR HOLD & PAY VIA ${activeChannelObj.shortLabel.toUpperCase()} (₱${activePayableAmount.toLocaleString()}) →`}
+                      ? `OPENING ${activeChannelObj.shortLabel.toUpperCase()} GATEWAY (${OWNER_GCASH_NUMBER})...`
+                      : `PAY VIA ${activeChannelObj.shortLabel.toUpperCase()} TO ${OWNER_GCASH_NUMBER} (₱${activePayableAmount.toLocaleString()}) →`}
                   </span>
                 </button>
                 <p className="text-center text-[10px] text-zinc-500 font-mono mt-2">
-                  Instant Xendit PH Settlement to GCash, BPI, BDO &amp; UnionBank • SM Framework Agreement Triggered
+                  Automatic Xendit PH Payment to GCash ({OWNER_GCASH_NUMBER}), BPI &amp; Banks • Instant Slot Lock
                 </p>
               </div>
             </form>

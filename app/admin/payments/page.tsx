@@ -26,7 +26,7 @@ export default function PaymentsPage() {
   const [accountHolderName, setAccountHolderName] = useState(
     "Brillo Events Management Services"
   );
-  const [gcashNumber, setGcashNumber] = useState("0927 887 2343");
+  const [gcashNumber, setGcashNumber] = useState("0906 439 0028");
   const [bpiAccount, setBpiAccount] = useState("0041-8923-74");
   const [bdoAccount, setBdoAccount] = useState("0078-4029-1852");
   const [ubpAccount, setUbpAccount] = useState("1094-5288-3910");

@@ -86,17 +86,17 @@ try {
         // Automatic payout/settlement to Owner's GCash (PH_GCASH), BPI (PH_BPI), or BDO (PH_BDO)
         $payoutApi = new PayoutApi();
         $idempotencyKey = 'payout-' . uniqid();
-        $channelCode = $payload['channel_code'] ?? 'PH_BPI'; // PH_GCASH, PH_BPI, PH_BDO, PH_UBP, PH_MBTC
+        $channelCode = $payload['channel_code'] ?? 'PH_GCASH'; // PH_GCASH, PH_BPI, PH_BDO, PH_UBP, PH_MBTC
 
         $payoutRequest = new CreatePayoutRequest([
             'reference_id' => 'BRILLO-SETTLEMENT-' . time(),
             'channel_code' => $channelCode,
             'channel_properties' => [
                 'account_holder_name' => $payload['account_holder_name'] ?? 'Brillo Events Management Services',
-                'account_number' => $payload['account_number'] ?? '0041892374'
+                'account_number' => $payload['account_number'] ?? '09064390028'
             ],
             'amount' => (float)($payload['amount'] ?? 9000),
-            'description' => 'Brillo Events Santa Booking Auto-Settlement',
+            'description' => 'Brillo Events Santa Booking Auto-Settlement to GCash 09064390028',
             'currency' => 'PHP'
         ]);
 

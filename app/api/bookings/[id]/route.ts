@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { validateStateTransition, BookingStatus, BOOKING_STATUS_CONFIG } from "@/lib/booking-state";
+import { evaluateDualGateSignoff } from "@/lib/booking-state-machine";
 import { checkTalentConflict } from "@/lib/concurrency";
 import { logAudit } from "@/lib/audit";
+import { authorizeAdminRequest } from "@/lib/security";
 
 export async function GET(
   req: NextRequest,
@@ -45,6 +47,11 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = authorizeAdminRequest(req, ["SUPER_ADMIN", "OPS_ADMIN", "FINANCE_ADMIN"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
+
     const body = await req.json();
     const {
       status: targetStatus,
@@ -60,7 +67,8 @@ export async function PATCH(
       extendHoldReason,
       cancellationReason,
       internalNotes,
-      actor = "STAFF_USER",
+      forceDualGateOverride = false,
+      actor = auth.actor,
     } = body;
 
     const existing = await prisma.booking.findUnique({
@@ -78,11 +86,12 @@ export async function PATCH(
 
     const updates: any = {};
 
-    // 1. Check Date / Time / Talent conflict if changing
+    // 1. Check Date / Time / Talent conflict
     const newDate = eventDate ? new Date(eventDate) : existing.eventDate;
     const effectiveTalentId = talentId || existing.talentAssignments[0]?.talentId;
+    let hasScheduleOverlap = false;
 
-    if ((eventDate || startTime || endTime || talentId) && effectiveTalentId) {
+    if (effectiveTalentId) {
       const conflict = await checkTalentConflict({
         talentId: effectiveTalentId,
         eventDate: newDate,
@@ -91,7 +100,9 @@ export async function PATCH(
         excludeBookingId: existing.id,
       });
 
-      if (conflict.hasConflict) {
+      hasScheduleOverlap = conflict.hasConflict;
+
+      if (conflict.hasConflict && (eventDate || startTime || endTime || talentId)) {
         return NextResponse.json(
           {
             success: false,
@@ -129,17 +140,52 @@ export async function PATCH(
       });
     }
 
-    // 3. Status Transition Validation
+    // 3. Deterministic Status Transition & Dual-Gate Signoff Validation
     if (targetStatus && targetStatus !== existing.status) {
-      const hasSignedAgreement = existing.contracts.some((c) => c.status === "SIGNED" || c.signedFileUrl !== null);
-      const hasVerifiedPayment = existing.payments.some((p) => p.status === "VERIFIED");
+      const hasSignedAgreement = existing.contracts.some(
+        (c) => c.status === "SIGNED" || c.signedFileUrl !== null
+      );
+      const hasInstitutionalWaiver = existing.contracts.some(
+        (c) => c.templateType === "NO_DP" || c.templateType === "SM_CUSTOM"
+      );
+      const verifiedDepositPaid = existing.payments
+        .filter((p) => p.status === "VERIFIED")
+        .reduce((s, p) => s + Number(p.amount), 0);
+      const hasVerifiedPayment = verifiedDepositPaid > 0;
+
+      // Enforce Dual-Gate Approval when locking booking from AWAITING_STAFF_APPROVAL
+      if (
+        (targetStatus === "SECURED_UNASSIGNED" || targetStatus === "READY_FOR_DEPLOYMENT") &&
+        !(forceDualGateOverride && auth.role === "SUPER_ADMIN")
+      ) {
+        const dualGate = evaluateDualGateSignoff({
+          hasSignedContract: hasSignedAgreement,
+          hasInstitutionalWaiver,
+          totalContractAmount: Number(existing.totalContractAmount || 18000),
+          verifiedDepositPaid,
+          hasAssignedTalent: Boolean(effectiveTalentId),
+          hasScheduleOverlap,
+        });
+
+        if (!dualGate.canLockRoster) {
+          return NextResponse.json(
+            {
+              success: false,
+              dualGateFailed: true,
+              blockingReasons: dualGate.blockingReasons,
+              error: dualGate.blockingReasons.join(" | "),
+            },
+            { status: 400 }
+          );
+        }
+      }
 
       const validation = validateStateTransition(
         existing.status as BookingStatus,
         targetStatus as BookingStatus,
-        hasSignedAgreement,
-        hasVerifiedPayment,
-        true // isStaff
+        hasSignedAgreement || (forceDualGateOverride && auth.role === "SUPER_ADMIN"),
+        hasVerifiedPayment || hasInstitutionalWaiver || (forceDualGateOverride && auth.role === "SUPER_ADMIN"),
+        true
       );
 
       if (!validation.allowed) {
@@ -158,7 +204,9 @@ export async function PATCH(
           fromStatus: existing.status,
           toStatus: targetStatus,
           actor,
-          reason: cancellationReason || `Status updated to ${targetStatus}`,
+          reason:
+            cancellationReason ||
+            `Dual-Gate Signoff passed (${auth.role}) -> ${targetStatus}`,
         },
       });
     }
@@ -193,7 +241,7 @@ export async function PATCH(
       entityType: "Booking",
       entityId: existing.id,
       actorName: actor,
-      details: { updates },
+      details: { updates, rbacRole: auth.role },
     });
 
     return NextResponse.json({ success: true, booking: updated });

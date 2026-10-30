@@ -20,6 +20,7 @@ import { WallOfWin } from "@/components/funnel/wall-of-win";
 import { OfferStack } from "@/components/funnel/offer-stack";
 import { BookingModal } from "@/components/funnel/booking-modal";
 import { DubTrack } from "@/components/funnel/dub-track";
+import { VelvetShaderWave } from "@/components/visual-effects/velvet-shader-wave";
 
 export default function B2BFunnelHomePage() {
   const [modalOpen, setModalOpen] = useState(false);
@@ -31,6 +32,8 @@ export default function B2BFunnelHomePage() {
           SECTION A: THE B2B HERO (Split-Screen Layout)
          ======================================================== */}
       <section className="relative pt-20 pb-16 lg:pt-28 lg:pb-24 overflow-hidden border-b border-[#27272A]">
+        {/* Velvet-Crimson & Champagne-Gold Controlled Hero Shader Wave */}
+        <VelvetShaderWave />
         {/* Ambient background glows */}
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#E11D48]/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-[#D4AF37]/5 rounded-full blur-3xl pointer-events-none" />

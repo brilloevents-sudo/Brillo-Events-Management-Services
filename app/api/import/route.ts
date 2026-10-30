@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import prisma from "@/lib/prisma";
 import { runImportDryRun, executeImportCommit, parseWorkbookBuffer } from "@/lib/importer";
 import { logAudit } from "@/lib/audit";
+import { authorizeAdminRequest, checkRateLimit } from "@/lib/security";
 
 export async function GET() {
   try {
@@ -23,6 +24,18 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = authorizeAdminRequest(req, ["SUPER_ADMIN", "OPS_ADMIN"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
+    const rate = checkRateLimit(`import:${auth.actor}`, 10, 60_000);
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { success: false, error: "Import rate limit exceeded. Please wait 1 minute." },
+        { status: 429 }
+      );
+    }
+
     const formData = await req.formData();
     const action = (formData.get("action") as string) || "dry_run"; // 'dry_run' | 'commit'
     const useDefaultFile = formData.get("useDefaultFile") === "true";

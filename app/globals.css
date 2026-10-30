@@ -1,141 +1,14 @@
+@import "../styles/theme.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #f6f3ec;
-  --foreground: #252824;
-  --surface: #fffefb;
-  --border: #e2ded4;
-  --charcoal: #171a18;
-  --crimson: #a92f3a;
-  --crimson-hover: #8e252f;
-  --gold: #b99a5b;
-}
-
 body {
-  background-color: var(--background);
-  color: var(--foreground);
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   overflow-x: hidden;
-}
-
-/* ==========================================================================
-   RED VELVET & ESPRESSO EXECUTIVE ADMIN THEME
-   ========================================================================== */
-
-/* 1. Fix the invisible Page Title & Subtitle */
-.page-title,
-.admin-workspace h1 {
-  color: #1E1416 !important; /* Espresso Black instead of White */
-  font-weight: 700;
-}
-
-.page-subtitle,
-.admin-workspace h1 + p,
-.admin-workspace header p {
-  color: #6E5D5F !important; /* Warm Muted Gray */
-}
-
-/* 2. Replace the Neon Purple Badge with a Red Velvet Tinted Badge */
-.badge-esign,
-.admin-workspace .bg-purple-950,
-.admin-workspace .bg-indigo-950 {
-  background-color: #F9EBED !important;
-  color: #9B1B30 !important;
-  border: 1px solid #F0D0D5 !important;
-  font-weight: 600;
-}
-
-/* 3. Convert the Pitch Black Form Cards to Clean White Velvet Cards */
-.dashboard-card,
-.admin-workspace .bg-obsidian-900 {
-  background-color: #FFFFFF !important;
-  border: 1px solid #E8DFE0 !important;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px -2px rgba(30, 20, 22, 0.05) !important;
-  color: #1E1416 !important;
-}
-
-.admin-workspace .bg-obsidian-950,
-.admin-workspace .bg-obsidian-950\/80 {
-  background-color: #FAF7F5 !important;
-  border-color: #E8DFE0 !important;
-  color: #1E1416 !important;
-}
-
-.dashboard-card h2,
-.dashboard-card h3,
-.admin-workspace .bg-obsidian-900 h2,
-.admin-workspace .bg-obsidian-900 h3,
-.admin-workspace .bg-obsidian-900 .text-white,
-.admin-workspace .bg-obsidian-950 .text-white {
-  color: #1E1416 !important;
-}
-
-.dashboard-card .text-slate-300,
-.dashboard-card .text-slate-400,
-.admin-workspace .bg-obsidian-900 .text-slate-300,
-.admin-workspace .bg-obsidian-900 .text-slate-400,
-.admin-workspace .text-slate-400 {
-  color: #6E5D5F !important;
-}
-
-.admin-workspace .border-slate-800,
-.admin-workspace .border-slate-800\/60,
-.admin-workspace .divide-slate-800\/60 > :not([hidden]) ~ :not([hidden]) {
-  border-color: #E8DFE0 !important;
-}
-
-/* 4. Fix Form Labels & Inputs inside the Card */
-.dashboard-card label,
-.admin-workspace label {
-  color: #3D2C2E !important; /* Replaces the light blue dark-mode text */
-  font-weight: 600;
-}
-
-.dashboard-card input,
-.dashboard-card select,
-.dashboard-card textarea,
-.admin-workspace input,
-.admin-workspace select,
-.admin-workspace textarea {
-  background-color: #FAF7F5 !important;
-  border: 1px solid #D6C7C9 !important;
-  color: #1E1416 !important;
-  border-radius: 8px;
-}
-
-.dashboard-card input::placeholder,
-.dashboard-card textarea::placeholder,
-.admin-workspace input::placeholder,
-.admin-workspace textarea::placeholder {
-  color: #9A8A8C !important;
-}
-
-.dashboard-card input:focus,
-.dashboard-card select:focus,
-.dashboard-card textarea:focus,
-.admin-workspace input:focus,
-.admin-workspace select:focus,
-.admin-workspace textarea:focus {
-  border-color: #9B1B30 !important;
-  box-shadow: 0 0 0 3px rgba(155, 27, 48, 0.12) !important;
-  outline: none;
-}
-
-/* 5. Primary Red Velvet Buttons */
-.btn-primary,
-.admin-workspace .bg-crimson-700 {
-  background: linear-gradient(135deg, #9B1B30 0%, #7A1424 100%) !important;
-  color: #FFFFFF !important;
-  border: none;
-  box-shadow: 0 4px 12px rgba(155, 27, 48, 0.25);
-}
-
-.btn-primary:hover,
-.admin-workspace .bg-crimson-700:hover {
-  background: linear-gradient(135deg, #871629 0%, #63101D 100%) !important;
 }
 
 /* Custom scrollbars */
@@ -144,31 +17,31 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #efeae0;
+  background: #f2ecee;
 }
 ::-webkit-scrollbar-thumb {
-  background: #c5c0b4;
+  background: #cbbec1;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a294;
+  background: #ad9ca0;
 }
 
-/* Sidebar scrollbar */
+/* Dark Velvet Espresso Sidebar scrollbar */
 .sidebar-scroll::-webkit-scrollbar-track {
-  background: #171a18;
+  background: var(--sidebar-bg);
 }
 .sidebar-scroll::-webkit-scrollbar-thumb {
-  background: #2c312d;
+  background: #352126;
   border-radius: 4px;
 }
 .sidebar-scroll::-webkit-scrollbar-thumb:hover {
-  background: #3e443f;
+  background: #4b2d34;
 }
 
 /* Accessible focus ring */
 *:focus-visible {
-  outline: 2px solid #b99a5b;
+  outline: 2px solid var(--velvet-primary);
   outline-offset: 2px;
 }
 

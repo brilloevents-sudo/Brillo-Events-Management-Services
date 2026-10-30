@@ -1,0 +1,219 @@
+/* ==========================================================================
+   BRILLO EVENTS SANTA OPERATIONS HUB v3.0
+   Global Design System: "Red Velvet, Warm Alabaster & Champagne Gold"
+   ========================================================================== */
+
+:root {
+  /* Surfaces */
+  --bg-canvas: #FAF7F5;          /* Warm Alabaster Main Background */
+  --bg-surface: #FFFFFF;         /* Pure White Cards, Tables, Modals */
+  --bg-subtle: #F4ECEE;          /* Tinted Velvet Cream for Hover/Secondary */
+  --bg-input: #FCF9F8;           /* Clean Input Field Background */
+
+  /* Sidebar (Dark Velvet Espresso Theme) */
+  --sidebar-bg: #181012;         /* Deep Velvet Espresso */
+  --sidebar-active-bg: #2B151A;  /* Highlighted Menu Item */
+  --sidebar-border: #2E1F22;
+
+  /* Brand & Semantic Accents */
+  --velvet-primary: #9B1B30;     /* Primary Red Velvet CTA & Active Bars */
+  --velvet-hover: #7A1424;       /* Deep Burgundy Velvet Hover */
+  --velvet-soft-bg: #F9EBED;     /* Soft Rose Pill Badge Background */
+  --gold-accent: #C68A12;        /* Champagne Gold Icons & Hold Badges */
+  --gold-soft-bg: #FDF6E7;
+
+  /* Typography */
+  --text-primary: #1E1416;       /* Espresso Charcoal (Headings & Data) */
+  --text-secondary: #4A3A3D;     /* Form Labels & Table Body */
+  --text-muted: #756568;         /* Subtitles & Empty States */
+  --border-default: #E8DFE0;     /* Card & Table Dividers */
+  --border-input: #D6C7C9;       /* Form Control Borders */
+}
+
+/* Liquid-Glass Sticky Header & Modal Surfaces (liquid-glass-js pattern) */
+.liquid-glass-header {
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border-bottom: 1px solid rgba(232, 223, 224, 0.9);
+  box-shadow: 0 1px 10px rgba(30, 20, 22, 0.04);
+}
+
+.liquid-glass-modal {
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid var(--border-default);
+  box-shadow: 0 20px 50px -12px rgba(24, 16, 18, 0.25);
+}
+
+/* 1. Page Titles & Subtitles */
+.page-title,
+.admin-workspace h1 {
+  color: var(--text-primary) !important;
+  font-weight: 700;
+}
+
+.page-subtitle,
+.admin-workspace h1 + p {
+  color: var(--text-muted) !important;
+}
+
+/* 2. Red Velvet & Champagne Gold Semantic Badges */
+.badge-esign,
+.badge-velvet,
+.admin-workspace .bg-purple-950,
+.admin-workspace .bg-indigo-950,
+.admin-workspace .bg-rose-950 {
+  background-color: var(--velvet-soft-bg) !important;
+  color: var(--velvet-primary) !important;
+  border: 1px solid #F0D0D5 !important;
+  font-weight: 600;
+}
+
+.badge-gold,
+.admin-workspace .bg-amber-950,
+.admin-workspace .bg-gold-950 {
+  background-color: var(--gold-soft-bg) !important;
+  color: #8A5E08 !important;
+  border: 1px solid #F3DFB3 !important;
+  font-weight: 600;
+}
+
+.admin-workspace .bg-emerald-950 {
+  background-color: #ECFDF5 !important;
+  color: #065F46 !important;
+  border: 1px solid #A7F3D0 !important;
+  font-weight: 600;
+}
+
+.admin-workspace .bg-blue-950 {
+  background-color: #EFF6FF !important;
+  color: #1E40AF !important;
+  border: 1px solid #BFDBFE !important;
+  font-weight: 600;
+}
+
+/* 3. Clean White Velvet Cards (Eliminate all dark cards inside .admin-workspace) */
+.dashboard-card,
+.admin-workspace .bg-obsidian-900,
+.admin-workspace .bg-\[\#FFFEFB\] {
+  background-color: var(--bg-surface) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px -2px rgba(30, 20, 22, 0.05) !important;
+  color: var(--text-primary) !important;
+}
+
+.admin-workspace .bg-obsidian-950,
+.admin-workspace .bg-obsidian-950\/80,
+.admin-workspace .bg-obsidian-850,
+.admin-workspace .bg-obsidian-850\/40,
+.admin-workspace .bg-obsidian-850\/50 {
+  background-color: var(--bg-input) !important;
+  border-color: var(--border-default) !important;
+  color: var(--text-primary) !important;
+}
+
+.admin-workspace tr:hover {
+  background-color: var(--bg-subtle) !important;
+}
+
+/* Normalize dark-mode utility text colors inside Admin Workspace */
+.dashboard-card h2,
+.dashboard-card h3,
+.admin-workspace h2,
+.admin-workspace h3,
+.admin-workspace .bg-obsidian-900 .text-white,
+.admin-workspace .bg-obsidian-950 .text-white,
+.admin-workspace table .text-white,
+.admin-workspace table .text-slate-200 {
+  color: var(--text-primary) !important;
+}
+
+.admin-workspace .text-slate-300 {
+  color: var(--text-secondary) !important;
+}
+
+.admin-workspace .text-slate-400,
+.admin-workspace .text-slate-500 {
+  color: var(--text-muted) !important;
+}
+
+.admin-workspace .text-gold-400,
+.admin-workspace .text-gold-300 {
+  color: var(--gold-accent) !important;
+}
+
+.admin-workspace .text-emerald-400,
+.admin-workspace .text-emerald-300 {
+  color: #047857 !important;
+}
+
+.admin-workspace .text-rose-400,
+.admin-workspace .text-amber-400 {
+  color: var(--velvet-primary) !important;
+}
+
+.admin-workspace .border-slate-800,
+.admin-workspace .border-slate-800\/60,
+.admin-workspace .border-slate-800\/80,
+.admin-workspace .border-slate-700,
+.admin-workspace .border-\[\#E2DED4\],
+.admin-workspace .divide-slate-800\/60 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--border-default) !important;
+}
+
+/* 4. Form Labels & Inputs inside Admin Workspace */
+.dashboard-card label,
+.admin-workspace label {
+  color: var(--text-secondary) !important;
+  font-weight: 600;
+}
+
+.dashboard-card input,
+.dashboard-card select,
+.dashboard-card textarea,
+.admin-workspace input,
+.admin-workspace select,
+.admin-workspace textarea {
+  background-color: var(--bg-input) !important;
+  border: 1px solid var(--border-input) !important;
+  color: var(--text-primary) !important;
+  border-radius: 8px;
+}
+
+.dashboard-card input::placeholder,
+.dashboard-card textarea::placeholder,
+.admin-workspace input::placeholder,
+.admin-workspace textarea::placeholder {
+  color: #9A8A8C !important;
+}
+
+.dashboard-card input:focus,
+.dashboard-card select:focus,
+.dashboard-card textarea:focus,
+.admin-workspace input:focus,
+.admin-workspace select:focus,
+.admin-workspace textarea:focus {
+  border-color: var(--velvet-primary) !important;
+  box-shadow: 0 0 0 3px rgba(155, 27, 48, 0.12) !important;
+  outline: none;
+}
+
+/* 5. Primary Red Velvet Buttons */
+.btn-primary,
+.admin-workspace .bg-crimson-700,
+.admin-workspace .bg-crimson-800,
+.admin-workspace .bg-\[\#A92F3A\] {
+  background: linear-gradient(135deg, var(--velvet-primary) 0%, var(--velvet-hover) 100%) !important;
+  color: #FFFFFF !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(155, 27, 48, 0.22);
+}
+
+.btn-primary:hover,
+.admin-workspace .bg-crimson-700:hover,
+.admin-workspace .bg-\[\#A92F3A\]:hover {
+  background: linear-gradient(135deg, #871629 0%, #63101D 100%) !important;
+}

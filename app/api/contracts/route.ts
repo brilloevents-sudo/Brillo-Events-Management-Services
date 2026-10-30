@@ -2,23 +2,45 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { generateContractHtml } from "@/lib/contracts";
 import { logAudit } from "@/lib/audit";
+import {
+  authorizeAdminRequest,
+  checkRateLimit,
+  validateContractPayload,
+} from "@/lib/security";
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = authorizeAdminRequest(req, ["SUPER_ADMIN", "OPS_ADMIN"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
+
+    const rate = checkRateLimit(`contracts:${auth.actor}`, 25, 60_000);
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { success: false, error: "Rate limit exceeded. Please wait before generating more contracts." },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
+    const validation = validateContractPayload(body);
+    if (!validation.valid || !validation.data) {
+      return NextResponse.json(
+        { success: false, error: validation.error || "Invalid contract payload." },
+        { status: 400 }
+      );
+    }
+
     const {
       bookingId,
-      templateType = "WITH_DP", // WITH_DP, NO_DP, SM_CUSTOM
+      templateType,
       signedFileUrl,
       signerName,
       signerEmail,
-      isSigned = false,
-      actor = "STAFF_USER",
-    } = body;
-
-    if (!bookingId) {
-      return NextResponse.json({ success: false, error: "Booking ID is required." }, { status: 400 });
-    }
+      documentSha256,
+      isSigned,
+    } = validation.data;
 
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
@@ -55,7 +77,8 @@ export async function POST(req: NextRequest) {
       totalAmount: totalAmt,
       depositAmount: depAmt,
       balanceAmount: balAmt,
-      inclusions: "Real Beard Santa Claus, dedicated Production Assistant, holding room coordination.",
+      inclusions:
+        "Real Beard Santa Claus, dedicated Production Assistant, holding room coordination.",
       withDP,
     });
 
@@ -67,13 +90,13 @@ export async function POST(req: NextRequest) {
         templateType,
         title: `Service Agreement — ${booking.mallOrVenue}`,
         version: nextVersion,
-        status: isSigned || signedFileUrl ? "SIGNED" : "SENT",
+        status: isSigned ? "SIGNED" : "SENT",
         contentHtml: htmlContent,
-        signedFileUrl: signedFileUrl || null,
+        signedFileUrl,
         signerName: signerName || booking.client.primaryContact,
         signerEmail: signerEmail || booking.client.email,
-        signedAt: isSigned || signedFileUrl ? new Date() : null,
-        signProvider: "MANUAL",
+        signedAt: isSigned ? new Date() : null,
+        signProvider: documentSha256 ? `SHA256:${documentSha256.slice(0, 12)}` : "DOCUMENSO_FRAMEWORK",
       },
     });
 
@@ -81,11 +104,21 @@ export async function POST(req: NextRequest) {
       action: "CONTRACT_GENERATE",
       entityType: "Contract",
       entityId: contract.id,
-      actorName: actor,
-      details: { contractNumber, templateType, isSigned: Boolean(isSigned || signedFileUrl) },
+      actorName: auth.actor,
+      details: {
+        contractNumber,
+        templateType,
+        isSigned,
+        documentSha256,
+        rbacRole: auth.role,
+      },
     });
 
-    return NextResponse.json({ success: true, contract });
+    return NextResponse.json({
+      success: true,
+      contract,
+      documentSha256,
+    });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

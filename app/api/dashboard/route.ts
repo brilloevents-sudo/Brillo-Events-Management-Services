@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getEmailProviderStatus } from "@/lib/email-service";
+import { computeDynamicReconciliation } from "@/lib/data-reconciliation";
 
 export async function GET() {
   try {
@@ -19,6 +20,7 @@ export async function GET() {
       allExpenses,
       ledgerAdvances,
       unreadEmailThreads,
+      actionQueueBookings,
     ] = await Promise.all([
       prisma.booking.count(),
       prisma.booking.count({ where: { status: "AWAITING_STAFF_APPROVAL" } }),
@@ -30,10 +32,32 @@ export async function GET() {
       prisma.dataConflict.count(),
       prisma.dataConflict.count({ where: { status: "PENDING_REVIEW" } }),
       prisma.payment.findMany({ where: { status: "VERIFIED" } }),
-      prisma.booking.findMany({ select: { totalContractAmount: true, balanceDue: true } }),
+      prisma.booking.findMany({
+        select: {
+          id: true,
+          bookingNumber: true,
+          eventDate: true,
+          startTime: true,
+          endTime: true,
+          status: true,
+          totalContractAmount: true,
+          balanceDue: true,
+          talentAssignments: { select: { talentId: true } },
+        },
+      }),
       prisma.expense.findMany({ select: { amount: true } }),
       prisma.talentLedgerEntry.findMany({ where: { entryType: "ADVANCE" } }),
       prisma.emailThread.count({ where: { isUnread: true } }),
+      prisma.booking.findMany({
+        take: 10,
+        orderBy: [{ pipelineStage: "asc" }, { eventDate: "asc" }],
+        include: {
+          client: true,
+          talentAssignments: { include: { talent: true } },
+          contracts: true,
+          payments: true,
+        },
+      }),
     ]);
 
     const totalVerifiedRevenue = allVerifiedPayments.reduce(
@@ -57,16 +81,21 @@ export async function GET() {
       0
     );
 
+    const reconciliation = computeDynamicReconciliation({
+      bookings: allBookingsFinancials,
+      pendingConflictsCount: pendingConflicts,
+    });
+
     const emailStatus = getEmailProviderStatus();
 
-    // Critical Task Queues
     const queues = {
       pendingStaffApprovalBookings: pendingApprovalBookings,
       activeTemporaryHolds: activeHolds,
       talentsAwaitingPublicApproval: unapprovedTalents,
-      unresolvedSourceConflicts: pendingConflicts,
+      unresolvedSourceConflicts: reconciliation.totalActiveConflicts,
+      dynamicConflictSubtitle: reconciliation.dynamicSubtitle,
       unreadInboxMessages: unreadEmailThreads,
-      emailConnectionStatus: emailStatus.connected ? "CONNECTED" : "CONFIGURATION_REQUIRED",
+      emailConnectionStatus: emailStatus.connected ? "CONNECTED" : "STANDBY_LOCAL_OUTBOX",
     };
 
     return NextResponse.json({
@@ -83,6 +112,8 @@ export async function GET() {
         totalPaluwalAdvances,
       },
       queues,
+      reconciliation,
+      immediateActionQueue: actionQueueBookings,
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

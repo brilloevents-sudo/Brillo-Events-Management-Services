@@ -12,25 +12,19 @@ import {
   FileCheck2,
   Wallet,
   AlertTriangle,
-  Mail,
   Settings,
   PlusCircle,
   FileText,
-  UserCheck,
   Building2,
   DollarSign,
-  TrendingUp,
   History,
-  ShieldCheck,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
-  Inbox,
+  ChevronDown,
   KanbanSquare,
-  Truck,
-  ShieldAlert,
-  UserCog,
+  ShieldCheck,
 } from "lucide-react";
+import { BrilloLiquidEmblem } from "@/components/visual-effects/brillo-liquid-emblem";
 
 interface AdminNavProps {
   onOpenQuickAction?: () => void;
@@ -39,12 +33,14 @@ interface AdminNavProps {
 export function AdminNav({ onOpenQuickAction }: AdminNavProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [showGovernance, setShowGovernance] = useState(false);
 
-  // Exactly matching Section 5 of the Codex Master Prompt (22 items in order)
+  // v3.0 Strict Chronological Lifecycle Navigation (4 Lifecycle Groups, Zero Number Prefixes)
   const navGroups: Array<{
     group: string;
     items: Array<{
       href: string;
+      matchPaths?: string[];
       label: string;
       icon: any;
       badge?: string;
@@ -52,77 +48,88 @@ export function AdminNav({ onOpenQuickAction }: AdminNavProps) {
     }>;
   }> = [
     {
-      group: "PIPELINE & INQUIRIES",
+      group: "COMMAND CENTER",
       items: [
-        { href: "/admin", label: "1. Overview", icon: LayoutDashboard },
-        { href: "/admin/leads", label: "2. Leads & Inquiries", icon: Inbox },
-        { href: "/admin/pipeline", label: "3. CRM Pipeline", icon: KanbanSquare },
-        { href: "/admin/calendar", label: "4. Booking Calendar", icon: CalendarDays },
+        { href: "/admin", label: "Executive Overview", icon: LayoutDashboard },
+        { href: "/admin/calendar", label: "Master Calendar & Holds", icon: CalendarDays },
       ],
     },
     {
-      group: "BOOKINGS & OPERATIONS",
+      group: "1. INQUIRIES & COMMERCIAL",
       items: [
-        { href: "/admin/bookings", label: "5. Bookings", icon: FileText },
         {
-          href: "/admin/individual-talent-bookings",
-          label: "6. Individual Talent Bookings",
-          icon: UserCheck,
-          badge: "Direct",
+          href: "/admin/crm",
+          matchPaths: ["/admin/crm", "/admin/leads", "/admin/pipeline"],
+          label: "Leads & CRM Pipeline",
+          icon: KanbanSquare,
         },
-        { href: "/admin/talents", label: "7. Santa Talent", icon: Users2 },
-        { href: "/admin/pa-crew", label: "8. PA & Crew", icon: UserCog },
-        { href: "/admin/clients", label: "9. Clients & Agencies", icon: Building2 },
+        { href: "/admin/quotes", label: "Quotes & Costing", icon: DollarSign },
+        { href: "/admin/contracts", label: "Contracts & E-Sign", icon: FileCheck2 },
       ],
     },
     {
-      group: "COMMERCIAL & FINANCE",
+      group: "2. OPERATIONS & DISPATCH",
       items: [
-        { href: "/admin/quotes", label: "10. Quotes & Costing", icon: DollarSign },
-        { href: "/admin/contracts", label: "11. Contracts & E-signatures", icon: FileCheck2 },
-        { href: "/admin/payments", label: "12. Payments & Receivables", icon: Receipt },
-        { href: "/admin/expenses", label: "13. Expenses", icon: Receipt },
-        { href: "/admin/paluwal", label: "14. Talent Advances / Paluwal", icon: Wallet },
+        {
+          href: "/admin/bookings",
+          matchPaths: ["/admin/bookings", "/admin/individual-talent-bookings"],
+          label: "Bookings & Signoff",
+          icon: FileText,
+          badgeAlert: "Signoff",
+        },
+        {
+          href: "/admin/roster",
+          matchPaths: ["/admin/roster", "/admin/talents", "/admin/pa-crew"],
+          label: "Santa & Crew Roster",
+          icon: Users2,
+        },
+        { href: "/admin/clients", label: "Clients & Agencies", icon: Building2 },
       ],
     },
     {
-      group: "DISPATCH & COMMUNICATIONS",
+      group: "3. FINANCE & SETTLEMENT",
       items: [
-        { href: "/admin/deployment", label: "15. Event Deployment", icon: Truck },
-        { href: "/admin/inbox", label: "16. Email Center", icon: Mail },
-        { href: "/admin/import", label: "17. Excel Import Center", icon: FileSpreadsheet },
-        { href: "/admin/conflicts", label: "18. Source Conflicts", icon: AlertTriangle, badgeAlert: "13" },
-      ],
-    },
-    {
-      group: "MANAGEMENT & GOVERNANCE",
-      items: [
-        { href: "/admin/reports", label: "19. Reports", icon: TrendingUp },
-        { href: "/admin/audit-log", label: "20. Audit Log", icon: History },
-        { href: "/admin/users", label: "21. Users & Roles", icon: ShieldCheck },
-        { href: "/admin/settings", label: "22. Settings", icon: Settings },
+        { href: "/admin/payments", label: "Payments & Receivables", icon: Receipt },
+        {
+          href: "/admin/expenses",
+          matchPaths: ["/admin/expenses", "/admin/paluwal"],
+          label: "Expenses & Paluwal Ledger",
+          icon: Wallet,
+        },
       ],
     },
   ];
+
+  const governanceItems = [
+    { href: "/admin/conflicts", label: "Data & Conflict Audit", icon: AlertTriangle },
+    { href: "/admin/import", label: "Excel Import Center", icon: FileSpreadsheet },
+    { href: "/admin/audit-log", label: "Immutable Audit Log", icon: History },
+    { href: "/admin/users", label: "RBAC Users & Roles", icon: ShieldCheck },
+    { href: "/admin/settings", label: "System Settings", icon: Settings },
+  ];
+
+  const isRouteActive = (href: string, matchPaths?: string[]) => {
+    if (href === "/admin") return pathname === "/admin";
+    if (matchPaths && matchPaths.some((p) => pathname.startsWith(p))) return true;
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
 
   return (
     <aside
       className={`${
         collapsed ? "w-16" : "w-64"
-      } bg-[#171A18] text-[#FBF9F4] border-r border-[#2C312D] flex flex-col h-screen sticky top-0 transition-all duration-200 select-none z-30 shrink-0`}
+      } bg-[#181012] text-[#FAF7F5] border-r border-[#2E1F22] flex flex-col h-screen sticky top-0 transition-all duration-200 select-none z-30 shrink-0`}
     >
-      {/* Brand Header */}
-      <div className="h-16 border-b border-[#2C312D] flex items-center justify-between px-3">
+      {/* Brand Header with Liquid Metallic Emblem */}
+      <div className="h-16 border-b border-[#2E1F22] flex items-center justify-between px-3">
         <Link href="/admin" className="flex items-center space-x-2.5 overflow-hidden">
-          <div className="w-8 h-8 rounded bg-[#8E252F] border border-[#B99A5B]/40 flex items-center justify-center shrink-0">
-            <Sparkles className="w-4 h-4 text-[#D4B473]" />
-          </div>
+          <BrilloLiquidEmblem />
           {!collapsed && (
             <div className="truncate">
-              <span className="font-serif font-bold text-sm tracking-wide text-white block">
+              <span className="font-serif font-bold text-sm tracking-wide text-white block leading-tight">
                 BRILLO HUB
               </span>
-              <span className="text-[9px] text-[#B99A5B] uppercase tracking-widest block font-mono">
+              <span className="text-[9px] text-[#E6B85C] uppercase tracking-widest block font-mono font-semibold">
                 SANTA OPERATIONS
               </span>
             </div>
@@ -130,65 +137,60 @@ export function AdminNav({ onOpenQuickAction }: AdminNavProps) {
         </Link>
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="text-[#6B706C] hover:text-white p-1 rounded hover:bg-[#202421] transition"
+          className="text-[#9A8A8C] hover:text-white p-1 rounded hover:bg-[#2B151A] transition"
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
       </div>
 
-      {/* Quick Action Button */}
-      <div className="p-2.5 border-b border-[#2C312D]">
+      {/* Universal Quick Action CTA */}
+      <div className="p-2.5 border-b border-[#2E1F22]">
         <button
           onClick={onOpenQuickAction}
-          className={`w-full py-2 px-2 rounded-lg bg-[#A92F3A] hover:bg-[#8E252F] text-white font-medium text-xs flex items-center justify-center shadow-sm border border-[#A92F3A]/40 transition active:scale-[0.99] ${
+          className={`w-full py-2 px-2.5 rounded-lg text-white font-semibold text-xs flex items-center justify-center transition active:scale-[0.99] btn-primary ${
             collapsed ? "px-0" : ""
           }`}
           title="Open Universal Quick Actions"
         >
-          <PlusCircle className="w-4 h-4 text-[#E7CE97] shrink-0" />
-          {!collapsed && <span className="ml-2 font-medium tracking-wide">Quick Action</span>}
+          <PlusCircle className="w-4 h-4 text-[#F8E2A8] shrink-0" />
+          {!collapsed && <span className="ml-2 tracking-wide">Quick Action</span>}
         </button>
       </div>
 
-      {/* Navigation Sections */}
-      <nav className="flex-1 overflow-y-auto sidebar-scroll px-2 py-3 space-y-4">
+      {/* 4 Chronological Lifecycle Groups */}
+      <nav className="flex-1 overflow-y-auto sidebar-scroll px-2.5 py-3 space-y-4">
         {navGroups.map((grp, idx) => (
           <div key={idx} className="space-y-0.5">
             {!collapsed && (
-              <div className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-[#6B706C] font-mono">
+              <div className="px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-wider text-[#9A8A8C] font-mono">
                 {grp.group}
               </div>
             )}
             {grp.items.map((item) => {
               const Icon = item.icon;
-              const active = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href));
+              const active = isRouteActive(item.href, item.matchPaths);
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   title={collapsed ? item.label : undefined}
-                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium transition ${
+                  className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-xs transition ${
                     active
-                      ? "bg-[#202421] text-[#E7CE97] border-l-2 border-[#B99A5B] font-semibold"
-                      : "text-[#C5C0B4] hover:text-white hover:bg-[#202421]/60"
+                      ? "bg-[#2B151A] text-white border-l-2 border-[#9B1B30] font-semibold shadow-sm"
+                      : "text-[#D6C7C9] hover:text-white hover:bg-[#2B151A]/55"
                   }`}
                 >
                   <div className="flex items-center space-x-2.5 truncate">
                     <Icon
                       className={`w-4 h-4 shrink-0 ${
-                        active ? "text-[#D4B473]" : "text-[#6B706C] group-hover:text-white"
+                        active ? "text-[#E6B85C]" : "text-[#9A8A8C]"
                       }`}
                     />
                     {!collapsed && <span className="truncate">{item.label}</span>}
                   </div>
-                  {!collapsed && item.badge && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#202421] text-[#D4B473] border border-[#B99A5B]/30 font-semibold uppercase">
-                      {item.badge}
-                    </span>
-                  )}
                   {!collapsed && item.badgeAlert && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800/60 font-semibold font-mono">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#9B1B30]/35 text-[#F9EBED] border border-[#9B1B30]/60 font-semibold font-mono">
                       {item.badgeAlert}
                     </span>
                   )}
@@ -197,19 +199,69 @@ export function AdminNav({ onOpenQuickAction }: AdminNavProps) {
             })}
           </div>
         ))}
+
+        {/* Discreet Collapsible Governance & Data Audit Section */}
+        <div className="pt-2 border-t border-[#2E1F22]/80">
+          {!collapsed && (
+            <button
+              type="button"
+              onClick={() => setShowGovernance(!showGovernance)}
+              className="w-full px-2.5 py-1.5 flex items-center justify-between text-[9.5px] font-bold uppercase tracking-wider text-[#9A8A8C] hover:text-[#FAF7F5] font-mono transition"
+            >
+              <span>GOVERNANCE &amp; AUDIT</span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform ${
+                  showGovernance ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+          )}
+          {(showGovernance || collapsed) && (
+            <div className="space-y-0.5 mt-1">
+              {governanceItems.map((g) => {
+                const Icon = g.icon;
+                const active = isRouteActive(g.href);
+                return (
+                  <Link
+                    key={g.href}
+                    href={g.href}
+                    title={collapsed ? g.label : undefined}
+                    className={`flex items-center space-x-2.5 px-2.5 py-1.5 rounded-lg text-xs transition ${
+                      active
+                        ? "bg-[#2B151A] text-white border-l-2 border-[#9B1B30] font-semibold"
+                        : "text-[#B5A4A7] hover:text-white hover:bg-[#2B151A]/50"
+                    }`}
+                  >
+                    <Icon className={`w-3.5 h-3.5 shrink-0 ${active ? "text-[#E6B85C]" : "text-[#9A8A8C]"}`} />
+                    {!collapsed && <span className="truncate">{g.label}</span>}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </nav>
 
-      {/* Footer / Public Link */}
-      <div className="p-3 border-t border-[#2C312D] bg-[#101211] flex items-center justify-between text-xs text-[#6B706C]">
+      {/* Footer / Public Portal */}
+      <div className="p-3 border-t border-[#2E1F22] bg-[#130C0E] flex items-center justify-between text-xs text-[#9A8A8C]">
         {!collapsed ? (
           <>
-            <Link href="/" target="_blank" className="hover:text-[#D4B473] text-[11px] flex items-center transition">
-              ↗ Public Portal
+            <Link
+              href="/"
+              target="_blank"
+              className="hover:text-[#E6B85C] text-[11px] flex items-center transition font-medium"
+            >
+              ↗ Public Funnel
             </Link>
-            <span className="text-[10px] text-[#6B706C] font-mono">v2.0 (Codex)</span>
+            <span className="text-[10px] text-[#9A8A8C] font-mono">v3.0 Master</span>
           </>
         ) : (
-          <Link href="/" target="_blank" className="mx-auto hover:text-[#D4B473]" title="View Public Portal">
+          <Link
+            href="/"
+            target="_blank"
+            className="mx-auto hover:text-[#E6B85C]"
+            title="View Public Funnel"
+          >
             ↗
           </Link>
         )}

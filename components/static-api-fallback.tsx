@@ -139,6 +139,70 @@ export function StaticApiFallback() {
         });
       }
 
+      // Handle Contract Generation & SHA-256 Validation in Static Mode
+      if (pathname === "/api/contracts" && method === "POST") {
+        const candidateUrl = String(parsedBody.signedFileUrl || "").trim();
+        if (
+          candidateUrl &&
+          (candidateUrl.includes("..") ||
+            candidateUrl.includes("\\") ||
+            candidateUrl.startsWith("/"))
+        ) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error:
+                "Security Policy: Raw local filesystem paths are rejected. Drag-and-drop a signed PDF/Image or provide an HTTPS bucket URL.",
+            }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          );
+        }
+
+        const targetBooking =
+          snap.bookings?.bookings?.find((b: any) => b.id === parsedBody.bookingId) ||
+          snap.bookings?.bookings?.[0];
+        const sha =
+          parsedBody.documentSha256 ||
+          Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+        const contractNum = `CTR-${targetBooking?.bookingNumber || "B2026"}-V${
+          ((targetBooking?.contracts?.length || 0) + 1)
+        }`;
+        const newContract = {
+          id: `ctr_${Date.now()}`,
+          contractNumber: contractNum,
+          bookingId: targetBooking?.id,
+          templateType: parsedBody.templateType || "WITH_DP",
+          status: parsedBody.isSigned ? "SIGNED" : "SENT",
+          signedFileUrl:
+            candidateUrl ||
+            (parsedBody.uploadedFileName
+              ? `https://storage.brilloevent.com/contracts/${sha.slice(0, 12)}-${parsedBody.uploadedFileName}`
+              : null),
+          signerName: parsedBody.signerName || "Authorized Representative",
+          signProvider: parsedBody.isSigned ? `SHA256:${sha.slice(0, 12)}` : "DOCUMENSO_FRAMEWORK",
+        };
+        if (targetBooking) {
+          targetBooking.contracts = [newContract, ...(targetBooking.contracts || [])];
+        }
+        return jsonResponse({
+          success: true,
+          contract: newContract,
+          documentSha256: parsedBody.isSigned ? sha : null,
+        });
+      }
+
+      // Handle Dual-Gate Booking Signoff in Static Mode
+      if (pathname.startsWith("/api/bookings/") && method === "PATCH") {
+        const id = pathname.split("/").pop();
+        const target = snap.bookings?.bookings?.find(
+          (b: any) => b.id === id || b.bookingNumber === id
+        );
+        if (target && parsedBody.status) {
+          target.status = parsedBody.status;
+        }
+        return jsonResponse({ success: true, booking: target });
+      }
+
       if (method !== "GET") {
         const refNum = `B2026-${Math.floor(1000 + Math.random() * 9000)}`;
         const tok = `tok_${Date.now()}`;
@@ -151,7 +215,19 @@ export function StaticApiFallback() {
         });
       }
 
-      if (pathname === "/api/dashboard") return jsonResponse(snap.dashboard);
+      if (pathname === "/api/dashboard") {
+        const allB = snap.bookings?.bookings || [];
+        return jsonResponse({
+          ...snap.dashboard,
+          queues: {
+            ...(snap.dashboard?.queues || {}),
+            dynamicConflictSubtitle: `${
+              snap.dashboard?.queues?.unresolvedSourceConflicts || 0
+            } source audit flags • 0 roster overlaps`,
+          },
+          immediateActionQueue: allB.slice(0, 8),
+        });
+      }
       if (pathname === "/api/bookings") return jsonResponse(snap.bookings);
       if (pathname.startsWith("/api/bookings/")) {
         const id = pathname.split("/").pop();

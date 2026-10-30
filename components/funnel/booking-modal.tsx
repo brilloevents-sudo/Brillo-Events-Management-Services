@@ -27,12 +27,16 @@ interface BookingModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultLocation?: "METRO_MANILA" | "PROVINCIAL";
+  selectedTalent?: any | null;
+  publicTalents?: any[];
 }
 
 export function BookingModal({
   isOpen,
   onClose,
   defaultLocation = "METRO_MANILA",
+  selectedTalent = null,
+  publicTalents = [],
 }: BookingModalProps) {
   const [isProvincial, setIsProvincial] = useState(defaultLocation === "PROVINCIAL");
   const [mallOrVenue, setMallOrVenue] = useState("");
@@ -41,6 +45,32 @@ export function BookingModal({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [selectedSlot, setSelectedSlot] = useState("4:00 PM - 8:00 PM (Standard 4-Hr Block)");
+  const [preferredTalentId, setPreferredTalentId] = useState<string>("");
+  const [rosterTalents, setRosterTalents] = useState<any[]>(publicTalents);
+
+  useEffect(() => {
+    if (publicTalents && publicTalents.length > 0) {
+      setRosterTalents(publicTalents);
+    } else if (isOpen) {
+      fetch("/api/talents?publicOnly=true")
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.talents) setRosterTalents(d.talents);
+        })
+        .catch(() => {});
+    }
+  }, [isOpen, publicTalents]);
+
+  useEffect(() => {
+    if (selectedTalent?.id) {
+      setPreferredTalentId(selectedTalent.id);
+    } else if (!selectedTalent && isOpen) {
+      setPreferredTalentId("");
+    }
+  }, [selectedTalent, isOpen]);
+
+  const activeTalent =
+    rosterTalents.find((t) => t.id === preferredTalentId) || selectedTalent || null;
 
   // Xendit Payment Gateway State
   const [paymentOption, setPaymentOption] = useState<"DEPOSIT_50" | "FULL_100">("DEPOSIT_50");
@@ -110,7 +140,8 @@ export function BookingModal({
           locationCity: isProvincial ? "Provincial Venue" : "Metro Manila",
           isProvincial,
           clientQuotedAmount: baseRate,
-          notes: `Slot: ${selectedSlot} | Xendit Gateway: ${selectedChannel} -> GCash ${OWNER_GCASH_NUMBER} (${paymentOption})`,
+          talentPreferenceId: preferredTalentId || undefined,
+          notes: `Preferred Santa: ${activeTalent ? `Santa ${activeTalent.displayName} (${activeTalent.canonicalId})` : "Any Approved Real-Beard Santa"} | Slot: ${selectedSlot} | Xendit Gateway: ${selectedChannel} -> GCash ${OWNER_GCASH_NUMBER} (${paymentOption})`,
         }),
       });
 
@@ -625,6 +656,49 @@ export function BookingModal({
                     </span>
                   </div>
                 </div>
+              </div>
+
+              {/* Preferred Real-Beard Santa (Public Approved Roster) */}
+              <div className="p-3.5 rounded-xl bg-[#09090B] border border-[#27272A] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center space-x-3">
+                  {activeTalent ? (
+                    <img
+                      src={
+                        (activeTalent.images?.find((i: any) => i.isPrimary) || activeTalent.images?.[0])
+                          ?.publicUrl || "/talents/Bob/bob_photo_1.png"
+                      }
+                      alt={`Santa ${activeTalent.displayName}`}
+                      className="w-11 h-11 rounded-xl object-cover border border-[#D4AF37]/60 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-11 h-11 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[#D4AF37] font-headline font-bold text-xs shrink-0">
+                      🎅
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-[#D4AF37] font-bold block">
+                      Preferred Real-Beard Santa ({rosterTalents.length} Approved)
+                    </span>
+                    <span className="text-xs font-headline font-bold text-white block">
+                      {activeTalent
+                        ? `Santa ${activeTalent.displayName} (${activeTalent.nationality || "Real Beard"})`
+                        : "Any Available Public-Approved Santa"}
+                    </span>
+                  </div>
+                </div>
+
+                <select
+                  value={preferredTalentId}
+                  onChange={(e) => setPreferredTalentId(e.target.value)}
+                  className="px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-xs font-medium focus:outline-none focus:border-[#22C55E] transition sm:max-w-[240px] w-full"
+                >
+                  <option value="">Any Available Approved Santa</option>
+                  {rosterTalents.map((t: any) => (
+                    <option key={t.id} value={t.id}>
+                      Santa {t.displayName} ({t.canonicalId} • {t.nationality || "Real Beard"})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Form Inputs Grid */}

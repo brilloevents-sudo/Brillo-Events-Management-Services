@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
+import fs from "fs";
+import path from "path";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const talent = await prisma.talent.findUnique({
-      where: { id: params.id },
+    const talent = await prisma.talent.findFirst({
+      where: {
+        OR: [{ id: params.id }, { canonicalId: params.id }],
+      },
       include: {
-        images: true,
+        images: {
+          orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }],
+        },
         aliases: true,
         assignments: {
           include: {
@@ -68,7 +74,16 @@ export async function PATCH(
   try {
     const body = await req.json();
     const {
+      action,
+      imageId,
+      fileName,
+      fileDataUrl,
+      publicUrl: customPublicUrl,
+      caption,
+      setAsPrimary = false,
+      approvedForClient,
       displayName,
+      sourceName,
       talentType,
       status,
       age,
@@ -82,39 +97,178 @@ export async function PATCH(
       holidayRate,
       specialRateNote,
       approvedForPublicDisplay,
-      actor = "STAFF_USER",
+      actor = "SUPER_ADMIN",
     } = body;
 
-    const existing = await prisma.talent.findUnique({
-      where: { id: params.id },
+    const existing = await prisma.talent.findFirst({
+      where: {
+        OR: [{ id: params.id }, { canonicalId: params.id }],
+      },
+      include: { images: true },
     });
 
     if (!existing) {
       return NextResponse.json({ success: false, error: "Talent not found" }, { status: 404 });
     }
 
+    // 1. Handle Photo Gallery Actions
+    if (action === "ADD_PHOTO") {
+      let resolvedUrl = customPublicUrl || "";
+      const safeName = (fileName || `santa_${existing.displayName}_${Date.now()}.jpg`).replace(
+        /[^a-zA-Z0-9._-]/g,
+        "_"
+      );
+
+      if (fileDataUrl && typeof fileDataUrl === "string" && fileDataUrl.startsWith("data:image/")) {
+        try {
+          const matches = fileDataUrl.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+          if (matches) {
+            const buffer = Buffer.from(matches[2], "base64");
+            const uploadDir = path.join(process.cwd(), "public", "talents", "uploads");
+            fs.mkdirSync(uploadDir, { recursive: true });
+            const uniqueFile = `${Date.now()}_${safeName}`;
+            fs.writeFileSync(path.join(uploadDir, uniqueFile), buffer);
+            resolvedUrl = `/talents/uploads/${uniqueFile}`;
+          } else {
+            resolvedUrl = fileDataUrl;
+          }
+        } catch {
+          resolvedUrl = fileDataUrl;
+        }
+      }
+
+      if (!resolvedUrl) {
+        return NextResponse.json(
+          { success: false, error: "Please select an image file or provide a valid photo URL." },
+          { status: 400 }
+        );
+      }
+
+      const shouldBePrimary = Boolean(setAsPrimary || existing.images.length === 0);
+      if (shouldBePrimary) {
+        await prisma.talentImage.updateMany({
+          where: { talentId: existing.id },
+          data: { isPrimary: false },
+        });
+      }
+
+      const createdImage = await prisma.talentImage.create({
+        data: {
+          talentId: existing.id,
+          fileName: safeName,
+          originalPath: resolvedUrl,
+          publicUrl: resolvedUrl,
+          isPrimary: shouldBePrimary,
+          caption: caption || `Santa ${existing.displayName} Portrait`,
+          approvedForClient:
+            approvedForClient !== undefined
+              ? Boolean(approvedForClient)
+              : existing.approvedForPublicDisplay,
+        },
+      });
+
+      const refreshed = await prisma.talent.findUnique({
+        where: { id: existing.id },
+        include: {
+          images: { orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }] },
+          aliases: true,
+        },
+      });
+
+      return NextResponse.json({ success: true, image: createdImage, talent: refreshed });
+    }
+
+    if (action === "SET_PRIMARY_PHOTO" && imageId) {
+      await prisma.talentImage.updateMany({
+        where: { talentId: existing.id },
+        data: { isPrimary: false },
+      });
+      await prisma.talentImage.update({
+        where: { id: imageId },
+        data: { isPrimary: true },
+      });
+      const refreshed = await prisma.talent.findUnique({
+        where: { id: existing.id },
+        include: {
+          images: { orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }] },
+          aliases: true,
+        },
+      });
+      return NextResponse.json({ success: true, talent: refreshed });
+    }
+
+    if (action === "UPDATE_PHOTO" && imageId) {
+      const imgUpdates: any = {};
+      if (caption !== undefined) imgUpdates.caption = caption;
+      if (approvedForClient !== undefined) imgUpdates.approvedForClient = Boolean(approvedForClient);
+      await prisma.talentImage.update({
+        where: { id: imageId },
+        data: imgUpdates,
+      });
+      const refreshed = await prisma.talent.findUnique({
+        where: { id: existing.id },
+        include: {
+          images: { orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }] },
+          aliases: true,
+        },
+      });
+      return NextResponse.json({ success: true, talent: refreshed });
+    }
+
+    if (action === "DELETE_PHOTO" && imageId) {
+      const targetImg = existing.images.find((i) => i.id === imageId);
+      await prisma.talentImage.delete({ where: { id: imageId } });
+
+      if (targetImg?.isPrimary) {
+        const remaining = await prisma.talentImage.findMany({
+          where: { talentId: existing.id },
+          orderBy: { createdAt: "desc" },
+        });
+        if (remaining.length > 0) {
+          await prisma.talentImage.update({
+            where: { id: remaining[0].id },
+            data: { isPrimary: true },
+          });
+        }
+      }
+
+      const refreshed = await prisma.talent.findUnique({
+        where: { id: existing.id },
+        include: {
+          images: { orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }] },
+          aliases: true,
+        },
+      });
+      return NextResponse.json({ success: true, talent: refreshed });
+    }
+
+    // 2. Standard Talent Profile & Rate Card Updates
     const updates: any = {};
     if (displayName !== undefined) updates.displayName = displayName;
+    if (sourceName !== undefined) updates.sourceName = sourceName;
     if (talentType !== undefined) updates.talentType = talentType;
     if (status !== undefined) updates.status = status;
-    if (age !== undefined) updates.age = age ? parseInt(age, 10) : null;
+    if (age !== undefined) updates.age = age ? parseInt(String(age), 10) : null;
     if (height !== undefined) updates.height = height;
     if (nationality !== undefined) updates.nationality = nationality;
     if (phone !== undefined) updates.phone = phone;
     if (bio !== undefined) updates.bio = bio;
-    if (baseTalentFee !== undefined) updates.baseTalentFee = baseTalentFee;
-    if (metroManilaRate !== undefined) updates.metroManilaRate = metroManilaRate;
-    if (provincialRate !== undefined) updates.provincialRate = provincialRate;
-    if (holidayRate !== undefined) updates.holidayRate = holidayRate;
+    if (baseTalentFee !== undefined) updates.baseTalentFee = Number(baseTalentFee);
+    if (metroManilaRate !== undefined) updates.metroManilaRate = Number(metroManilaRate);
+    if (provincialRate !== undefined) updates.provincialRate = Number(provincialRate);
+    if (holidayRate !== undefined) updates.holidayRate = Number(holidayRate);
     if (specialRateNote !== undefined) updates.specialRateNote = specialRateNote;
     if (approvedForPublicDisplay !== undefined) {
-      updates.approvedForPublicDisplay = approvedForPublicDisplay;
+      updates.approvedForPublicDisplay = Boolean(approvedForPublicDisplay);
     }
 
     const updated = await prisma.talent.update({
-      where: { id: params.id },
+      where: { id: existing.id },
       data: updates,
-      include: { images: true, aliases: true },
+      include: {
+        images: { orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }] },
+        aliases: true,
+      },
     });
 
     await logAudit({

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   Sparkles,
@@ -25,6 +25,42 @@ import { VelvetShaderWave } from "@/components/visual-effects/velvet-shader-wave
 export default function B2BFunnelHomePage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [publicTalents, setPublicTalents] = useState<any[]>([]);
+  const [selectedTalent, setSelectedTalent] = useState<any | null>(null);
+  const [loadingTalents, setLoadingTalents] = useState(true);
+
+  const loadPublicTalents = useCallback(() => {
+    fetch("/api/talents?publicOnly=true")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.talents && Array.isArray(data.talents)) {
+          setPublicTalents(
+            data.talents.filter((t: any) => Boolean(t.approvedForPublicDisplay))
+          );
+        }
+        setLoadingTalents(false);
+      })
+      .catch(() => {
+        setLoadingTalents(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    loadPublicTalents();
+    const onFocus = () => loadPublicTalents();
+    const onStorage = () => loadPublicTalents();
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [loadPublicTalents]);
+
+  const handleOpenModalForTalent = (talent: any | null = null) => {
+    setSelectedTalent(talent);
+    setModalOpen(true);
+  };
 
   return (
     <div className="bg-[#09090B] text-zinc-100 min-h-screen selection:bg-[#22C55E] selection:text-black">
@@ -186,16 +222,24 @@ export default function B2BFunnelHomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
-              <span className="text-xs font-mono font-bold text-[#D4AF37] uppercase tracking-wider">
-                Vetted Roster Directory
-              </span>
+              <div className="inline-flex items-center space-x-2">
+                <span className="text-xs font-mono font-bold text-[#D4AF37] uppercase tracking-wider">
+                  Vetted Roster Directory
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-[#22C55E]/15 border border-[#22C55E]/40 text-[#22C55E] text-[10px] font-mono font-bold">
+                  ✓ {publicTalents.length} Public Approved Santas
+                </span>
+              </div>
               <h2 className="text-3xl sm:text-4xl font-headline font-black text-white mt-1">
                 Authentic Real-Beard Santa Performers
               </h2>
+              <p className="text-xs text-zinc-400 mt-1">
+                Live-synced with the Brillo Operations Roster — every Santa marked <strong className="text-emerald-400">✓ Public Approved</strong> in the Admin Hub appears directly below.
+              </p>
             </div>
             <DubTrack event="view_all_santas_clicked">
               <button
-                onClick={() => setModalOpen(true)}
+                onClick={() => handleOpenModalForTalent(null)}
                 className="text-xs font-mono font-bold text-[#22C55E] hover:underline flex items-center"
               >
                 Inquire Specific Talent Availability →
@@ -204,38 +248,81 @@ export default function B2BFunnelHomePage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              { name: "Bob", code: "TAL-BOB", img: "/talents/Bob/bob_photo_1.png", exp: "8 Seasons • SM Flagship Headliner" },
-              { name: "Cedric", code: "TAL-CEDRIC", img: "/talents/Cedric/cedric_photo_1.jpg", exp: "SM Pampanga & Clark Tour Lead" },
-              { name: "Perry", code: "TAL-PERRY", img: "/talents/Perry/perry_photo_1.jpg", exp: "Luxury Hotel & Tree-Lighting Specialist" },
-              { name: "Terry", code: "TAL-TERRY", img: "/talents/Terry/terry_photo_1.jpg", exp: "North Luzon Commercial Mall Resident" },
-            ].map((santa, i) => (
-              <div
-                key={i}
-                className="rounded-xl bg-[#18181B] border border-[#27272A] overflow-hidden group hover:border-[#D4AF37]/50 transition shadow-lg flex flex-col justify-between"
-              >
-                <div className="h-60 overflow-hidden bg-black relative">
-                  <img
-                    src={santa.img}
-                    alt={santa.name}
-                    className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/80 backdrop-blur-md text-[9px] font-mono text-[#D4AF37] border border-zinc-700">
-                    Real Beard • {santa.code}
-                  </span>
+            {publicTalents.map((t: any) => {
+              const primaryImg =
+                (t.images?.find((i: any) => i.isPrimary) || t.images?.[0])?.publicUrl ||
+                null;
+              const photoCount = t.images?.length || 0;
+              const subtitle =
+                t.bio ||
+                t.specialRateNote ||
+                `${t.nationality || "International"} Real-Beard Santa Performer`;
+
+              return (
+                <div
+                  key={t.id}
+                  className="rounded-xl bg-[#18181B] border border-[#27272A] overflow-hidden group hover:border-[#D4AF37]/60 transition shadow-lg flex flex-col justify-between"
+                >
+                  <div className="h-64 overflow-hidden bg-zinc-950 relative">
+                    {primaryImg ? (
+                      <img
+                        src={primaryImg}
+                        alt={`Santa ${t.displayName}`}
+                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-zinc-900 to-zinc-950 text-zinc-500 p-4 text-center">
+                        <Sparkles className="w-8 h-8 text-[#D4AF37]/60 mb-2" />
+                        <span className="text-xs font-headline font-bold text-zinc-300">
+                          Santa {t.displayName}
+                        </span>
+                        <span className="text-[10px] font-mono text-zinc-500 mt-0.5">
+                          Verified Real-Beard Roster
+                        </span>
+                      </div>
+                    )}
+                    <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded bg-black/80 backdrop-blur-md text-[9px] font-mono text-[#D4AF37] border border-zinc-700 font-bold">
+                      {t.talentType === "REGULAR_SANTA" ? "Costumed Santa" : "Real Beard"} • {t.canonicalId}
+                    </span>
+                    <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded bg-emerald-950/90 backdrop-blur-md text-[9px] font-mono text-emerald-300 border border-emerald-700/60 font-bold">
+                      ✓ Public Approved
+                    </span>
+                    {photoCount > 1 && (
+                      <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/75 backdrop-blur-md text-[9px] font-mono text-zinc-300 border border-zinc-700">
+                        {photoCount} Photos
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-4 space-y-2.5 flex-1 flex flex-col justify-between">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-base font-headline font-bold text-white">
+                          Santa {t.displayName}
+                        </h3>
+                        {t.height && (
+                          <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">
+                            {t.height}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] font-mono text-[#D4AF37] flex items-center justify-between">
+                        <span>{t.nationality || "International"}</span>
+                        <span>₱{Number(t.metroManilaRate || 18000).toLocaleString()} MM</span>
+                      </div>
+                      <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                        {subtitle}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleOpenModalForTalent(t)}
+                      className="w-full mt-2 py-2.5 rounded-lg bg-zinc-900 hover:bg-[#22C55E] hover:text-zinc-950 border border-zinc-700 hover:border-[#22C55E] text-xs font-headline font-bold text-white transition"
+                    >
+                      Select Santa {t.displayName}
+                    </button>
+                  </div>
                 </div>
-                <div className="p-4 space-y-2">
-                  <h3 className="text-base font-headline font-bold text-white">Santa {santa.name}</h3>
-                  <p className="text-xs text-zinc-400 line-clamp-2">{santa.exp}</p>
-                  <button
-                    onClick={() => setModalOpen(true)}
-                    className="w-full mt-2 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-headline font-bold text-white transition"
-                  >
-                    Select Santa {santa.name}
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
@@ -261,7 +348,7 @@ export default function B2BFunnelHomePage() {
           <div>
             <DubTrack event="bottom_cta_clicked">
               <button
-                onClick={() => setModalOpen(true)}
+                onClick={() => handleOpenModalForTalent(null)}
                 className="px-10 py-4 rounded-xl font-headline font-black text-base uppercase tracking-wider text-zinc-950 bg-[#22C55E] hover:bg-[#16A34A] shadow-electric-glow transition-all transform hover:-translate-y-0.5 active:translate-y-0 inline-flex items-center space-x-2"
               >
                 <span>SECURE YOUR SANTA SLOT NOW</span>
@@ -279,6 +366,8 @@ export default function B2BFunnelHomePage() {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         defaultLocation="METRO_MANILA"
+        selectedTalent={selectedTalent}
+        publicTalents={publicTalents}
       />
     </div>
   );

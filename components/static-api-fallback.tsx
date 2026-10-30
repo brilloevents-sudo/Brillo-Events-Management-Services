@@ -435,6 +435,182 @@ export function StaticApiFallback() {
         return jsonResponse({ success: true });
       }
 
+      const getMergedTalents = (): any[] => {
+        const baseTalents: any[] = snap.talents?.talents || [];
+        if (typeof localStorage === "undefined") return baseTalents;
+        try {
+          const customRaw = localStorage.getItem("brillo_custom_talents_v3");
+          const editsRaw = localStorage.getItem("brillo_talent_edits_v3");
+          const customList: any[] = customRaw ? JSON.parse(customRaw) : [];
+          const editsMap: Record<string, any> = editsRaw ? JSON.parse(editsRaw) : {};
+          const combined = [...customList, ...baseTalents];
+          const seen = new Set<string>();
+          const result: any[] = [];
+          for (const t of combined) {
+            if (seen.has(t.id)) continue;
+            seen.add(t.id);
+            result.push(editsMap[t.id] ? { ...t, ...editsMap[t.id] } : t);
+          }
+          return result;
+        } catch {
+          return baseTalents;
+        }
+      };
+
+      // Handle Create New Talent in Static Mode (POST /api/talents)
+      if (pathname === "/api/talents" && method === "POST") {
+        const newId = `tal_custom_${Date.now()}`;
+        const displayName = parsedBody.displayName || "New Santa";
+        const canonicalId = `TAL-${displayName.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8)}`;
+        const newTalent = {
+          id: newId,
+          canonicalId,
+          sourceName: parsedBody.sourceName || displayName,
+          displayName,
+          talentType: parsedBody.talentType || "REAL_BEARD",
+          status: "ACTIVE",
+          age: parsedBody.age ? Number(parsedBody.age) : 62,
+          height: parsedBody.height || "6'0\"",
+          nationality: parsedBody.nationality || "International",
+          phone: parsedBody.phone || "",
+          baseTalentFee: Number(parsedBody.baseTalentFee || 12000),
+          metroManilaRate: Number(parsedBody.metroManilaRate || 18000),
+          provincialRate: Number(parsedBody.provincialRate || 23400),
+          holidayRate: Number(parsedBody.holidayRate || 21000),
+          specialRateNote: parsedBody.specialRateNote || "",
+          bio: parsedBody.bio || "",
+          approvedForPublicDisplay: Boolean(parsedBody.approvedForPublicDisplay),
+          images: parsedBody.fileDataUrl
+            ? [
+                {
+                  id: `img_${Date.now()}`,
+                  talentId: newId,
+                  fileName: parsedBody.fileName || "portrait.jpg",
+                  publicUrl: parsedBody.fileDataUrl,
+                  isPrimary: true,
+                  caption: `${displayName} Portrait`,
+                  approvedForClient: true,
+                },
+              ]
+            : [],
+          aliases: [],
+          assignments: [],
+          ledgerEntries: [],
+        };
+        if (typeof localStorage !== "undefined") {
+          try {
+            const prev = JSON.parse(localStorage.getItem("brillo_custom_talents_v3") || "[]");
+            localStorage.setItem("brillo_custom_talents_v3", JSON.stringify([newTalent, ...prev]));
+          } catch {}
+        }
+        if (snap.talents?.talents) {
+          snap.talents.talents.unshift(newTalent);
+        }
+        return jsonResponse({ success: true, talent: newTalent });
+      }
+
+      // Handle Talent Profile Edit & Photo Upload in Static Mode (PATCH /api/talents/[id])
+      if (pathname.startsWith("/api/talents/") && method === "PATCH") {
+        const id = pathname.split("/").pop() || "";
+        const merged = getMergedTalents();
+        const target =
+          merged.find((t: any) => t.id === id || t.canonicalId === id) || merged[0];
+        if (target) {
+          const updated = { ...target, images: [...(target.images || [])] };
+          const action = parsedBody.action;
+
+          if (action === "ADD_PHOTO") {
+            const url = parsedBody.fileDataUrl || parsedBody.publicUrl || "";
+            const shouldBePrimary = Boolean(parsedBody.setAsPrimary || updated.images.length === 0);
+            if (shouldBePrimary) {
+              updated.images = updated.images.map((img: any) => ({ ...img, isPrimary: false }));
+            }
+            const newImg = {
+              id: `img_${Date.now()}`,
+              talentId: updated.id,
+              fileName: parsedBody.fileName || `santa_${updated.displayName}.jpg`,
+              publicUrl: url,
+              originalPath: url,
+              isPrimary: shouldBePrimary,
+              caption: parsedBody.caption || `Santa ${updated.displayName} Portrait`,
+              approvedForClient:
+                parsedBody.approvedForClient !== undefined
+                  ? Boolean(parsedBody.approvedForClient)
+                  : updated.approvedForPublicDisplay,
+            };
+            updated.images = shouldBePrimary
+              ? [newImg, ...updated.images]
+              : [...updated.images, newImg];
+          } else if (action === "SET_PRIMARY_PHOTO" && parsedBody.imageId) {
+            updated.images = updated.images
+              .map((img: any) => ({
+                ...img,
+                isPrimary: img.id === parsedBody.imageId,
+              }))
+              .sort((a: any, b: any) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
+          } else if (action === "UPDATE_PHOTO" && parsedBody.imageId) {
+            updated.images = updated.images.map((img: any) =>
+              img.id === parsedBody.imageId
+                ? {
+                    ...img,
+                    caption: parsedBody.caption !== undefined ? parsedBody.caption : img.caption,
+                    approvedForClient:
+                      parsedBody.approvedForClient !== undefined
+                        ? Boolean(parsedBody.approvedForClient)
+                        : img.approvedForClient,
+                  }
+                : img
+            );
+          } else if (action === "DELETE_PHOTO" && parsedBody.imageId) {
+            const wasPrimary = updated.images.find(
+              (img: any) => img.id === parsedBody.imageId
+            )?.isPrimary;
+            updated.images = updated.images.filter((img: any) => img.id !== parsedBody.imageId);
+            if (wasPrimary && updated.images.length > 0) {
+              updated.images[0] = { ...updated.images[0], isPrimary: true };
+            }
+          } else {
+            if (parsedBody.displayName !== undefined) updated.displayName = parsedBody.displayName;
+            if (parsedBody.sourceName !== undefined) updated.sourceName = parsedBody.sourceName;
+            if (parsedBody.talentType !== undefined) updated.talentType = parsedBody.talentType;
+            if (parsedBody.status !== undefined) updated.status = parsedBody.status;
+            if (parsedBody.age !== undefined)
+              updated.age = parsedBody.age ? Number(parsedBody.age) : null;
+            if (parsedBody.height !== undefined) updated.height = parsedBody.height;
+            if (parsedBody.nationality !== undefined) updated.nationality = parsedBody.nationality;
+            if (parsedBody.phone !== undefined) updated.phone = parsedBody.phone;
+            if (parsedBody.bio !== undefined) updated.bio = parsedBody.bio;
+            if (parsedBody.baseTalentFee !== undefined)
+              updated.baseTalentFee = Number(parsedBody.baseTalentFee);
+            if (parsedBody.metroManilaRate !== undefined)
+              updated.metroManilaRate = Number(parsedBody.metroManilaRate);
+            if (parsedBody.provincialRate !== undefined)
+              updated.provincialRate = Number(parsedBody.provincialRate);
+            if (parsedBody.holidayRate !== undefined)
+              updated.holidayRate = Number(parsedBody.holidayRate);
+            if (parsedBody.specialRateNote !== undefined)
+              updated.specialRateNote = parsedBody.specialRateNote;
+            if (parsedBody.approvedForPublicDisplay !== undefined)
+              updated.approvedForPublicDisplay = Boolean(parsedBody.approvedForPublicDisplay);
+          }
+
+          if (typeof localStorage !== "undefined") {
+            try {
+              const editsMap = JSON.parse(
+                localStorage.getItem("brillo_talent_edits_v3") || "{}"
+              );
+              editsMap[updated.id] = updated;
+              localStorage.setItem("brillo_talent_edits_v3", JSON.stringify(editsMap));
+            } catch {}
+          }
+          const idx = snap.talents?.talents?.findIndex((t: any) => t.id === updated.id);
+          if (idx !== undefined && idx >= 0) {
+            snap.talents.talents[idx] = updated;
+          }
+          return jsonResponse({ success: true, talent: updated });
+        }
+      }
+
       if (method !== "GET") {
         const refNum = `B2026-${Math.floor(1000 + Math.random() * 9000)}`;
         const tok = `tok_${Date.now()}`;
@@ -469,15 +645,22 @@ export function StaticApiFallback() {
         const allB = getMergedBookings();
         const booking =
           allB.find((b: any) => b.id === id || b.bookingNumber === id) || allB[0];
-        return jsonResponse({ success: true, booking, talents: snap.talents.talents });
+        return jsonResponse({ success: true, booking, talents: getMergedTalents() });
       }
       if (pathname === "/api/individual-bookings") return jsonResponse(snap.individualBookings);
-      if (pathname === "/api/talents") return jsonResponse(snap.talents);
+      if (pathname === "/api/talents") {
+        const publicOnly = urlObj.searchParams.get("publicOnly") === "true";
+        let allT = getMergedTalents();
+        if (publicOnly) {
+          allT = allT.filter((t: any) => Boolean(t.approvedForPublicDisplay));
+        }
+        return jsonResponse({ success: true, count: allT.length, talents: allT });
+      }
       if (pathname.startsWith("/api/talents/")) {
         const id = pathname.split("/").pop();
+        const allT = getMergedTalents();
         const talent =
-          snap.talents.talents.find((t: any) => t.id === id || t.canonicalId === id) ||
-          snap.talents.talents[0];
+          allT.find((t: any) => t.id === id || t.canonicalId === id) || allT[0];
         return jsonResponse({ success: true, talent });
       }
       if (pathname === "/api/leads") return jsonResponse(snap.leads);

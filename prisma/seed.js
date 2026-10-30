@@ -46,9 +46,11 @@ async function main() {
       bio: 'Professional real-beard Santa with commanding stage presence, natural charisma, and extensive mall centerpiece tour experience.',
       aliases: ['BOB HALMITON', 'Bob', 'Santa Bob', 'Santa Rob', 'BOB -4K ADVANCE'],
       photos: [
-        { fileName: 'bob_photo_1.jpg', publicUrl: '/talents/Bob/bob_photo_1.jpg', isPrimary: true, caption: 'Santa Bob Mall Portrait' },
-        { fileName: 'bob_photo_2.png', publicUrl: '/talents/Bob/bob_photo_2.png', isPrimary: false, caption: 'Santa Bob Close-up' },
+        { fileName: 'bob_photo_1.png', publicUrl: '/talents/Bob/bob_photo_1.png', isPrimary: true, caption: 'Santa Bob Mall Portrait' },
+        { fileName: 'bob_photo_2.jpg', publicUrl: '/talents/Bob/bob_photo_2.jpg', isPrimary: false, caption: 'Santa Bob Close-up' },
         { fileName: 'bob_photo_3.jpg', publicUrl: '/talents/Bob/bob_photo_3.jpg', isPrimary: false, caption: 'Santa Bob Event Action' },
+        { fileName: 'bob_photo_4.jpg', publicUrl: '/talents/Bob/bob_photo_4.jpg', isPrimary: false, caption: 'Santa Bob Holiday Throne' },
+        { fileName: 'bob_photo_5.jpg', publicUrl: '/talents/Bob/bob_photo_5.jpg', isPrimary: false, caption: 'Santa Bob Meet & Greet' },
       ]
     },
     {
@@ -117,6 +119,7 @@ async function main() {
       photos: [
         { fileName: 'cedric_photo_1.jpg', publicUrl: '/talents/Cedric/cedric_photo_1.jpg', isPrimary: true, caption: 'Santa Cedric Smiling' },
         { fileName: 'cedric_photo_2.jpg', publicUrl: '/talents/Cedric/cedric_photo_2.jpg', isPrimary: false, caption: 'Santa Cedric Candid' },
+        { fileName: 'cedric_photo_3.jpg', publicUrl: '/talents/Cedric/cedric_photo_3.jpg', isPrimary: false, caption: 'Santa Cedric Stage Appearance' },
       ]
     },
     {
@@ -138,7 +141,8 @@ async function main() {
       bio: 'Distinguished real-beard Santa with commanding stage poise, preferred for high-volume flagship mall centerpieces.',
       aliases: ['RANDY', 'Santa Randy', 'Randy'],
       photos: [
-        { fileName: 'randy_photo_1.jpg', publicUrl: '/talents/Randy/randy_photo_1.jpg', isPrimary: true, caption: 'Santa Randy Flagship Portrait' }
+        { fileName: 'randy_photo_1.jpg', publicUrl: '/talents/Randy/randy_photo_1.jpg', isPrimary: true, caption: 'Santa Randy Flagship Portrait' },
+        { fileName: 'randy_photo_2.jpg', publicUrl: '/talents/Randy/randy_photo_2.jpg', isPrimary: false, caption: 'Santa Randy Mall Tour' },
       ]
     },
     {
@@ -156,7 +160,7 @@ async function main() {
       holidayRate: 21000,
       specialRateNote: 'SM San Lazaro and SM Novaliches Dec 25 scheduled talent.',
       rateSourceNote: 'Santa Rate row 5',
-      approvedForPublicDisplay: false,
+      approvedForPublicDisplay: true,
       bio: 'Seasoned real-beard Santa with rich voice, deep holiday storytelling expertise, and excellent rapport with children.',
       aliases: ['VIC', 'Vic'],
       photos: [
@@ -178,7 +182,7 @@ async function main() {
       holidayRate: 20000,
       specialRateNote: 'Ever Gotesco & Clark Cityfront confirmed talent.',
       rateSourceNote: 'Santa Rate row 8',
-      approvedForPublicDisplay: false,
+      approvedForPublicDisplay: true,
       bio: 'Authentic Dutch real-beard Santa delivering a gentle, traditional holiday aura.',
       aliases: ['LIAM', 'Liam', 'Liam/ Alpha Bazaar'],
       photos: [
@@ -204,7 +208,10 @@ async function main() {
       bio: 'Danish real-beard Santa entrusted with ultra-exclusive luxury resort appearances including Amanpulo.',
       aliases: ['PERRY', 'Perry'],
       photos: [
-        { fileName: 'perry_photo_1.jpg', publicUrl: '/talents/Perry/perry_photo_1.jpg', isPrimary: true, caption: 'Santa Perry Amanpulo Talent' }
+        { fileName: 'perry_photo_1.jpg', publicUrl: '/talents/Perry/perry_photo_1.jpg', isPrimary: true, caption: 'Santa Perry Amanpulo Talent' },
+        { fileName: 'perry_photo_2.jpg', publicUrl: '/talents/Perry/perry_photo_2.jpg', isPrimary: false, caption: 'Santa Perry Holiday Portrait' },
+        { fileName: 'perry_photo_3.jpg', publicUrl: '/talents/Perry/perry_photo_3.jpg', isPrimary: false, caption: 'Santa Perry Close-Up' },
+        { fileName: 'perry_photo_4.jpg', publicUrl: '/talents/Perry/perry_photo_4.jpg', isPrimary: false, caption: 'Santa Perry Mall Appearance' },
       ]
     },
     {
@@ -222,11 +229,13 @@ async function main() {
       holidayRate: 20000,
       specialRateNote: 'One Ayala Dec 12 and SM Aura confirmed talent.',
       rateSourceNote: 'Santa Rate row 11',
-      approvedForPublicDisplay: false,
+      approvedForPublicDisplay: true,
       bio: 'Tall, majestic American real-beard Santa with deep laugh and vibrant, photogenic red suit.',
       aliases: ['ROY', 'Roy'],
       photos: [
-        { fileName: 'roy_photo_1.jpg', publicUrl: '/talents/Roy/roy_photo_1.jpg', isPrimary: true, caption: 'Santa Roy One Ayala Portrait' }
+        { fileName: 'roy_photo_1.jpg', publicUrl: '/talents/Roy/roy_photo_1.jpg', isPrimary: true, caption: 'Santa Roy One Ayala Portrait' },
+        { fileName: 'roy_photo_2.jpg', publicUrl: '/talents/Roy/roy_photo_2.jpg', isPrimary: false, caption: 'Santa Roy Full Costume' },
+        { fileName: 'roy_photo_3.jpg', publicUrl: '/talents/Roy/roy_photo_3.jpg', isPrimary: false, caption: 'Santa Roy Event Greet' },
       ]
     },
     {
@@ -264,11 +273,12 @@ async function main() {
       holidayRate: 22000,
       specialRateNote: 'SM Clark, SM Rosales, SM Pampanga, SM Southmall confirmed talent.',
       rateSourceNote: 'Real Beard DOCX archive + booking schedules',
-      approvedForPublicDisplay: false,
+      approvedForPublicDisplay: true,
       bio: 'Venerable 71-year-old American real-beard Santa with quintessential grandfatherly warmth.',
       aliases: ['Terry'],
       photos: [
-        { fileName: 'terry_photo_1.jpg', publicUrl: '/talents/Terry/terry_photo_1.jpg', isPrimary: true, caption: 'Santa Terry Classic' }
+        { fileName: 'terry_photo_1.jpg', publicUrl: '/talents/Terry/terry_photo_1.jpg', isPrimary: true, caption: 'Santa Terry Classic' },
+        { fileName: 'terry_photo_2.jpg', publicUrl: '/talents/Terry/terry_photo_2.jpg', isPrimary: false, caption: 'Santa Terry Holiday Setup' },
       ]
     },
     {
@@ -286,7 +296,7 @@ async function main() {
       holidayRate: 20000,
       specialRateNote: 'SM Center Shaw multi-day contract (Dec 12, 19, 20). ₱36,000 package TF.',
       rateSourceNote: 'Real Beard DOCX archive + Confirmed Booking row 14',
-      approvedForPublicDisplay: false,
+      approvedForPublicDisplay: true,
       bio: 'Enthusiastic and articulate Santa with exceptional interactive rapport for mall celebrations.',
       aliases: ['Mickeyver', 'SANTA MICKEYVER'],
       photos: [
@@ -308,7 +318,7 @@ async function main() {
       holidayRate: 21000,
       specialRateNote: 'Dec 19 (Grae) & Dec 25 (SM Sta. Mesa) scheduled talent.',
       rateSourceNote: 'Real Beard DOCX archive',
-      approvedForPublicDisplay: false,
+      approvedForPublicDisplay: true,
       bio: 'Distinguished Italian real-beard Santa renowned for theatrical presentation and authentic costume.',
       aliases: ['Benito'],
       photos: [
@@ -330,11 +340,12 @@ async function main() {
       holidayRate: 20000,
       specialRateNote: 'Dec 19 (Light) & Dec 25 (SM San Lazaro) scheduled talent.',
       rateSourceNote: 'Real Beard DOCX archive',
-      approvedForPublicDisplay: false,
+      approvedForPublicDisplay: true,
       bio: 'Warm and genial American real-beard Santa with rich background in festive hospitality.',
       aliases: ['Richard'],
       photos: [
-        { fileName: 'richard_photo_1.jpg', publicUrl: '/talents/Richard/richard_photo_1.jpg', isPrimary: true, caption: 'Santa Richard' }
+        { fileName: 'richard_photo_1.jpg', publicUrl: '/talents/Richard/richard_photo_1.jpg', isPrimary: true, caption: 'Santa Richard' },
+        { fileName: 'richard_photo_2.jpg', publicUrl: '/talents/Richard/richard_photo_2.jpg', isPrimary: false, caption: 'Santa Richard Festive Portrait' },
       ]
     },
     {
@@ -405,6 +416,11 @@ async function main() {
       where: { canonicalId: t.canonicalId },
       update: data,
       create: data
+    });
+
+    await prisma.talentAlias.deleteMany({ where: { talentId: talent.id } });
+    await prisma.talentImage.deleteMany({
+      where: { talentId: talent.id, originalPath: { startsWith: '/talents/' } }
     });
 
     for (const a of aliases) {

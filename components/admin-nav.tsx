@@ -24,6 +24,8 @@ import {
   ChevronDown,
   KanbanSquare,
   ShieldCheck,
+  Mail,
+  Inbox,
 } from "lucide-react";
 import { BrilloLiquidEmblem } from "@/components/visual-effects/brillo-liquid-emblem";
 
@@ -97,6 +99,24 @@ export function AdminNav({ onOpenQuickAction }: AdminNavProps) {
           matchPaths: ["/admin/expenses", "/admin/paluwal"],
           label: "Expenses & Paluwal Ledger",
           icon: Wallet,
+        },
+      ],
+    },
+    {
+      group: "4. COMMUNICATION & INBOX",
+      items: [
+        {
+          href: "/admin/emails",
+          matchPaths: ["/admin/emails"],
+          label: "Email Automation Center",
+          icon: Mail,
+          badgeAlert: "18 Auto",
+        },
+        {
+          href: "/admin/inbox",
+          matchPaths: ["/admin/inbox"],
+          label: "Shared Client Inbox",
+          icon: Inbox,
         },
       ],
     },

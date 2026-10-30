@@ -17,6 +17,14 @@ import {
   Sparkles,
   MapPin,
   ExternalLink,
+  Star,
+  Trash2,
+  Save,
+  DollarSign,
+  CalendarDays,
+  FileText,
+  Lock,
+  Wallet,
 } from "lucide-react";
 
 // Real PA & Handler Directory from the Google Sheet ("Santa database" tab)
@@ -51,7 +59,14 @@ const PA_CREW_DIRECTORY = [
     role: "Executive Santa Handler",
     phone: "0927 113 1300",
     location: "Limay, Bataan",
-    keyVenues: ["SM Megamall", "The Podium", "SM Olongapo Central", "SM Tarlac", "SM Marilao", "SM San Lazaro"],
+    keyVenues: [
+      "SM Megamall",
+      "The Podium",
+      "SM Olongapo Central",
+      "SM Tarlac",
+      "SM Marilao",
+      "SM San Lazaro",
+    ],
   },
   {
     name: "Maritez Vest",
@@ -67,7 +82,14 @@ const PA_CREW_DIRECTORY = [
     role: "Metro Manila Field PA Handler",
     phone: "0963 279 8603",
     location: "Manila / Pasig",
-    keyVenues: ["SM Mall of Asia (SMOA)", "SM Sucat", "SMDC Light", "SMDC Wind Tagaytay", "One Ayala", "SM Aura"],
+    keyVenues: [
+      "SM Mall of Asia (SMOA)",
+      "SM Sucat",
+      "SMDC Light",
+      "SMDC Wind Tagaytay",
+      "One Ayala",
+      "SM Aura",
+    ],
   },
   {
     name: "Teresita Gelera Villanueva",
@@ -75,7 +97,14 @@ const PA_CREW_DIRECTORY = [
     role: "Personal Assistant & Crowd Coordinator",
     phone: "0976 635 0420",
     location: "Caloocan City",
-    keyVenues: ["SM San Jose", "SM City San Mateo", "SM Fairview", "SM San Lazaro", "SM Caloocan", "SM Novaliches"],
+    keyVenues: [
+      "SM San Jose",
+      "SM City San Mateo",
+      "SM Fairview",
+      "SM San Lazaro",
+      "SM Caloocan",
+      "SM Novaliches",
+    ],
   },
   {
     name: "Franco Cunial",
@@ -87,21 +116,38 @@ const PA_CREW_DIRECTORY = [
   },
 ];
 
+type DossierTabId =
+  | "profile"
+  | "gallery"
+  | "bookings"
+  | "availability"
+  | "rates"
+  | "documents"
+  | "payouts"
+  | "audit";
+
 export default function UnifiedRosterPage() {
   const [activeTab, setActiveTab] = useState<"SANTAS" | "PA_CREW">("SANTAS");
   const [talents, setTalents] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Quick-Edit / Create Santa Profile Modal state
-  const [editModalOpen, setEditModalOpen] = useState(false);
+  // Full 8-Tab Dossier Modal state (Opened when clicking "Edit Profile", "Photo", or "8-Tab Profile ->")
+  const [dossierOpen, setDossierOpen] = useState(false);
+  const [dossierTab, setDossierTab] = useState<DossierTabId>("profile");
+  const [selectedTalent, setSelectedTalent] = useState<any | null>(null);
   const [isNewTalent, setIsNewTalent] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(
+    null
+  );
+
   const [editForm, setEditForm] = useState<any>({
     id: "",
     displayName: "",
     sourceName: "",
     talentType: "REAL_BEARD",
+    status: "ACTIVE",
     nationality: "American",
     age: 62,
     height: "6'0\"",
@@ -113,24 +159,27 @@ export default function UnifiedRosterPage() {
     specialRateNote: "",
     bio: "",
     approvedForPublicDisplay: true,
-    fileDataUrl: "",
-    fileName: "",
   });
 
-  // Quick Upload Photo Modal state
-  const [photoModalTalent, setPhotoModalTalent] = useState<any | null>(null);
+  // Photo Upload states inside Tab 2 (Photo Gallery)
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string>("");
   const [photoFileName, setPhotoFileName] = useState<string>("");
   const [photoCaption, setPhotoCaption] = useState<string>("");
   const [photoSetPrimary, setPhotoSetPrimary] = useState<boolean>(true);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [photoPublicApproved, setPhotoPublicApproved] = useState<boolean>(true);
+  const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
+  const [editingCaptionText, setEditingCaptionText] = useState<string>("");
 
   function loadRoster() {
     setLoading(true);
-    fetch("/api/talents")
-      .then((r) => r.json())
-      .then((tData) => {
+    Promise.all([
+      fetch("/api/talents").then((r) => r.json()),
+      fetch("/api/bookings").then((r) => r.json()),
+    ])
+      .then(([tData, bData]) => {
         if (tData?.talents) setTalents(tData.talents);
+        if (bData?.bookings) setBookings(bData.bookings);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -153,14 +202,22 @@ export default function UnifiedRosterPage() {
     }
   }
 
-  function openQuickEdit(t: any) {
+  // Open the 8-Tab Modal directly on the requested tab (e.g. "profile" or "gallery")
+  function open8TabDossier(t: any, initialTab: DossierTabId = "profile") {
     setIsNewTalent(false);
+    setSelectedTalent(t);
+    setDossierTab(initialTab);
     setFeedback(null);
+    setPhotoPreviewUrl("");
+    setPhotoFileName("");
+    setPhotoCaption(`Santa ${t.displayName} Portrait`);
+    setEditingPhotoId(null);
     setEditForm({
       id: t.id,
       displayName: t.displayName || "",
       sourceName: t.sourceName || t.displayName || "",
       talentType: t.talentType || "REAL_BEARD",
+      status: t.status || "ACTIVE",
       nationality: t.nationality || "",
       age: t.age || "",
       height: t.height || "",
@@ -172,20 +229,28 @@ export default function UnifiedRosterPage() {
       specialRateNote: t.specialRateNote || "",
       bio: t.bio || "",
       approvedForPublicDisplay: Boolean(t.approvedForPublicDisplay),
-      fileDataUrl: "",
-      fileName: "",
     });
-    setEditModalOpen(true);
+    setDossierOpen(true);
   }
 
   function openNewTalentModal() {
     setIsNewTalent(true);
+    setSelectedTalent({
+      id: "",
+      canonicalId: "TAL-NEW",
+      displayName: "New Santa",
+      images: [],
+    });
+    setDossierTab("profile");
     setFeedback(null);
+    setPhotoPreviewUrl("");
+    setPhotoFileName("");
     setEditForm({
       id: "",
       displayName: "",
       sourceName: "",
       talentType: "REAL_BEARD",
+      status: "ACTIVE",
       nationality: "American",
       age: 62,
       height: "6'0\"",
@@ -197,14 +262,12 @@ export default function UnifiedRosterPage() {
       specialRateNote: "",
       bio: "",
       approvedForPublicDisplay: true,
-      fileDataUrl: "",
-      fileName: "",
     });
-    setEditModalOpen(true);
+    setDossierOpen(true);
   }
 
-  async function handleSaveTalent(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSaveTalent(e?: React.FormEvent) {
+    if (e) e.preventDefault();
     setSaving(true);
     setFeedback(null);
     try {
@@ -219,27 +282,29 @@ export default function UnifiedRosterPage() {
       if (!res.ok || data.success === false) {
         throw new Error(data.error || "Failed to save profile");
       }
+      if (data.talent) {
+        setSelectedTalent(data.talent);
+        setIsNewTalent(false);
+        setEditForm((prev: any) => ({ ...prev, id: data.talent.id }));
+      }
       loadRoster();
-      setEditModalOpen(false);
+      setFeedback({
+        type: "success",
+        text: `Santa ${editForm.displayName}'s profile and rate card have been saved!`,
+      });
     } catch (err: any) {
-      setFeedback(err.message || "Error saving profile");
+      setFeedback({ type: "error", text: err.message || "Error saving profile" });
     } finally {
       setSaving(false);
     }
   }
 
-  function openPhotoUploadModal(t: any) {
-    setPhotoModalTalent(t);
-    setPhotoPreviewUrl("");
-    setPhotoFileName("");
-    setPhotoCaption(`Santa ${t.displayName} Portrait`);
-    setPhotoSetPrimary(true);
-    setFeedback(null);
-  }
-
   function handleFilePicked(file: File | undefined) {
     if (!file) return;
     setPhotoFileName(file.name);
+    if (!photoCaption && selectedTalent) {
+      setPhotoCaption(`Santa ${selectedTalent.displayName} Portrait`);
+    }
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
@@ -251,33 +316,128 @@ export default function UnifiedRosterPage() {
 
   async function handleUploadPhotoSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!photoModalTalent || !photoPreviewUrl) return;
+    if (!selectedTalent?.id || !photoPreviewUrl) return;
     setSaving(true);
+    setFeedback(null);
     try {
-      const res = await fetch(`/api/talents/${photoModalTalent.id}`, {
+      const res = await fetch(`/api/talents/${selectedTalent.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "ADD_PHOTO",
-          fileName: photoFileName || `santa_${photoModalTalent.displayName}.jpg`,
+          fileName: photoFileName || `santa_${selectedTalent.displayName}.jpg`,
           fileDataUrl: photoPreviewUrl,
-          caption: photoCaption || `Santa ${photoModalTalent.displayName} Portrait`,
+          caption: photoCaption || `Santa ${selectedTalent.displayName} Portrait`,
           setAsPrimary: photoSetPrimary,
-          approvedForClient: true,
+          approvedForClient: photoPublicApproved,
         }),
       });
       const data = await res.json();
       if (!res.ok || data.success === false) {
         throw new Error(data.error || "Failed to upload photo");
       }
+      if (data.talent) {
+        setSelectedTalent(data.talent);
+      }
+      setPhotoPreviewUrl("");
+      setPhotoFileName("");
       loadRoster();
-      setPhotoModalTalent(null);
+      setFeedback({
+        type: "success",
+        text: "New portrait photo uploaded to Tab 2: Photo Gallery!",
+      });
     } catch (err: any) {
-      setFeedback(err.message || "Could not upload photo");
+      setFeedback({ type: "error", text: err.message || "Could not upload photo" });
     } finally {
       setSaving(false);
     }
   }
+
+  async function handleSetPrimaryPhoto(imageId: string) {
+    if (!selectedTalent?.id) return;
+    try {
+      const res = await fetch(`/api/talents/${selectedTalent.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "SET_PRIMARY_PHOTO", imageId }),
+      });
+      const data = await res.json();
+      if (data.talent) {
+        setSelectedTalent(data.talent);
+        loadRoster();
+        setFeedback({ type: "success", text: "Primary portrait updated!" });
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", text: err.message });
+    }
+  }
+
+  async function handleSavePhotoCaption(imageId: string) {
+    if (!selectedTalent?.id) return;
+    try {
+      const res = await fetch(`/api/talents/${selectedTalent.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "UPDATE_PHOTO",
+          imageId,
+          caption: editingCaptionText,
+        }),
+      });
+      const data = await res.json();
+      if (data.talent) {
+        setSelectedTalent(data.talent);
+        loadRoster();
+      }
+      setEditingPhotoId(null);
+      setFeedback({ type: "success", text: "Photo caption updated!" });
+    } catch (err: any) {
+      setFeedback({ type: "error", text: err.message });
+    }
+  }
+
+  async function handleDeletePhoto(imageId: string) {
+    if (!selectedTalent?.id) return;
+    try {
+      const res = await fetch(`/api/talents/${selectedTalent.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "DELETE_PHOTO", imageId }),
+      });
+      const data = await res.json();
+      if (data.talent) {
+        setSelectedTalent(data.talent);
+        loadRoster();
+        setFeedback({ type: "success", text: "Photo deleted from gallery." });
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", text: err.message });
+    }
+  }
+
+  // Bookings for the currently opened Santa in the 8-Tab Modal
+  const selectedTalentBookings = bookings.filter(
+    (b) =>
+      selectedTalent &&
+      (b.talentAssignments?.[0]?.talent?.id === selectedTalent.id ||
+        b.talentAssignments?.[0]?.talent?.displayName === selectedTalent.displayName)
+  );
+
+  const dossierTabs: { id: DossierTabId; label: string }[] = [
+    { id: "profile", label: "1. Profile & Bio" },
+    { id: "gallery", label: `2. Photo Gallery (${selectedTalent?.images?.length || 0})` },
+    { id: "bookings", label: `3. Booking History (${selectedTalentBookings.length})` },
+    { id: "availability", label: "4. Availability" },
+    { id: "rates", label: "5. Rates & Costing" },
+    { id: "documents", label: "6. Documents" },
+    { id: "payouts", label: "7. Payments & Payouts" },
+    { id: "audit", label: "8. Notes & Audit" },
+  ];
+
+  const activePrimaryAvatar =
+    selectedTalent?.images?.find((img: any) => img.isPrimary)?.publicUrl ||
+    selectedTalent?.images?.[0]?.publicUrl ||
+    "/brand/logo-brillo.png";
 
   return (
     <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
@@ -293,7 +453,7 @@ export default function UnifiedRosterPage() {
             </h1>
           </div>
           <p className="page-subtitle text-xs mt-1">
-            Unified roster of authenticated Real-Beard Santa performers and dedicated PA / event handlers. Edit profiles or upload new portraits directly from any card.
+            Click <strong>Edit Profile</strong>, <strong>Upload Photo</strong>, or <strong>8-Tab Profile</strong> on any Santa card to open the complete 8-Tab Operational Dossier.
           </p>
         </div>
 
@@ -354,13 +514,14 @@ export default function UnifiedRosterPage() {
                 className="dashboard-card overflow-hidden flex flex-col justify-between hover:border-[#9B1B30]/50 transition group"
               >
                 <div>
-                  {/* Portrait Container with Quick Photo Upload Overlay */}
+                  {/* Portrait Container with Quick Photo Upload Overlay (Opens Tab 2 of 8-Tab Modal) */}
                   <div className="relative h-60 bg-[#F4ECEE] border-b border-[#E8DFE0] overflow-hidden flex items-center justify-center">
                     {primaryPhoto ? (
                       <img
                         src={primaryPhoto.publicUrl}
                         alt={primaryPhoto.caption || t.displayName}
-                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
+                        onClick={() => open8TabDossier(t, "profile")}
+                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500 cursor-pointer"
                       />
                     ) : (
                       <div className="text-center p-6 text-[#756568]">
@@ -368,7 +529,7 @@ export default function UnifiedRosterPage() {
                         <span className="text-xs font-mono block">No Cleared Portrait</span>
                         <button
                           type="button"
-                          onClick={() => openPhotoUploadModal(t)}
+                          onClick={() => open8TabDossier(t, "gallery")}
                           className="mt-2.5 px-3 py-1 rounded-lg bg-[#9B1B30] text-white text-[11px] font-bold inline-flex items-center gap-1 shadow-xs hover:opacity-95"
                         >
                           <Camera className="w-3 h-3" />
@@ -388,10 +549,10 @@ export default function UnifiedRosterPage() {
                       )}
                     </div>
 
-                    {/* Top-Right Upload Photo Quick Button */}
+                    {/* Top-Right Upload Photo Quick Button -> Opens 8-Tab Modal on Tab 2: Photo Gallery */}
                     <button
                       type="button"
-                      onClick={() => openPhotoUploadModal(t)}
+                      onClick={() => open8TabDossier(t, "gallery")}
                       className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-white/95 hover:bg-[#9B1B30] text-[#1E1416] hover:text-white border border-[#D6C7C9] text-[10px] font-bold flex items-center gap-1 shadow-sm transition"
                       title={`Upload new photo for Santa ${t.displayName}`}
                     >
@@ -455,15 +616,14 @@ export default function UnifiedRosterPage() {
                   </div>
                 </div>
 
-                {/* Logical 3-Button Action Footer Sequence:
-                    1. Quick Edit Profile  |  2. Photo Gallery  |  3. Full 8-Tab Profile */}
+                {/* Card Action Footer: All 3 buttons open the full 8-Tab Operational Dossier! */}
                 <div className="p-3 border-t border-[#E8DFE0] bg-[#FCF9F8] flex items-center justify-between gap-2 text-xs">
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => openQuickEdit(t)}
+                      onClick={() => open8TabDossier(t, "profile")}
                       className="px-2.5 py-1.5 rounded-md bg-[#F9EBED] text-[#9B1B30] hover:bg-[#9B1B30] hover:text-white border border-[#F0D0D5] font-bold inline-flex items-center gap-1 transition"
-                      title="Quick Edit Profile & Rates"
+                      title="Open 8-Tab Profile Editor (Tab 1: Profile & Bio)"
                     >
                       <Pencil className="w-3 h-3" />
                       <span>Edit Profile</span>
@@ -471,21 +631,22 @@ export default function UnifiedRosterPage() {
 
                     <button
                       type="button"
-                      onClick={() => openPhotoUploadModal(t)}
+                      onClick={() => open8TabDossier(t, "gallery")}
                       className="px-2.5 py-1.5 rounded-md bg-white hover:bg-[#FAF7F5] text-[#3D2C2E] border border-[#D6C7C9] font-semibold inline-flex items-center gap-1 transition"
-                      title="Upload New Portrait Photo"
+                      title="Open 8-Tab Profile Editor (Tab 2: Photo Gallery)"
                     >
                       <Camera className="w-3 h-3 text-[#9B1B30]" />
                       <span>Photo</span>
                     </button>
                   </div>
 
-                  <Link
-                    href={`/admin/talents/${t.id}`}
+                  <button
+                    type="button"
+                    onClick={() => open8TabDossier(t, "profile")}
                     className="px-3 py-1.5 rounded-md bg-white hover:border-[#9B1B30] hover:text-[#9B1B30] text-[#1E1416] border border-[#D6C7C9] font-bold inline-flex items-center gap-1 transition"
                   >
                     <span>8-Tab Profile →</span>
-                  </Link>
+                  </button>
                 </div>
               </div>
             );
@@ -548,299 +709,846 @@ export default function UnifiedRosterPage() {
       )}
 
       {/* =====================================================================
-          MODAL 1: QUICK-EDIT OR CREATE SANTA PROFILE & RATES
+          FULL 8-TAB SANTA DOSSIER MODAL (OPENS WHEN CLICKING EDIT PROFILE,
+          UPLOAD PHOTO, OR 8-TAB PROFILE)
          ===================================================================== */}
-      {editModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="dashboard-card w-full max-w-xl bg-white overflow-hidden my-8">
-            <div className="p-4 border-b border-[#E8DFE0] bg-[#FAF7F5] flex items-center justify-between">
-              <div>
-                <span className="badge-esign px-2 py-0.5 rounded-full text-[10px] uppercase">
-                  {isNewTalent ? "New Santa Performer" : "Quick Profile Editor"}
-                </span>
-                <h2 className="text-lg font-bold text-[#1E1416] mt-0.5">
-                  {isNewTalent
-                    ? "Add New Santa Performer to Roster"
-                    : `Edit Profile & Rates — Santa ${editForm.displayName}`}
-                </h2>
+      {dossierOpen && (
+        <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="dashboard-card w-full max-w-6xl bg-white overflow-hidden my-auto max-h-[92vh] flex flex-col shadow-2xl">
+            {/* Sticky Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-[#E8DFE0] bg-[#FAF7F5] flex flex-col lg:flex-row lg:items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center space-x-3.5">
+                <button
+                  type="button"
+                  onClick={() => setDossierTab("gallery")}
+                  className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-[#C68A12] bg-white shrink-0 shadow-xs group"
+                  title="Click to open Tab 2: Photo Gallery"
+                >
+                  <img
+                    src={activePrimaryAvatar}
+                    alt={editForm.displayName || "Santa"}
+                    className="w-full h-full object-cover object-top"
+                  />
+                  <span className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                    <Camera className="w-4 h-4 text-white" />
+                  </span>
+                </button>
+
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-[#9B1B30] font-bold text-xs">
+                      {selectedTalent?.canonicalId || "TAL-NEW"}
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-white text-[#6E5D5F] border border-[#D6C7C9] font-mono">
+                      Source: {editForm.sourceName || editForm.displayName || "New Profile"}
+                    </span>
+                    {editForm.approvedForPublicDisplay ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-300 font-semibold">
+                        ✓ Publicly Approved
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-300 font-semibold">
+                        Internal Only
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#1E1416] mt-0.5">
+                    {isNewTalent
+                      ? "Add New Santa Performer"
+                      : `Santa ${editForm.displayName || selectedTalent?.displayName}`}
+                  </h2>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setEditModalOpen(false)}
-                className="p-1.5 rounded-lg border border-[#D6C7C9] text-[#3D2C2E] hover:bg-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
+
+              {/* Header Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDossierTab("profile")}
+                  className={`px-3 py-2 rounded-lg text-xs font-bold border flex items-center gap-1.5 transition ${
+                    dossierTab === "profile"
+                      ? "bg-[#F9EBED] text-[#9B1B30] border-[#9B1B30]"
+                      : "bg-white text-[#3D2C2E] border-[#D6C7C9] hover:bg-[#FAF7F5]"
+                  }`}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>Edit Profile</span>
+                </button>
+
+                {!isNewTalent && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDossierTab("gallery");
+                      setTimeout(() => fileInputRef.current?.click(), 120);
+                    }}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold border flex items-center gap-1.5 transition ${
+                      dossierTab === "gallery"
+                        ? "bg-[#F9EBED] text-[#9B1B30] border-[#9B1B30]"
+                        : "bg-white text-[#3D2C2E] border-[#D6C7C9] hover:bg-[#FAF7F5]"
+                    }`}
+                  >
+                    <Camera className="w-3.5 h-3.5 text-[#9B1B30]" />
+                    <span>+ Upload Photo</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => handleSaveTalent()}
+                  disabled={saving}
+                  className="btn-primary px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{saving ? "Saving..." : "Save Profile"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDossierOpen(false)}
+                  className="p-2 rounded-lg border border-[#D6C7C9] bg-white text-[#3D2C2E] hover:bg-[#FAF7F5]"
+                  title="Close 8-Tab Dossier"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleSaveTalent} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto text-xs">
+            {/* 8-Tab Navigation Bar (Always Visible at Top of Modal) */}
+            <div className="flex overflow-x-auto space-x-1 px-4 sm:px-6 bg-[#FAF7F5] border-b border-[#E8DFE0] shrink-0">
+              {dossierTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setDossierTab(tab.id)}
+                  className={`px-3.5 py-2.5 text-xs font-medium border-b-2 transition whitespace-nowrap ${
+                    dossierTab === tab.id
+                      ? "border-[#9B1B30] text-[#9B1B30] font-bold bg-white rounded-t-lg"
+                      : "border-transparent text-[#6E5D5F] hover:text-[#1E1416] hover:border-[#D6C7C9]"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Modal Body Content for Active Tab */}
+            <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-4 text-xs">
               {feedback && (
-                <div className="p-3 rounded-lg bg-[#FEF2F2] border border-[#F87171] text-[#B91C1C] font-bold">
-                  {feedback}
+                <div
+                  className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between ${
+                    feedback.type === "success"
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                      : "bg-[#FEF2F2] border-[#F87171] text-[#B91C1C]"
+                  }`}
+                >
+                  <span>{feedback.text}</span>
+                  <button
+                    type="button"
+                    onClick={() => setFeedback(null)}
+                    className="opacity-70 hover:opacity-100"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold mb-1">Display Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={editForm.displayName}
-                    onChange={(e) => setEditForm({ ...editForm, displayName: e.target.value })}
-                    placeholder="e.g. Bob Hamilton"
-                    className="w-full px-3 py-2"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold mb-1">Nationality</label>
-                  <input
-                    type="text"
-                    value={editForm.nationality}
-                    onChange={(e) => setEditForm({ ...editForm, nationality: e.target.value })}
-                    placeholder="e.g. American, Danish, Italian"
-                    className="w-full px-3 py-2"
-                  />
-                </div>
-              </div>
+              {/* ===============================================================
+                  TAB 1: 1. PROFILE & BIO
+                 =============================================================== */}
+              {dossierTab === "profile" && (
+                <form onSubmit={handleSaveTalent} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="lg:col-span-2 space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block font-bold mb-1">Display Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={editForm.displayName}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, displayName: e.target.value })
+                          }
+                          placeholder="e.g. Bob Hamilton"
+                          className="w-full px-3 py-2"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold mb-1">Full Legal / Source Name</label>
+                        <input
+                          type="text"
+                          value={editForm.sourceName}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, sourceName: e.target.value })
+                          }
+                          placeholder="e.g. BOB HALMITON"
+                          className="w-full px-3 py-2"
+                        />
+                      </div>
+                    </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-bold mb-1">Age</label>
-                  <input
-                    type="number"
-                    value={editForm.age}
-                    onChange={(e) => setEditForm({ ...editForm, age: e.target.value })}
-                    className="w-full px-3 py-2 font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold mb-1">Height</label>
-                  <input
-                    type="text"
-                    value={editForm.height}
-                    onChange={(e) => setEditForm({ ...editForm, height: e.target.value })}
-                    placeholder="e.g. 6ft 1in"
-                    className="w-full px-3 py-2 font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold mb-1">Contact Phone</label>
-                  <input
-                    type="text"
-                    value={editForm.phone}
-                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                    placeholder="0915 158 1344"
-                    className="w-full px-3 py-2 font-mono"
-                  />
-                </div>
-              </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block font-bold mb-1">Nationality</label>
+                        <input
+                          type="text"
+                          value={editForm.nationality}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, nationality: e.target.value })
+                          }
+                          placeholder="e.g. American, Danish, Italian"
+                          className="w-full px-3 py-2"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold mb-1">Talent Category</label>
+                        <select
+                          value={editForm.talentType}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, talentType: e.target.value })
+                          }
+                          className="w-full px-3 py-2 font-semibold"
+                        >
+                          <option value="REAL_BEARD">REAL_BEARD (Authentic Beard)</option>
+                          <option value="REGULAR_SANTA">REGULAR_SANTA (Costumed)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block font-bold mb-1">Roster Status</label>
+                        <select
+                          value={editForm.status}
+                          onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                          className="w-full px-3 py-2 font-semibold"
+                        >
+                          <option value="ACTIVE">ACTIVE</option>
+                          <option value="PENDING_VERIFICATION">PENDING_VERIFICATION</option>
+                          <option value="INACTIVE">INACTIVE</option>
+                        </select>
+                      </div>
+                    </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-[#E8DFE0]">
-                <div>
-                  <label className="block font-bold mb-1">Base TF (₱)</label>
-                  <input
-                    type="number"
-                    value={editForm.baseTalentFee}
-                    onChange={(e) => setEditForm({ ...editForm, baseTalentFee: e.target.value })}
-                    className="w-full px-3 py-1.5 font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold mb-1">MM Rate (₱)</label>
-                  <input
-                    type="number"
-                    value={editForm.metroManilaRate}
-                    onChange={(e) => setEditForm({ ...editForm, metroManilaRate: e.target.value })}
-                    className="w-full px-3 py-1.5 font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold mb-1">Provincial (₱)</label>
-                  <input
-                    type="number"
-                    value={editForm.provincialRate}
-                    onChange={(e) => setEditForm({ ...editForm, provincialRate: e.target.value })}
-                    className="w-full px-3 py-1.5 font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold mb-1">Holiday (₱)</label>
-                  <input
-                    type="number"
-                    value={editForm.holidayRate}
-                    onChange={(e) => setEditForm({ ...editForm, holidayRate: e.target.value })}
-                    className="w-full px-3 py-1.5 font-mono"
-                  />
-                </div>
-              </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block font-bold mb-1">Age</label>
+                        <input
+                          type="number"
+                          value={editForm.age}
+                          onChange={(e) => setEditForm({ ...editForm, age: e.target.value })}
+                          className="w-full px-3 py-2 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold mb-1">Height</label>
+                        <input
+                          type="text"
+                          value={editForm.height}
+                          onChange={(e) => setEditForm({ ...editForm, height: e.target.value })}
+                          placeholder="e.g. 6ft"
+                          className="w-full px-3 py-2 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold mb-1">Contact Phone</label>
+                        <input
+                          type="text"
+                          value={editForm.phone}
+                          onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                          placeholder="0915 158 1344"
+                          className="w-full px-3 py-2 font-mono"
+                        />
+                      </div>
+                    </div>
 
-              <div>
-                <label className="block font-bold mb-1">Biography &amp; Portfolio Notes</label>
-                <textarea
-                  rows={3}
-                  value={editForm.bio}
-                  onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-[#D6C7C9] bg-[#FAF7F5] text-[#1E1416]"
-                />
-              </div>
+                    <div>
+                      <label className="block font-bold mb-1">
+                        Biography &amp; Holiday Portfolio Brief
+                      </label>
+                      <textarea
+                        rows={4}
+                        value={editForm.bio}
+                        onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+                        className="w-full px-3 py-2 rounded-lg border border-[#D6C7C9] bg-[#FAF7F5] text-[#1E1416]"
+                      />
+                    </div>
 
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="quickApproveCheck"
-                  checked={editForm.approvedForPublicDisplay}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, approvedForPublicDisplay: e.target.checked })
-                  }
-                />
-                <label htmlFor="quickApproveCheck" className="font-semibold cursor-pointer">
-                  Approved for Public Client Funnel Display
-                </label>
-              </div>
+                    <div className="flex items-center justify-between pt-3 border-t border-[#E8DFE0]">
+                      <label className="flex items-center space-x-2 cursor-pointer font-semibold text-[#1E1416]">
+                        <input
+                          type="checkbox"
+                          checked={editForm.approvedForPublicDisplay}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              approvedForPublicDisplay: e.target.checked,
+                            })
+                          }
+                        />
+                        <span>Approved for Public Funnel Display</span>
+                      </label>
 
-              <div className="flex items-center justify-between pt-4 border-t border-[#E8DFE0]">
-                {!isNewTalent && editForm.id ? (
-                  <Link
-                    href={`/admin/talents/${editForm.id}`}
-                    className="text-xs font-bold text-[#9B1B30] hover:underline flex items-center gap-1"
+                      <button
+                        type="submit"
+                        disabled={saving}
+                        className="btn-primary px-5 py-2 rounded-lg font-bold flex items-center gap-1.5"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>{saving ? "Saving..." : "Save Profile Changes"}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Right Column inside Tab 1: Primary Portrait Preview & Quick Rate Card */}
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-xl bg-[#FAF7F5] border border-[#E8DFE0] space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-[#1E1416]">Primary Portrait</span>
+                        {!isNewTalent && (
+                          <button
+                            type="button"
+                            onClick={() => setDossierTab("gallery")}
+                            className="text-[#9B1B30] font-bold hover:underline flex items-center gap-1"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Manage Photos ({selectedTalent?.images?.length || 0})</span>
+                          </button>
+                        )}
+                      </div>
+                      <div className="h-52 rounded-xl overflow-hidden bg-white border border-[#E8DFE0] flex items-center justify-center">
+                        {selectedTalent?.images?.length > 0 ? (
+                          <img
+                            src={activePrimaryAvatar}
+                            alt={editForm.displayName}
+                            className="w-full h-full object-cover object-top"
+                          />
+                        ) : (
+                          <div className="text-center p-4 text-[#6E5D5F]">
+                            <ImageIcon className="w-8 h-8 mx-auto mb-1 opacity-40" />
+                            <span>No Portrait Uploaded</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-[#FAF7F5] border border-[#E8DFE0] space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-[#1E1416]">Rate Summary</span>
+                        <button
+                          type="button"
+                          onClick={() => setDossierTab("rates")}
+                          className="text-[#9B1B30] font-bold hover:underline"
+                        >
+                          Edit Rates (Tab 5) →
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 font-mono pt-1">
+                        <div>
+                          Base TF:{" "}
+                          <strong className="text-emerald-700">
+                            ₱{Number(editForm.baseTalentFee || 12000).toLocaleString()}
+                          </strong>
+                        </div>
+                        <div>
+                          MM Rate:{" "}
+                          <strong className="text-[#9B1B30]">
+                            ₱{Number(editForm.metroManilaRate || 18000).toLocaleString()}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              )}
+
+              {/* ===============================================================
+                  TAB 2: 2. PHOTO GALLERY (UPLOAD, SET PRIMARY, CAPTION, DELETE)
+                 =============================================================== */}
+              {dossierTab === "gallery" && (
+                <div className="space-y-5">
+                  <form
+                    onSubmit={handleUploadPhotoSubmit}
+                    className="p-4 rounded-xl bg-[#FAF7F5] border border-[#E8DFE0] grid grid-cols-1 lg:grid-cols-3 gap-4"
                   >
-                    <span>Open Full 8-Tab Dossier</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </Link>
-                ) : (
-                  <span />
-                )}
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        handleFilePicked(e.dataTransfer.files?.[0]);
+                      }}
+                      className="border-2 border-dashed border-[#D6C7C9] hover:border-[#9B1B30] rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer bg-white transition min-h-[150px]"
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFilePicked(e.target.files?.[0])}
+                        className="hidden"
+                      />
+                      {photoPreviewUrl ? (
+                        <div className="space-y-1.5">
+                          <img
+                            src={photoPreviewUrl}
+                            alt="Upload Preview"
+                            className="h-32 w-32 object-cover rounded-lg mx-auto border border-[#D6C7C9]"
+                          />
+                          <div className="text-[11px] font-mono font-bold text-[#1E7E48]">
+                            {photoFileName} — Click to replace
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <Upload className="w-7 h-7 text-[#9B1B30] mx-auto" />
+                          <div className="font-bold text-[#1E1416]">
+                            Choose Photo File or Drag &amp; Drop Here
+                          </div>
+                          <div className="text-[11px] text-[#6E5D5F]">
+                            JPG, PNG, WebP high-res portraits
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditModalOpen(false)}
-                    className="px-4 py-2 rounded-lg border border-[#D6C7C9] bg-white text-[#3D2C2E] font-semibold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="btn-primary px-5 py-2 rounded-lg font-bold flex items-center gap-1.5"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>{saving ? "Saving..." : "Save Profile"}</span>
-                  </button>
+                    <div className="lg:col-span-2 flex flex-col justify-between space-y-3">
+                      <div className="space-y-2.5">
+                        <div>
+                          <label className="block font-bold mb-1">
+                            Photo Caption / Portrait Title
+                          </label>
+                          <input
+                            type="text"
+                            value={photoCaption}
+                            onChange={(e) => setPhotoCaption(e.target.value)}
+                            placeholder={`e.g. Santa ${editForm.displayName} Mall Portrait`}
+                            className="w-full px-3 py-2"
+                          />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-5 pt-1">
+                          <label className="flex items-center gap-2 cursor-pointer font-semibold">
+                            <input
+                              type="checkbox"
+                              checked={photoSetPrimary}
+                              onChange={(e) => setPhotoSetPrimary(e.target.checked)}
+                            />
+                            <span>Set as Primary Roster &amp; Funnel Portrait</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer font-semibold">
+                            <input
+                              type="checkbox"
+                              checked={photoPublicApproved}
+                              onChange={(e) => setPhotoPublicApproved(e.target.checked)}
+                            />
+                            <span>Approved for Public Client Display</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E8DFE0]">
+                        <button
+                          type="submit"
+                          disabled={!photoPreviewUrl || saving}
+                          className="btn-primary px-5 py-2 rounded-lg font-bold flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>{saving ? "Uploading..." : "Upload & Save to Gallery"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+
+                  {/* Existing Photos Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {(selectedTalent?.images || []).map((img: any) => (
+                      <div
+                        key={img.id}
+                        className={`rounded-xl overflow-hidden border flex flex-col justify-between bg-white ${
+                          img.isPrimary ? "border-2 border-[#C68A12]" : "border-[#E8DFE0]"
+                        }`}
+                      >
+                        <div>
+                          <div className="relative h-48 overflow-hidden bg-[#FAF7F5]">
+                            <img
+                              src={img.publicUrl}
+                              alt={img.caption || editForm.displayName}
+                              className="w-full h-full object-cover object-top"
+                            />
+                            {img.isPrimary ? (
+                              <span className="absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#C68A12] text-white flex items-center gap-1">
+                                <Star className="w-3 h-3 fill-white" />
+                                <span>Primary Portrait</span>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleSetPrimaryPhoto(img.id)}
+                                className="absolute top-2 left-2 px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/95 hover:bg-[#9B1B30] text-[#1E1416] hover:text-white border border-[#D6C7C9] transition"
+                              >
+                                ★ Set Primary
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="p-2.5">
+                            {editingPhotoId === img.id ? (
+                              <div className="space-y-1.5">
+                                <input
+                                  type="text"
+                                  value={editingCaptionText}
+                                  onChange={(e) => setEditingCaptionText(e.target.value)}
+                                  className="w-full px-2 py-1 text-xs"
+                                />
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSavePhotoCaption(img.id)}
+                                    className="btn-primary px-2 py-0.5 rounded text-[10px] font-bold"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingPhotoId(null)}
+                                    className="px-2 py-0.5 rounded border border-[#D6C7C9] text-[10px]"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="font-semibold text-[#1E1416] truncate">
+                                  {img.caption || img.fileName}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingPhotoId(img.id);
+                                    setEditingCaptionText(img.caption || img.fileName || "");
+                                  }}
+                                  className="text-[#9B1B30] hover:underline text-[10px] font-bold shrink-0"
+                                >
+                                  Edit
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="px-2.5 py-1.5 border-t border-[#E8DFE0] bg-[#FAF7F5] flex items-center justify-between text-[10px]">
+                          <span className="font-mono text-[#6E5D5F] truncate max-w-[120px]">
+                            {img.fileName}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePhoto(img.id)}
+                            className="text-[#B91C1C] hover:underline font-bold flex items-center gap-0.5"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+              )}
 
-      {/* =====================================================================
-          MODAL 2: DIRECT PHOTO UPLOAD FROM ROSTER CARD
-         ===================================================================== */}
-      {photoModalTalent && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="dashboard-card w-full max-w-md bg-white overflow-hidden">
-            <div className="p-4 border-b border-[#E8DFE0] bg-[#FAF7F5] flex items-center justify-between">
-              <div>
-                <span className="badge-esign px-2 py-0.5 rounded-full text-[10px] uppercase">
-                  Portrait Uploader
-                </span>
-                <h3 className="text-base font-bold text-[#1E1416] mt-0.5">
-                  Upload Photo for Santa {photoModalTalent.displayName}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPhotoModalTalent(null)}
-                className="p-1.5 rounded-lg border border-[#D6C7C9] text-[#3D2C2E] hover:bg-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+              {/* ===============================================================
+                  TAB 3: 3. BOOKING HISTORY
+                 =============================================================== */}
+              {dossierTab === "bookings" && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-[#1E1416]">
+                      All Scheduled &amp; Historical Engagements ({selectedTalentBookings.length})
+                    </h3>
+                    <Link
+                      href="/admin/calendar"
+                      className="btn-primary px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1"
+                    >
+                      <CalendarDays className="w-3.5 h-3.5" />
+                      <span>Open Master Calendar</span>
+                    </Link>
+                  </div>
 
-            <form onSubmit={handleUploadPhotoSubmit} className="p-5 space-y-4 text-xs">
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  handleFilePicked(e.dataTransfer.files?.[0]);
-                }}
-                className="border-2 border-dashed border-[#D6C7C9] hover:border-[#9B1B30] rounded-xl p-5 text-center cursor-pointer bg-[#FAF7F5] transition"
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleFilePicked(e.target.files?.[0])}
-                  className="hidden"
-                />
-                {photoPreviewUrl ? (
-                  <div className="space-y-2">
-                    <img
-                      src={photoPreviewUrl}
-                      alt="Preview"
-                      className="w-36 h-36 object-cover rounded-lg mx-auto border border-[#D6C7C9]"
+                  {selectedTalentBookings.length === 0 ? (
+                    <div className="p-8 text-center text-[#6E5D5F] bg-[#FAF7F5] rounded-xl border border-[#E8DFE0]">
+                      No bookings assigned to Santa {editForm.displayName} yet.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto border border-[#E8DFE0] rounded-xl">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="bg-[#FAF7F5] text-[10px] font-mono uppercase text-[#6E5D5F] border-b border-[#E8DFE0]">
+                            <th className="py-2.5 px-3">Date</th>
+                            <th className="py-2.5 px-3">Booking #</th>
+                            <th className="py-2.5 px-3">Mall / Venue</th>
+                            <th className="py-2.5 px-3">Agreed TF</th>
+                            <th className="py-2.5 px-3">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#E8DFE0]">
+                          {selectedTalentBookings.map((b: any) => (
+                            <tr key={b.id} className="hover:bg-[#FAF7F5]">
+                              <td className="py-2 px-3 font-mono">
+                                {new Date(b.eventDate).toLocaleDateString()}
+                              </td>
+                              <td className="py-2 px-3 font-mono font-bold text-[#9B1B30]">
+                                {b.bookingNumber}
+                              </td>
+                              <td className="py-2 px-3 font-bold text-[#1E1416]">
+                                {b.mallOrVenue}
+                              </td>
+                              <td className="py-2 px-3 font-mono text-emerald-800 font-bold">
+                                ₱
+                                {Number(
+                                  b.talentAssignments?.[0]?.agreedTalentFee ||
+                                    editForm.baseTalentFee ||
+                                    12000
+                                ).toLocaleString()}
+                              </td>
+                              <td className="py-2 px-3 font-mono text-[10px]">{b.status}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ===============================================================
+                  TAB 4: 4. AVAILABILITY
+                 =============================================================== */}
+              {dossierTab === "availability" && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-[#1E1416]">
+                        Calendar Availability &amp; Locked Dates
+                      </h3>
+                      <p className="text-[11px] text-[#6E5D5F]">
+                        Dates below are currently booked for Santa {editForm.displayName}.
+                      </p>
+                    </div>
+                    <Link
+                      href="/admin/calendar"
+                      className="btn-primary px-3 py-1.5 rounded-lg text-xs font-bold"
+                    >
+                      Edit on Master Calendar →
+                    </Link>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {selectedTalentBookings.map((b: any) => (
+                      <div
+                        key={b.id}
+                        className="p-3 rounded-lg bg-[#FAF7F5] border border-[#E8DFE0]"
+                      >
+                        <span className="font-mono text-xs font-bold text-[#9B1B30] block">
+                          {new Date(b.eventDate).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            weekday: "short",
+                          })}
+                        </span>
+                        <span className="text-[#1E1416] font-bold block truncate mt-1">
+                          {b.mallOrVenue}
+                        </span>
+                        <span className="text-[10px] text-emerald-800 font-semibold block mt-0.5">
+                          Confirmed Deployment
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ===============================================================
+                  TAB 5: 5. RATES & COSTING (EDITABLE)
+                 =============================================================== */}
+              {dossierTab === "rates" && (
+                <form onSubmit={handleSaveTalent} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="p-3.5 rounded-xl bg-[#FAF7F5] border border-[#E8DFE0] space-y-1">
+                      <label className="block font-bold text-[#3D2C2E]">
+                        Internal Base Talent Fee (₱)
+                      </label>
+                      <input
+                        type="number"
+                        value={editForm.baseTalentFee}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, baseTalentFee: e.target.value })
+                        }
+                        className="w-full px-3 py-2 font-mono text-sm font-bold"
+                      />
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-[#FAF7F5] border border-[#E8DFE0] space-y-1">
+                      <label className="block font-bold text-[#3D2C2E]">
+                        Metro Manila Client Rate (₱)
+                      </label>
+                      <input
+                        type="number"
+                        value={editForm.metroManilaRate}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, metroManilaRate: e.target.value })
+                        }
+                        className="w-full px-3 py-2 font-mono text-sm font-bold"
+                      />
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-[#FAF7F5] border border-[#E8DFE0] space-y-1">
+                      <label className="block font-bold text-[#3D2C2E]">
+                        Provincial Client Rate (₱)
+                      </label>
+                      <input
+                        type="number"
+                        value={editForm.provincialRate}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, provincialRate: e.target.value })
+                        }
+                        className="w-full px-3 py-2 font-mono text-sm font-bold"
+                      />
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-[#FAF7F5] border border-[#E8DFE0] space-y-1">
+                      <label className="block font-bold text-[#3D2C2E]">
+                        Dec 24 &amp; 25 Holiday Rate (₱)
+                      </label>
+                      <input
+                        type="number"
+                        value={editForm.holidayRate}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, holidayRate: e.target.value })
+                        }
+                        className="w-full px-3 py-2 font-mono text-sm font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold mb-1">
+                      Special Rate Card Notes (e.g., Marquee / SM Megamall Package Rate, Transpo Rules)
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={editForm.specialRateNote}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, specialRateNote: e.target.value })
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-[#D6C7C9] bg-[#FAF7F5] text-[#1E1416]"
                     />
-                    <div className="text-[11px] font-mono text-[#1E7E48] font-bold">
-                      {photoFileName || "Image Ready"} (Click to change)
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="btn-primary px-5 py-2 rounded-lg font-bold flex items-center gap-1.5"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{saving ? "Saving..." : "Save Rate Card"}</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* ===============================================================
+                  TAB 6: 6. DOCUMENTS
+                 =============================================================== */}
+              {dossierTab === "documents" && (
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold text-[#1E1416]">
+                    Dossier &amp; Casting Files
+                  </h3>
+                  <div className="p-4 rounded-xl bg-[#FAF7F5] border border-[#E8DFE0] flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <FileText className="w-5 h-5 text-[#C68A12]" />
+                      <div>
+                        <strong className="text-[#1E1416] block">
+                          {editForm.sourceName || editForm.displayName}.docx
+                        </strong>
+                        <span className="text-[11px] text-[#6E5D5F]">
+                          Historical DOCX Casting Archive
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono">
+                      Archived
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* ===============================================================
+                  TAB 7: 7. PAYMENTS & PAYOUTS
+                 =============================================================== */}
+              {dossierTab === "payouts" && (
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <Wallet className="w-4 h-4 text-[#C68A12]" />
+                    <h3 className="text-sm font-bold text-[#1E1416]">
+                      Disbursements, Talent Fees &amp; Paluwal Cash Advance Ledger
+                    </h3>
+                  </div>
+                  <div className="p-4 rounded-xl bg-[#FAF7F5] border border-[#E8DFE0] grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono">
+                    <div>
+                      <span className="text-[#6E5D5F] block">Total Assigned Gigs:</span>
+                      <strong className="text-base text-[#1E1416]">
+                        {selectedTalentBookings.length} Gigs
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-[#6E5D5F] block">Allocated Season TF:</span>
+                      <strong className="text-base text-emerald-700">
+                        ₱
+                        {(
+                          selectedTalentBookings.length * Number(editForm.baseTalentFee || 12000)
+                        ).toLocaleString()}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-[#6E5D5F] block">Base Per-Gig TF:</span>
+                      <strong className="text-base text-[#9B1B30]">
+                        ₱{Number(editForm.baseTalentFee || 12000).toLocaleString()}
+                      </strong>
                     </div>
                   </div>
-                ) : (
-                  <div className="space-y-1.5 py-3">
-                    <Upload className="w-8 h-8 text-[#9B1B30] mx-auto" />
-                    <div className="font-bold text-[#1E1416]">
-                      Click to choose a photo or drag &amp; drop here
+                  <Link
+                    href="/admin/expenses"
+                    className="btn-primary inline-flex items-center px-4 py-2 rounded-lg font-bold"
+                  >
+                    Open Expenses &amp; Paluwal Ledger →
+                  </Link>
+                </div>
+              )}
+
+              {/* ===============================================================
+                  TAB 8: 8. NOTES & AUDIT
+                 =============================================================== */}
+              {dossierTab === "audit" && (
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold text-[#1E1416]">
+                    Audit Trail &amp; Source Provenance
+                  </h3>
+                  <div className="p-4 rounded-xl bg-[#FAF7F5] border border-[#E8DFE0] space-y-2 font-mono text-[11px]">
+                    <div>
+                      <strong>Canonical Talent ID:</strong>{" "}
+                      {selectedTalent?.canonicalId || "TAL-NEW"}
                     </div>
-                    <div className="text-[11px] text-[#6E5D5F]">
-                      Supports JPG, PNG, WebP high-resolution portraits
+                    <div>
+                      <strong>Source Sheet Name:</strong>{" "}
+                      {editForm.sourceName || editForm.displayName}
+                    </div>
+                    <div>
+                      <strong>Originating Tracker:</strong> SANTA OPERATION TRACKER - 2026.xlsx
+                      (Google Sheet Synced)
+                    </div>
+                    <div>
+                      <strong>Public Funnel Status:</strong>{" "}
+                      {editForm.approvedForPublicDisplay ? "Public Approved" : "Internal Only"}
                     </div>
                   </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block font-bold mb-1">Photo Caption</label>
-                <input
-                  type="text"
-                  value={photoCaption}
-                  onChange={(e) => setPhotoCaption(e.target.value)}
-                  placeholder="e.g. Santa Bob Flagship Mall Portrait"
-                  className="w-full px-3 py-2"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="rosterSetPrimary"
-                  checked={photoSetPrimary}
-                  onChange={(e) => setPhotoSetPrimary(e.target.checked)}
-                />
-                <label htmlFor="rosterSetPrimary" className="font-semibold cursor-pointer">
-                  Set as Primary Roster Portrait immediately
-                </label>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#E8DFE0]">
-                <button
-                  type="button"
-                  onClick={() => setPhotoModalTalent(null)}
-                  className="px-4 py-2 rounded-lg border border-[#D6C7C9] bg-white text-[#3D2C2E] font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={!photoPreviewUrl || saving}
-                  className="btn-primary px-4 py-2 rounded-lg font-bold flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>{saving ? "Uploading..." : "Upload & Save Photo"}</span>
-                </button>
-              </div>
-            </form>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -6,28 +6,49 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const search = searchParams.get("search") || "";
+    const search = (searchParams.get("search") || "").trim();
     const filter = searchParams.get("filter") || "ALL";
 
-    // Query bookings that are in the lead/inquiry stages
     const where: any = {};
 
     if (filter === "NEW") {
-      where.status = "INQUIRY_RECEIVED";
+      where.status = { in: ["INQUIRY_RECEIVED", "NEW_INQUIRY", "TEMPORARY_HOLD", "HOLD_24H_ACTIVE"] };
     } else if (filter === "CORPORATE") {
-      where.bookingType = "CORPORATE_MALL";
+      where.bookingType = { in: ["CORPORATE", "CORPORATE_MALL", "MALL_TOUR"] };
     } else if (filter === "PRIVATE") {
-      where.bookingType = "PRIVATE_PARTY";
+      where.bookingType = { in: ["PRIVATE", "PRIVATE_PARTY"] };
     } else if (filter === "FOLLOW_UP") {
-      where.status = { in: ["QUOTED", "UNDER_CLIENT_REVIEW"] };
+      where.status = {
+        in: [
+          "QUOTE_ISSUED",
+          "QUOTED",
+          "CONTRACT_SENT",
+          "CONTRACT_SIGNED_PENDING_DEPOSIT",
+          "AWAITING_STAFF_SIGNOFF",
+          "AWAITING_STAFF_APPROVAL",
+        ],
+      };
+    } else if (filter === "REAL_BEARD") {
+      where.OR = [
+        { internalNotes: { contains: '"santaTier":"REAL_BEARD"' } },
+        { specialRequests: { contains: "Real Beard" } },
+      ];
+    } else if (filter === "FAKE_BEARD") {
+      where.OR = [
+        { internalNotes: { contains: '"santaTier":"FAKE_BEARD"' } },
+        { specialRequests: { contains: "Fake Beard" } },
+      ];
     }
 
     if (search) {
       where.OR = [
         { eventName: { contains: search } },
         { mallOrVenue: { contains: search } },
-        { locationCity: { contains: search } },
+        { city: { contains: search } },
         { bookingNumber: { contains: search } },
+        { specialRequests: { contains: search } },
+        { client: { companyName: { contains: search } } },
+        { client: { primaryContact: { contains: search } } },
       ];
     }
 
@@ -42,9 +63,14 @@ export async function GET(request: NextRequest) {
           orderBy: { createdAt: "desc" },
           take: 1,
         },
+        contracts: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+        payments: true,
       },
-      orderBy: { createdAt: "desc" },
-      take: 50,
+      orderBy: [{ pipelineStage: "asc" }, { createdAt: "desc" }],
+      take: 100,
     });
 
     return NextResponse.json({ success: true, leads });

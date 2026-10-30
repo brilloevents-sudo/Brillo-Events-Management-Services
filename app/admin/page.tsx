@@ -365,7 +365,27 @@ export default function AdminDashboardPage() {
                   const assigned = b.talentAssignments?.[0]?.talent;
                   const hasContract = (b.contracts || []).length > 0;
                   const depositPaid = Number(b.depositPaid || 0);
-                  const contractAmt = Number(b.totalContractAmount || 18000);
+                  const contractAmt = Number(b.totalContractAmount || 24000);
+
+                  let parsedMeta: any = b.ledgerMeta || {};
+                  if (
+                    !b.ledgerMeta &&
+                    typeof b.internalNotes === "string" &&
+                    b.internalNotes.includes("||LEDGER_META:")
+                  ) {
+                    try {
+                      parsedMeta = JSON.parse(b.internalNotes.split("||LEDGER_META:")[1]);
+                    } catch {}
+                  }
+                  const tierLabel =
+                    parsedMeta.santaTier === "FAKE_BEARD"
+                      ? "🎭 Fake Beard"
+                      : "🎅 Real Beard • Limited";
+                  const activityLabel =
+                    parsedMeta.eventActivityLabel ||
+                    ((b.bookingType || "").includes("PRIVATE")
+                      ? "Private Party"
+                      : "Meet & Greet");
 
                   return (
                     <tr key={b.id} className="hover:bg-[#F4ECEE]/60 transition">
@@ -375,6 +395,14 @@ export default function AdminDashboardPage() {
                         </div>
                         <div className="font-semibold text-[#1E1416] mt-0.5">
                           {b.mallOrVenue}
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          <span className="px-1.5 py-0.5 rounded bg-[#F9EBED] text-[#9B1B30] border border-[#F0D0D5] font-mono text-[9px] font-semibold">
+                            {tierLabel}
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-mono text-[9px]">
+                            {activityLabel}
+                          </span>
                         </div>
                       </td>
 
@@ -431,22 +459,28 @@ export default function AdminDashboardPage() {
                         </span>
                       </td>
 
-                      <td className="p-3.5 text-right space-x-1.5">
+                      <td className="p-3.5 text-right space-x-1.5 whitespace-nowrap">
+                        <Link
+                          href="/admin/crm"
+                          className="inline-flex items-center px-2.5 py-1 rounded-md bg-white border border-[#D6C7C9] text-[#1E1416] font-semibold text-[11px] hover:border-[#9B1B30] transition"
+                        >
+                          CRM / Edit
+                        </Link>
                         {!hasContract && (
                           <Link
-                            href="/admin/contracts"
+                            href={`/admin/quotes?bookingId=${b.id}`}
                             className="inline-flex items-center px-2.5 py-1 rounded-md bg-[#F9EBED] text-[#9B1B30] border border-[#F0D0D5] font-semibold text-[11px] hover:bg-[#F3DCE0] transition"
                           >
                             <FileCheck2 className="w-3 h-3 mr-1" />
-                            Contract
+                            Quote
                           </Link>
                         )}
                         <Link
-                          href={`/admin/bookings/${b.id}`}
+                          href="/admin/calendar"
                           className="inline-flex items-center px-2.5 py-1 rounded-md bg-white border border-[#D6C7C9] text-[#1E1416] font-semibold text-[11px] hover:border-[#9B1B30] transition"
                         >
                           <ShieldCheck className="w-3 h-3 mr-1 text-[#9B1B30]" />
-                          Signoff →
+                          Calendar →
                         </Link>
                       </td>
                     </tr>

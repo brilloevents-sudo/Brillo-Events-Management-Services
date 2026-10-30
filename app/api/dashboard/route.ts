@@ -7,6 +7,7 @@ export async function GET() {
   try {
     const [
       totalBookings,
+      inquiryBookingsCount,
       pendingApprovalBookings,
       activeHolds,
       securedBookings,
@@ -23,10 +24,41 @@ export async function GET() {
       actionQueueBookings,
     ] = await Promise.all([
       prisma.booking.count(),
-      prisma.booking.count({ where: { status: "AWAITING_STAFF_APPROVAL" } }),
-      prisma.booking.count({ where: { status: "TEMPORARY_HOLD", isHoldExpired: false } }),
-      prisma.booking.count({ where: { status: "SECURED_UNASSIGNED" } }),
-      prisma.booking.count({ where: { status: "EVENT_COMPLETED" } }),
+      prisma.booking.count({
+        where: {
+          status: {
+            in: ["INQUIRY_RECEIVED", "NEW_INQUIRY", "QUOTE_ISSUED", "QUOTED"],
+          },
+        },
+      }),
+      prisma.booking.count({
+        where: {
+          status: {
+            in: [
+              "AWAITING_STAFF_APPROVAL",
+              "AWAITING_STAFF_SIGNOFF",
+              "CONTRACT_SENT",
+              "CONTRACT_SIGNED_PENDING_DEPOSIT",
+            ],
+          },
+        },
+      }),
+      prisma.booking.count({
+        where: {
+          status: { in: ["TEMPORARY_HOLD", "HOLD_24H_ACTIVE"] },
+          isHoldExpired: false,
+        },
+      }),
+      prisma.booking.count({
+        where: {
+          status: {
+            in: ["SECURED_UNASSIGNED", "READY_FOR_DEPLOYMENT", "ROSTER_LOCKED_DISPATCHED"],
+          },
+        },
+      }),
+      prisma.booking.count({
+        where: { status: { in: ["EVENT_COMPLETED", "EVENT_DELIVERED", "FINANCIALLY_SETTLED"] } },
+      }),
       prisma.talent.count(),
       prisma.talent.count({ where: { approvedForPublicDisplay: false } }),
       prisma.dataConflict.count(),
@@ -49,8 +81,8 @@ export async function GET() {
       prisma.talentLedgerEntry.findMany({ where: { entryType: "ADVANCE" } }),
       prisma.emailThread.count({ where: { isUnread: true } }),
       prisma.booking.findMany({
-        take: 10,
-        orderBy: [{ pipelineStage: "asc" }, { eventDate: "asc" }],
+        take: 12,
+        orderBy: [{ pipelineStage: "asc" }, { createdAt: "desc" }],
         include: {
           client: true,
           talentAssignments: { include: { talent: true } },
@@ -94,7 +126,7 @@ export async function GET() {
       talentsAwaitingPublicApproval: unapprovedTalents,
       unresolvedSourceConflicts: reconciliation.totalActiveConflicts,
       dynamicConflictSubtitle: reconciliation.dynamicSubtitle,
-      unreadInboxMessages: unreadEmailThreads,
+      unreadInboxMessages: Math.max(inquiryBookingsCount, unreadEmailThreads),
       emailConnectionStatus: emailStatus.connected ? "CONNECTED" : "STANDBY_LOCAL_OUTBOX",
     };
 

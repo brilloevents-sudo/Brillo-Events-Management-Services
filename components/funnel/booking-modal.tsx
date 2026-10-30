@@ -22,6 +22,13 @@ import {
   OWNER_GCASH_NUMBER,
   OWNER_GCASH_RAW,
 } from "@/lib/xendit";
+import {
+  calculateSantaPackageQuote,
+  SANTA_EVENT_ACTIVITIES,
+  SantaBeardTier,
+  SantaRateTerritory,
+  SantaEventActivityTag,
+} from "@/lib/costing";
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -39,12 +46,19 @@ export function BookingModal({
   publicTalents = [],
 }: BookingModalProps) {
   const [isProvincial, setIsProvincial] = useState(defaultLocation === "PROVINCIAL");
+  const [santaTier, setSantaTier] = useState<SantaBeardTier>("REAL_BEARD");
+  const [rateTerritory, setRateTerritory] = useState<SantaRateTerritory>(
+    defaultLocation === "PROVINCIAL" ? "OUT_OF_TOWN" : "METRO_MANILA"
+  );
+  const [eventActivityTag, setEventActivityTag] =
+    useState<SantaEventActivityTag>("MEET_AND_GREET");
+  const [durationHours, setDurationHours] = useState<number>(3);
   const [mallOrVenue, setMallOrVenue] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [contactPerson, setContactPerson] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [selectedSlot, setSelectedSlot] = useState("4:00 PM - 8:00 PM (Standard 4-Hr Block)");
+  const [selectedSlot, setSelectedSlot] = useState("2:00 PM - 5:00 PM (Minimum 3-Hr Block)");
   const [preferredTalentId, setPreferredTalentId] = useState<string>("");
   const [rosterTalents, setRosterTalents] = useState<any[]>(publicTalents);
 
@@ -98,10 +112,18 @@ export function BookingModal({
     }
   }, [isOpen]);
 
-  // Dynamic pricing calculations
-  const baseRate = isProvincial ? 23400 : 18000;
-  const depositAmount = baseRate * 0.5;
-  const balanceAmount = baseRate * 0.5;
+  // Dynamic pricing calculations from Official Rate Card
+  const liveQuote = calculateSantaPackageQuote({
+    santaTier,
+    rateTerritory,
+    isProvincial: rateTerritory === "OUT_OF_TOWN",
+    isHoliday: rateTerritory === "HOLIDAY",
+    durationHours,
+    eventActivityTag,
+  });
+  const baseRate = liveQuote.totalQuotedRate;
+  const depositAmount = liveQuote.depositRequired;
+  const balanceAmount = liveQuote.balanceAmount;
   const activePayableAmount = paymentOption === "FULL_100" ? baseRate : depositAmount;
 
   const activeChannelObj =
@@ -131,17 +153,24 @@ export function BookingModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clientName: mallOrVenue || "Corporate Partner",
+          clientName: contactPerson || mallOrVenue || "Corporate Partner",
+          companyName: mallOrVenue || "Corporate Partner",
           contactPerson,
           email,
           phone,
           eventDate,
           mallOrVenue,
-          locationCity: isProvincial ? "Provincial Venue" : "Metro Manila",
-          isProvincial,
+          venueName: mallOrVenue,
+          locationCity:
+            rateTerritory === "OUT_OF_TOWN" ? "Out of Town / Provincial" : "Metro Manila",
+          isProvincial: rateTerritory === "OUT_OF_TOWN",
+          santaTier,
+          rateTerritory,
+          eventActivityTag,
+          durationHours,
           clientQuotedAmount: baseRate,
           talentPreferenceId: preferredTalentId || undefined,
-          notes: `Preferred Santa: ${activeTalent ? `Santa ${activeTalent.displayName} (${activeTalent.canonicalId})` : "Any Approved Real-Beard Santa"} | Slot: ${selectedSlot} | Xendit Gateway: ${selectedChannel} -> GCash ${OWNER_GCASH_NUMBER} (${paymentOption})`,
+          notes: `[${liveQuote.santaTierLabel} • ${liveQuote.eventActivityLabel} • ${liveQuote.rateTerritoryLabel} • ${durationHours} Hrs] Preferred Santa: ${activeTalent ? `Santa ${activeTalent.displayName} (${activeTalent.canonicalId})` : "Any Approved Santa"} | Slot: ${selectedSlot} | Xendit Gateway: ${selectedChannel} -> GCash ${OWNER_GCASH_NUMBER} (${paymentOption})`,
         }),
       });
 
@@ -604,48 +633,141 @@ export function BookingModal({
                 </div>
               )}
 
-              {/* Custom Tailwind Toggle Switch: Metro Manila vs Provincial */}
+              {/* Official Rate Card Selector: Beard Tier, Territory, Activity & Duration */}
               <div className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-headline font-bold text-white block">
-                      Select Deployment Territory
-                    </span>
-                    <span className="text-[11px] text-zinc-400">
-                      Provincial locations apply standard +30% logistics factor
-                    </span>
-                  </div>
+                {/* 1. Real Beard vs Fake Beard */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSantaTier("REAL_BEARD")}
+                    className={`p-2.5 rounded-xl border text-left transition ${
+                      santaTier === "REAL_BEARD"
+                        ? "bg-zinc-900 border-[#22C55E] text-white"
+                        : "bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-headline font-bold text-[#D4AF37]">
+                        🎅 Real Beard Santa
+                      </span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                        Limited Talents
+                      </span>
+                    </div>
+                    <div className="text-[10px] font-mono text-zinc-400 mt-1">
+                      ₱24k MM • ₱26k Holiday / Out of Town
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSantaTier("FAKE_BEARD")}
+                    className={`p-2.5 rounded-xl border text-left transition ${
+                      santaTier === "FAKE_BEARD"
+                        ? "bg-zinc-900 border-[#22C55E] text-white"
+                        : "bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-headline font-bold text-white">
+                        🎭 Fake Beard Santa
+                      </span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                        Standard
+                      </span>
+                    </div>
+                    <div className="text-[10px] font-mono text-zinc-400 mt-1">
+                      ₱15k MM • ₱18k Holiday / Out of Town
+                    </div>
+                  </button>
+                </div>
 
-                  {/* Toggle Switch */}
-                  <div className="flex items-center p-1 rounded-xl bg-zinc-900 border border-zinc-800">
+                {/* 2. Rate Territory: Metro Manila vs Holiday vs Out of Town */}
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[
+                    {
+                      id: "METRO_MANILA" as SantaRateTerritory,
+                      label: "Metro Manila",
+                      price: santaTier === "REAL_BEARD" ? "₱24,000" : "₱15,000",
+                    },
+                    {
+                      id: "HOLIDAY" as SantaRateTerritory,
+                      label: "Holiday Rate",
+                      price: santaTier === "REAL_BEARD" ? "₱26,000" : "₱18,000",
+                    },
+                    {
+                      id: "OUT_OF_TOWN" as SantaRateTerritory,
+                      label: "Out of Town",
+                      price: santaTier === "REAL_BEARD" ? "₱26,000" : "₱18,000",
+                    },
+                  ].map((rt) => (
                     <button
+                      key={rt.id}
                       type="button"
-                      onClick={() => setIsProvincial(false)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-headline font-bold transition ${
-                        !isProvincial
-                          ? "bg-[#22C55E] text-zinc-950 shadow-sm"
-                          : "text-zinc-400 hover:text-white"
+                      onClick={() => {
+                        setRateTerritory(rt.id);
+                        setIsProvincial(rt.id === "OUT_OF_TOWN");
+                      }}
+                      className={`py-1.5 px-2 rounded-lg text-[11px] font-headline font-bold border transition ${
+                        rateTerritory === rt.id
+                          ? "bg-[#22C55E] border-[#22C55E] text-zinc-950"
+                          : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white"
                       }`}
                     >
-                      Metro Manila
+                      <div>{rt.label}</div>
+                      <div className="text-[10px] font-mono">{rt.price}</div>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsProvincial(true)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-headline font-bold transition ${
-                        isProvincial
-                          ? "bg-[#22C55E] text-zinc-950 shadow-sm"
-                          : "text-zinc-400 hover:text-white"
-                      }`}
+                  ))}
+                </div>
+
+                {/* 3. Activity Package & Duration Hours (Min 3 HRS + 3k/hr) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-mono uppercase text-zinc-400 mb-1">
+                      Activity Tag (Min 3 HRS)
+                    </label>
+                    <select
+                      value={eventActivityTag}
+                      onChange={(e) =>
+                        setEventActivityTag(e.target.value as SantaEventActivityTag)
+                      }
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-xs"
                     >
-                      Provincial (+30%)
-                    </button>
+                      {SANTA_EVENT_ACTIVITIES.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-mono uppercase text-zinc-400 mb-1">
+                      Duration (+₱3,000 / extra hr)
+                    </label>
+                    <select
+                      value={durationHours}
+                      onChange={(e) => setDurationHours(Number(e.target.value))}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-xs font-mono"
+                    >
+                      <option value={3}>3 Hours (Minimum Base)</option>
+                      <option value={4}>4 Hours (+₱3,000)</option>
+                      <option value={5}>5 Hours (+₱6,000)</option>
+                      <option value={6}>6 Hours (+₱9,000)</option>
+                      <option value={8}>8 Hours (+₱15,000)</option>
+                    </select>
                   </div>
                 </div>
 
                 {/* Dynamic Price Display */}
                 <div className="flex items-baseline justify-between pt-2 border-t border-zinc-800/80 text-xs font-mono">
-                  <span className="text-zinc-400">Appearance Investment:</span>
+                  <div>
+                    <span className="text-zinc-400 block">Quoted Package Rate:</span>
+                    <span className="text-[10px] text-[#D4AF37]">
+                      Base ₱{liveQuote.baseRate.toLocaleString()} (3 hrs)
+                      {liveQuote.extraHours > 0
+                        ? ` + ₱${liveQuote.extraHourCharge.toLocaleString()} (${liveQuote.extraHours} extra hr)`
+                        : ""}
+                    </span>
+                  </div>
                   <div className="text-right">
                     <span className="text-xl font-bold text-white">
                       ₱{baseRate.toLocaleString()}

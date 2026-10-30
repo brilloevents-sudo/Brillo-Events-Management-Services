@@ -2,6 +2,12 @@
 
 import { useEffect } from "react";
 import { XENDIT_PH_CHANNELS, buildQrPhString } from "@/lib/xendit";
+import {
+  calculateSantaPackageQuote,
+  SantaBeardTier,
+  SantaRateTerritory,
+  SantaEventActivityTag,
+} from "@/lib/costing";
 
 let cachedSnapshot: any = null;
 let snapshotPromise: Promise<any> | null = null;
@@ -220,6 +226,171 @@ export function StaticApiFallback() {
         }
       };
 
+      // Handle Public Quotation Request (POST /api/public/request-quote) in Static Mode
+      if (pathname === "/api/public/request-quote" && method === "POST") {
+        const rawDate = parsedBody.eventDate ? new Date(parsedBody.eventDate) : new Date();
+        const parsedDate = new Date(
+          Date.UTC(rawDate.getFullYear(), rawDate.getMonth(), rawDate.getDate(), 12, 0, 0)
+        );
+        const isoDate = parsedDate.toISOString();
+        const isHolidayDate =
+          (parsedDate.getUTCMonth() === 11 &&
+            (parsedDate.getUTCDate() === 24 ||
+              parsedDate.getUTCDate() === 25 ||
+              parsedDate.getUTCDate() === 30 ||
+              parsedDate.getUTCDate() === 31)) ||
+          parsedBody.rateTerritory === "HOLIDAY";
+
+        const pkg = calculateSantaPackageQuote({
+          santaTier: (parsedBody.santaTier || "REAL_BEARD") as SantaBeardTier,
+          rateTerritory: parsedBody.rateTerritory as SantaRateTerritory | undefined,
+          isProvincial: Boolean(parsedBody.isProvincial || parsedBody.rateTerritory === "OUT_OF_TOWN"),
+          isHoliday: isHolidayDate,
+          durationHours: Number(parsedBody.durationHours || 3),
+          eventActivityTag: (parsedBody.eventActivityTag || "MEET_AND_GREET") as SantaEventActivityTag,
+        });
+
+        const contractAmt =
+          parsedBody.clientQuotedAmount !== undefined && Number(parsedBody.clientQuotedAmount) > 0
+            ? Number(parsedBody.clientQuotedAmount)
+            : pkg.totalQuotedRate;
+        const dpRequired = Math.round(contractAmt * 0.5);
+        const effectiveVenue =
+          parsedBody.venueName || parsedBody.mallOrVenue || parsedBody.companyName || "Corporate Venue";
+        const effectiveContact =
+          parsedBody.clientName || parsedBody.contactPerson || "Authorized Coordinator";
+        const effectiveCompany =
+          parsedBody.companyName || parsedBody.mallOrVenue || parsedBody.venueName || effectiveContact;
+        const effectiveCity =
+          parsedBody.city ||
+          parsedBody.locationCity ||
+          (pkg.rateTerritory === "OUT_OF_TOWN" ? "Out of Town / Provincial" : "Metro Manila");
+
+        const allTalents: any[] = snap.talents?.talents || [];
+        const matchedTalent = parsedBody.talentPreferenceId
+          ? allTalents.find((t) => t.id === parsedBody.talentPreferenceId)
+          : null;
+        const tfAmt = Number(matchedTalent?.baseTalentFee || pkg.defaultInternalTalentFee);
+
+        const newId = `bk_quote_${Date.now()}`;
+        const refNum = `BR-2026-Q${Math.floor(100 + Math.random() * 900)}`;
+        const tok = `req_${Date.now().toString(36)}`;
+
+        const ledgerMeta = {
+          santaTier: pkg.santaTier,
+          santaTierLabel: pkg.santaTierLabel,
+          rateTerritory: pkg.rateTerritory,
+          rateTerritoryLabel: pkg.rateTerritoryLabel,
+          eventActivityTag: pkg.eventActivityTag,
+          eventActivityLabel: pkg.eventActivityLabel,
+          durationHours: pkg.durationHours,
+          extraHours: pkg.extraHours,
+          extraHourCharge: pkg.extraHourCharge,
+          baseRate: pkg.baseRate,
+          tags: pkg.tags,
+          dpStatus: "Pending",
+          collectiblesStatus: "Pending",
+          contractStatus: "Quotation Requested",
+        };
+
+        const combinedRequests = [
+          `[${pkg.santaTierLabel} • ${pkg.eventActivityLabel} • ${pkg.rateTerritoryLabel} • ${pkg.durationHours} Hrs]`,
+          parsedBody.specialRequests || parsedBody.notes || "",
+        ]
+          .filter(Boolean)
+          .join(" — ");
+
+        const newBooking = {
+          id: newId,
+          bookingNumber: refNum,
+          secureToken: tok,
+          bookingType: parsedBody.bookingType || "CORPORATE",
+          eventName: parsedBody.eventName || `${effectiveVenue} — ${pkg.eventActivityLabel}`,
+          eventDate: isoDate,
+          startTime: parsedBody.startTime || "14:00",
+          endTime: parsedBody.endTime || "17:00",
+          callTime: parsedBody.callTime || "13:00",
+          durationHours: pkg.durationHours,
+          mallOrVenue: effectiveVenue,
+          venueAddress: parsedBody.venueAddress || "",
+          city: effectiveCity,
+          locationCity: effectiveCity,
+          isProvincial: pkg.rateTerritory === "OUT_OF_TOWN",
+          isHoliday: pkg.rateTerritory === "HOLIDAY",
+          status: "INQUIRY_RECEIVED",
+          pipelineStage: 1,
+          totalContractAmount: contractAmt,
+          clientQuotedAmount: contractAmt,
+          depositRequired: dpRequired,
+          depositPaid: 0,
+          balanceDue: contractAmt,
+          totalDirectCost: tfAmt,
+          projectedGrossProfit: Math.max(0, contractAmt - tfAmt),
+          internalNotes: `${
+            parsedBody.notes || `Quotation Request from ${effectiveContact}`
+          } ||LEDGER_META:${JSON.stringify(ledgerMeta)}`,
+          specialRequests: combinedRequests,
+          venueNotes: "",
+          ledgerMeta,
+          createdAt: new Date().toISOString(),
+          client: {
+            id: `cli_${Date.now()}`,
+            companyName: effectiveCompany,
+            primaryContact: effectiveContact,
+            contactPerson: effectiveContact,
+            email: parsedBody.email || "events@client.local",
+            phone: parsedBody.phone || "N/A",
+            city: effectiveCity,
+          },
+          talentAssignments: matchedTalent
+            ? [
+                {
+                  id: `ta_${Date.now()}`,
+                  bookingId: newId,
+                  talentId: matchedTalent.id,
+                  agreedTalentFee: tfAmt,
+                  status: "PENDING",
+                  talent: matchedTalent,
+                },
+              ]
+            : [],
+          contracts: [],
+          payments: [],
+        };
+
+        if (typeof localStorage !== "undefined") {
+          try {
+            const prev = JSON.parse(
+              localStorage.getItem("brillo_calendar_custom_bookings_v3") || "[]"
+            );
+            localStorage.setItem(
+              "brillo_calendar_custom_bookings_v3",
+              JSON.stringify([newBooking, ...prev])
+            );
+          } catch {}
+        }
+        if (snap.bookings?.bookings) {
+          snap.bookings.bookings.unshift(newBooking);
+        }
+
+        const statusPortalPath = `/request-status?token=${encodeURIComponent(
+          tok
+        )}&booking=${encodeURIComponent(refNum)}&amount=${contractAmt}&venue=${encodeURIComponent(
+          effectiveVenue
+        )}`;
+
+        return jsonResponse({
+          success: true,
+          booking: newBooking,
+          bookingId: newBooking.id,
+          bookingNumber: refNum,
+          secureToken: tok,
+          lookupToken: tok,
+          statusUrl: statusPortalPath,
+          packageQuote: pkg,
+        });
+      }
+
       // Handle Create New Booking in Static Mode (POST /api/bookings)
       if (pathname === "/api/bookings" && method === "POST") {
         const rawDate = parsedBody.eventDate ? new Date(parsedBody.eventDate) : new Date();
@@ -324,6 +495,17 @@ export function StaticApiFallback() {
           const updated: any = { ...target };
 
           if (parsedBody.status) updated.status = parsedBody.status;
+          if (parsedBody.bookingType !== undefined) updated.bookingType = parsedBody.bookingType;
+          if (parsedBody.city !== undefined) {
+            updated.city = parsedBody.city;
+            updated.locationCity = parsedBody.city;
+          }
+          if (parsedBody.durationHours !== undefined)
+            updated.durationHours = Number(parsedBody.durationHours);
+          if (parsedBody.isProvincial !== undefined)
+            updated.isProvincial = Boolean(parsedBody.isProvincial);
+          if (parsedBody.isHoliday !== undefined)
+            updated.isHoliday = Boolean(parsedBody.isHoliday);
           if (parsedBody.eventName !== undefined) updated.eventName = parsedBody.eventName;
           if (parsedBody.mallOrVenue !== undefined) updated.mallOrVenue = parsedBody.mallOrVenue;
           if (parsedBody.venueAddress !== undefined) updated.venueAddress = parsedBody.venueAddress;
@@ -333,9 +515,13 @@ export function StaticApiFallback() {
           if (parsedBody.internalNotes !== undefined) updated.internalNotes = parsedBody.internalNotes;
           if (parsedBody.specialRequests !== undefined) updated.specialRequests = parsedBody.specialRequests;
           if (parsedBody.venueNotes !== undefined) updated.venueNotes = parsedBody.venueNotes;
-          if (parsedBody.ledgerMeta !== undefined) updated.ledgerMeta = parsedBody.ledgerMeta;
-          if (parsedBody.totalContractAmount !== undefined)
+          if (parsedBody.ledgerMeta !== undefined) {
+            updated.ledgerMeta = { ...(updated.ledgerMeta || {}), ...parsedBody.ledgerMeta };
+          }
+          if (parsedBody.totalContractAmount !== undefined) {
             updated.totalContractAmount = Number(parsedBody.totalContractAmount);
+            updated.clientQuotedAmount = Number(parsedBody.totalContractAmount);
+          }
           if (parsedBody.depositPaid !== undefined)
             updated.depositPaid = Number(parsedBody.depositPaid);
           if (parsedBody.balanceDue !== undefined)
@@ -348,10 +534,20 @@ export function StaticApiFallback() {
             ).toISOString();
           }
 
-          if (parsedBody.companyName) {
+          if (
+            parsedBody.companyName !== undefined ||
+            parsedBody.primaryContact !== undefined ||
+            parsedBody.email !== undefined ||
+            parsedBody.phone !== undefined
+          ) {
             updated.client = {
               ...(updated.client || {}),
-              companyName: parsedBody.companyName,
+              ...(parsedBody.companyName !== undefined ? { companyName: parsedBody.companyName } : {}),
+              ...(parsedBody.primaryContact !== undefined
+                ? { primaryContact: parsedBody.primaryContact, contactPerson: parsedBody.primaryContact }
+                : {}),
+              ...(parsedBody.email !== undefined ? { email: parsedBody.email } : {}),
+              ...(parsedBody.phone !== undefined ? { phone: parsedBody.phone } : {}),
             };
           }
 
@@ -626,6 +822,77 @@ export function StaticApiFallback() {
         }
       }
 
+      // Handle POST /api/quotes in Static Mode
+      if (pathname === "/api/quotes" && method === "POST") {
+        const quoteNumber = `QT-2026-${Math.floor(100 + Math.random() * 900)}`;
+        const quoteAmt = Number(parsedBody.clientQuotedAmount || 24000);
+        const tfAmt = Number(parsedBody.internalTalentFee || 12000);
+        const paAmt = Number(parsedBody.internalPaFee || 1500);
+        const transpoAmt = Number(parsedBody.transportAllowance || 0);
+        const wardrobeAmt = Number(parsedBody.wardrobeAllowance || 0);
+        const discountAmt = Number(parsedBody.discountAmount || 0);
+        const netAmt = Math.max(0, quoteAmt - discountAmt);
+        const directCost = tfAmt + paAmt + transpoAmt + wardrobeAmt;
+        const grossProfit = netAmt - directCost;
+        const newQuote = {
+          id: `qt_${Date.now()}`,
+          quoteNumber,
+          bookingId: parsedBody.bookingId,
+          clientQuotedAmount: quoteAmt,
+          internalTalentFee: tfAmt,
+          internalPaFee: paAmt,
+          transportAllowance: transpoAmt,
+          wardrobeAllowance: wardrobeAmt,
+          discountAmount: discountAmt,
+          netClientAmount: netAmt,
+          totalDirectCost: directCost,
+          grossProfit,
+          depositAmount: Math.round(netAmt * 0.5),
+          balanceAmount: netAmt - Math.round(netAmt * 0.5),
+          status: "ISSUED",
+          createdAt: new Date().toISOString(),
+        };
+
+        // Also update the linked booking in localStorage so Calendar, CRM, and Dashboard reflect the issued quote!
+        if (parsedBody.bookingId) {
+          const allB = getMergedBookings();
+          const target = allB.find((b: any) => b.id === parsedBody.bookingId);
+          if (target) {
+            const updatedBooking = {
+              ...target,
+              totalContractAmount: netAmt,
+              clientQuotedAmount: netAmt,
+              depositRequired: Math.round(netAmt * 0.5),
+              balanceDue: Math.max(0, netAmt - Number(target.depositPaid || 0)),
+              totalDirectCost: directCost,
+              projectedGrossProfit: grossProfit,
+              status:
+                target.status === "INQUIRY_RECEIVED" || target.status === "NEW_INQUIRY"
+                  ? "QUOTE_ISSUED"
+                  : target.status,
+              ledgerMeta: {
+                ...(target.ledgerMeta || {}),
+                ...(parsedBody.ledgerMeta || {}),
+              },
+            };
+            if (typeof localStorage !== "undefined") {
+              try {
+                const editsMap = JSON.parse(
+                  localStorage.getItem("brillo_calendar_booking_edits_v3") || "{}"
+                );
+                editsMap[updatedBooking.id] = updatedBooking;
+                localStorage.setItem(
+                  "brillo_calendar_booking_edits_v3",
+                  JSON.stringify(editsMap)
+                );
+              } catch {}
+            }
+          }
+        }
+
+        return jsonResponse({ success: true, quote: newQuote });
+      }
+
       if (method !== "GET") {
         const refNum = `B2026-${Math.floor(1000 + Math.random() * 9000)}`;
         const tok = `tok_${Date.now()}`;
@@ -640,15 +907,77 @@ export function StaticApiFallback() {
 
       if (pathname === "/api/dashboard") {
         const allB = getMergedBookings();
+        const inquiryCount = allB.filter((b: any) =>
+          ["INQUIRY_RECEIVED", "NEW_INQUIRY", "QUOTE_ISSUED", "QUOTED"].includes(
+            (b.status || "").toUpperCase()
+          )
+        ).length;
+        const holdCount = allB.filter((b: any) =>
+          ["HOLD_24H_ACTIVE", "TEMPORARY_HOLD", "RESERVED_HOLD"].includes(
+            (b.status || "").toUpperCase()
+          )
+        ).length;
+        const signoffCount = allB.filter((b: any) =>
+          [
+            "AWAITING_STAFF_SIGNOFF",
+            "AWAITING_STAFF_APPROVAL",
+            "CONTRACT_SENT",
+            "CONTRACT_SIGNED_PENDING_DEPOSIT",
+          ].includes((b.status || "").toUpperCase())
+        ).length;
+        const securedCount = allB.filter((b: any) =>
+          ["ROSTER_LOCKED_DISPATCHED", "READY_FOR_DEPLOYMENT", "SECURED_UNASSIGNED"].includes(
+            (b.status || "").toUpperCase()
+          )
+        ).length;
+
+        // Sort immediateActionQueue so new Inquiries, Holds, and Quotes appear at the very top!
+        const sortedQueue = [...allB].sort((a: any, b: any) => {
+          const priority = (st: string) => {
+            const u = (st || "").toUpperCase();
+            if (u === "INQUIRY_RECEIVED" || u === "NEW_INQUIRY") return 0;
+            if (u === "HOLD_24H_ACTIVE" || u === "TEMPORARY_HOLD") return 1;
+            if (u === "QUOTE_ISSUED" || u === "QUOTED" || u === "CONTRACT_SENT") return 2;
+            if (u === "AWAITING_STAFF_SIGNOFF" || u === "AWAITING_STAFF_APPROVAL") return 3;
+            return 4;
+          };
+          const pa = priority(a.status);
+          const pb = priority(b.status);
+          if (pa !== pb) return pa - pb;
+          return String(b.id).startsWith("bk_") ? -1 : 1;
+        });
+
+        const totalContractVal = allB.reduce(
+          (sum: number, b: any) => sum + Number(b.totalContractAmount || 0),
+          0
+        );
+        const totalReceivables = allB.reduce(
+          (sum: number, b: any) => sum + Number(b.balanceDue || 0),
+          0
+        );
+
         return jsonResponse({
           ...snap.dashboard,
+          metrics: {
+            ...(snap.dashboard?.metrics || {}),
+            totalBookings: allB.length,
+            securedBookings: securedCount,
+            totalContractValue: totalContractVal,
+            totalOutstandingReceivables: totalReceivables,
+          },
           queues: {
             ...(snap.dashboard?.queues || {}),
+            unreadInboxMessages: Math.max(
+              inquiryCount,
+              Number(snap.dashboard?.queues?.unreadInboxMessages || 0)
+            ),
+            activeTemporaryHolds: holdCount,
+            pendingStaffApprovalBookings: signoffCount,
             dynamicConflictSubtitle: `${
               snap.dashboard?.queues?.unresolvedSourceConflicts || 0
             } source audit flags • 0 roster overlaps`,
           },
-          immediateActionQueue: allB.slice(0, 8),
+          immediateActionQueue: sortedQueue.slice(0, 12),
         });
       }
       if (pathname === "/api/bookings") {
@@ -678,7 +1007,90 @@ export function StaticApiFallback() {
           allT.find((t: any) => t.id === id || t.canonicalId === id) || allT[0];
         return jsonResponse({ success: true, talent });
       }
-      if (pathname === "/api/leads") return jsonResponse(snap.leads);
+      if (pathname === "/api/leads") {
+        const filter = urlObj.searchParams.get("filter") || "ALL";
+        const search = (urlObj.searchParams.get("search") || "").trim().toLowerCase();
+        let allLeads = [...getMergedBookings()];
+
+        // Sort so newly requested inquiries & custom bookings appear at the top of CRM
+        allLeads.sort((a: any, b: any) => {
+          const isNewA =
+            String(a.id).startsWith("bk_") ||
+            ["INQUIRY_RECEIVED", "HOLD_24H_ACTIVE", "TEMPORARY_HOLD", "QUOTE_ISSUED"].includes(
+              (a.status || "").toUpperCase()
+            );
+          const isNewB =
+            String(b.id).startsWith("bk_") ||
+            ["INQUIRY_RECEIVED", "HOLD_24H_ACTIVE", "TEMPORARY_HOLD", "QUOTE_ISSUED"].includes(
+              (b.status || "").toUpperCase()
+            );
+          if (isNewA && !isNewB) return -1;
+          if (!isNewA && isNewB) return 1;
+          return 0;
+        });
+
+        if (filter === "NEW") {
+          allLeads = allLeads.filter((l: any) =>
+            ["INQUIRY_RECEIVED", "NEW_INQUIRY", "TEMPORARY_HOLD", "HOLD_24H_ACTIVE"].includes(
+              (l.status || "").toUpperCase()
+            )
+          );
+        } else if (filter === "FOLLOW_UP") {
+          allLeads = allLeads.filter((l: any) =>
+            [
+              "QUOTE_ISSUED",
+              "QUOTED",
+              "CONTRACT_SENT",
+              "CONTRACT_SIGNED_PENDING_DEPOSIT",
+              "AWAITING_STAFF_SIGNOFF",
+              "AWAITING_STAFF_APPROVAL",
+            ].includes((l.status || "").toUpperCase())
+          );
+        } else if (filter === "CORPORATE") {
+          allLeads = allLeads.filter((l: any) =>
+            ["CORPORATE", "CORPORATE_MALL", "MALL_TOUR", "PACKAGE"].includes(
+              (l.bookingType || "CORPORATE").toUpperCase()
+            )
+          );
+        } else if (filter === "PRIVATE") {
+          allLeads = allLeads.filter((l: any) =>
+            ["PRIVATE", "PRIVATE_PARTY"].includes((l.bookingType || "").toUpperCase())
+          );
+        } else if (filter === "REAL_BEARD") {
+          allLeads = allLeads.filter((l: any) => {
+            const tier = l.ledgerMeta?.santaTier || "";
+            return (
+              tier === "REAL_BEARD" ||
+              (l.internalNotes || "").includes('"santaTier":"REAL_BEARD"') ||
+              (!tier && !(l.internalNotes || "").includes('"santaTier":"FAKE_BEARD"'))
+            );
+          });
+        } else if (filter === "FAKE_BEARD") {
+          allLeads = allLeads.filter((l: any) => {
+            const tier = l.ledgerMeta?.santaTier || "";
+            return (
+              tier === "FAKE_BEARD" ||
+              (l.internalNotes || "").includes('"santaTier":"FAKE_BEARD"') ||
+              (l.specialRequests || "").toLowerCase().includes("fake beard")
+            );
+          });
+        }
+
+        if (search) {
+          allLeads = allLeads.filter(
+            (l: any) =>
+              (l.bookingNumber || "").toLowerCase().includes(search) ||
+              (l.eventName || "").toLowerCase().includes(search) ||
+              (l.mallOrVenue || "").toLowerCase().includes(search) ||
+              (l.city || l.locationCity || "").toLowerCase().includes(search) ||
+              (l.client?.companyName || "").toLowerCase().includes(search) ||
+              (l.client?.primaryContact || "").toLowerCase().includes(search) ||
+              (l.specialRequests || "").toLowerCase().includes(search)
+          );
+        }
+
+        return jsonResponse({ success: true, count: allLeads.length, leads: allLeads });
+      }
       if (pathname === "/api/clients") return jsonResponse(snap.clients);
       if (pathname === "/api/quotes") return jsonResponse(snap.quotes);
       if (pathname === "/api/contracts") return jsonResponse(snap.contracts);

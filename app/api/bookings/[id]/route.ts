@@ -57,6 +57,14 @@ export async function PATCH(
       status: targetStatus,
       eventName,
       companyName,
+      primaryContact,
+      email,
+      phone,
+      city,
+      bookingType,
+      durationHours,
+      isProvincial,
+      isHoliday,
       eventDate,
       startTime,
       endTime,
@@ -130,6 +138,11 @@ export async function PATCH(
     if (startTime !== undefined) updates.startTime = startTime;
     if (endTime !== undefined) updates.endTime = endTime;
     if (callTime !== undefined) updates.callTime = callTime;
+    if (durationHours !== undefined) updates.durationHours = Number(durationHours);
+    if (bookingType !== undefined) updates.bookingType = bookingType;
+    if (city !== undefined) updates.city = city;
+    if (isProvincial !== undefined) updates.isProvincial = Boolean(isProvincial);
+    if (isHoliday !== undefined) updates.isHoliday = Boolean(isHoliday);
     if (mallOrVenue !== undefined) updates.mallOrVenue = mallOrVenue;
     if (venueAddress !== undefined) updates.venueAddress = venueAddress;
     if (internalNotes !== undefined) updates.internalNotes = internalNotes;
@@ -139,10 +152,15 @@ export async function PATCH(
     if (depositPaid !== undefined) updates.depositPaid = Number(depositPaid);
     if (balanceDue !== undefined) updates.balanceDue = Number(balanceDue);
 
-    if (companyName && existing.clientId) {
+    if ((companyName || primaryContact || email || phone) && existing.clientId) {
+      const clientUpdates: any = {};
+      if (companyName !== undefined) clientUpdates.companyName = companyName;
+      if (primaryContact !== undefined) clientUpdates.primaryContact = primaryContact;
+      if (email !== undefined) clientUpdates.email = email;
+      if (phone !== undefined) clientUpdates.phone = phone;
       await prisma.client.update({
         where: { id: existing.clientId },
-        data: { companyName },
+        data: clientUpdates,
       });
     }
 

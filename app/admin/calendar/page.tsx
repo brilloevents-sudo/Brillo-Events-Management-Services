@@ -2025,6 +2025,47 @@ export default function CalendarPage() {
                 </div>
               </div>
 
+              {/* Official Santa Rate Card Quick-Apply Preset Bar */}
+              <div className="p-3 rounded-xl bg-[#FAF7F5] border border-[#E8DFE0] space-y-2 pt-2">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-bold text-[#1E1416]">
+                    ⚡ Official Rate Card Quick-Apply (Min 3 HRS • +₱3,000 / extra hr)
+                  </span>
+                  <span className="font-mono text-[10px] text-[#9B1B30] font-semibold">
+                    Meet &amp; Greet • Launch • Shoot • Party
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { label: "🎅 Real Beard • MM (₱24k)", amt: 24000, tf: 12000, tag: "[Real Beard • Metro Manila • 3 Hrs] " },
+                    { label: "🎅 Real Beard • Holiday/OOT (₱26k)", amt: 26000, tf: 13000, tag: "[Real Beard • Holiday/Out of Town • 3 Hrs] " },
+                    { label: "🎅 Real Beard • 4 Hrs (+₱3k = ₱27k)", amt: 27000, tf: 13000, tag: "[Real Beard • Metro Manila • 4 Hrs (+₱3k)] " },
+                    { label: "🎭 Fake Beard • MM (₱15k)", amt: 15000, tf: 7000, tag: "[Fake Beard • Metro Manila • 3 Hrs] " },
+                    { label: "🎭 Fake Beard • Holiday/OOT (₱18k)", amt: 18000, tf: 8000, tag: "[Fake Beard • Holiday/Out of Town • 3 Hrs] " },
+                    { label: "🎭 Fake Beard • 4 Hrs (+₱3k = ₱18k)", amt: 18000, tf: 8000, tag: "[Fake Beard • Metro Manila • 4 Hrs (+₱3k)] " },
+                  ].map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          totalContractAmount: preset.amt,
+                          agreedTalentFee: preset.tf,
+                          balanceDue: Math.max(0, preset.amt - form.depositPaid),
+                          specialRequests: form.specialRequests.startsWith("[")
+                            ? preset.tag + form.specialRequests.replace(/^\[[^\]]+\]\s*/, "")
+                            : preset.tag + form.specialRequests,
+                        })
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#F9EBED] border border-[#D6C7C9] hover:border-[#9B1B30] text-[10px] font-mono font-semibold text-[#1E1416] transition"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Row 7: Financials (Contract Total, Downpayment, Collectibles, Talent Fee) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-[#E8DFE0]">
                 <div>

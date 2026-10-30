@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useAuth } from "@/components/auth-context";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -34,6 +35,7 @@ export function AdminNav({ onOpenQuickAction }: AdminNavProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [showGovernance, setShowGovernance] = useState(false);
+  const { permissions } = useAuth();
 
   // v3.0 Strict Chronological Lifecycle Navigation (4 Lifecycle Groups, Zero Number Prefixes)
   const navGroups: Array<{
@@ -167,7 +169,9 @@ export function AdminNav({ onOpenQuickAction }: AdminNavProps) {
                 {grp.group}
               </div>
             )}
-            {grp.items.map((item) => {
+            {grp.items
+              .filter((item) => permissions.canAccessPaluwal || item.href !== "/admin/expenses")
+              .map((item) => {
               const Icon = item.icon;
               const active = isRouteActive(item.href, item.matchPaths);
               return (
@@ -201,6 +205,7 @@ export function AdminNav({ onOpenQuickAction }: AdminNavProps) {
         ))}
 
         {/* Discreet Collapsible Governance & Data Audit Section */}
+        {permissions.canAccessGovernance && (
         <div className="pt-2 border-t border-[#2E1F22]/80">
           {!collapsed && (
             <button
@@ -240,6 +245,7 @@ export function AdminNav({ onOpenQuickAction }: AdminNavProps) {
             </div>
           )}
         </div>
+        )}
       </nav>
 
       {/* Footer / Public Portal */}

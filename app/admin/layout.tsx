@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/auth-context";
+import { isCreatorOnlyAdminPath } from "@/lib/auth-shared";
 import { AdminNav } from "@/components/admin-nav";
 import { QuickActionsDrawer } from "@/components/quick-actions-drawer";
 import { usePathname } from "next/navigation";
-import { Search, Bell, ShieldCheck } from "lucide-react";
+import { Search, Bell, ShieldCheck, Crown, LogOut, Lock, Loader2 } from "lucide-react";
 import Link from "next/link";
-import type { AdminRole } from "@/lib/security";
 
 export default function AdminLayout({
   children,
@@ -15,22 +17,33 @@ export default function AdminLayout({
 }) {
   const [quickActionOpen, setQuickActionOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeRole, setActiveRole] = useState<AdminRole>("SUPER_ADMIN");
-  const pathname = usePathname();
+  const pathname = usePathname() || "/admin";
+  const router = useRouter();
+  const { user, loading, permissions, logout } = useAuth();
 
+  // Client-side guard (also required on static GitHub Pages where middleware does not run)
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedRole = localStorage.getItem("brillo_rbac_role") as AdminRole | null;
-      if (savedRole) setActiveRole(savedRole);
+    if (loading) return;
+    if (!user) {
+      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+    } else if (user.role === "CLIENT") {
+      router.replace("/portal");
     }
-  }, []);
+  }, [loading, user, pathname, router]);
 
-  const handleRoleChange = (role: AdminRole) => {
-    setActiveRole(role);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("brillo_rbac_role", role);
-    }
-  };
+  if (loading || !user || user.role === "CLIENT") {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-[#211619] text-[#D6B36A] gap-3">
+        <Loader2 className="w-6 h-6 animate-spin" />
+        <span className="text-xs tracking-[0.2em] uppercase">
+          {loading ? "Checking your session..." : "Redirecting to login..."}
+        </span>
+      </div>
+    );
+  }
+
+  const isCreator = user.role === "CREATOR";
+  const blockedForAdmin = !isCreator && isCreatorOnlyAdminPath(pathname);
 
   // Generate readable breadcrumbs from pathname
   const pathParts = pathname.split("/").filter(Boolean);
@@ -76,43 +89,72 @@ export default function AdminLayout({
               />
             </div>
 
-            <Link
-              href="/admin/conflicts"
-              className="p-1.5 rounded-lg hover:bg-[#F4ECEE] text-[#9B1B30] relative transition"
-              title="Data & Schedule Conflict Triage"
-            >
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#9B1B30]" />
-            </Link>
+            {permissions.canAccessGovernance && (
+              <Link
+                href="/admin/conflicts"
+                className="p-1.5 rounded-lg hover:bg-[#F4ECEE] text-[#9B1B30] relative transition"
+                title="Data & Schedule Conflict Triage"
+              >
+                <Bell className="w-4 h-4" />
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#9B1B30]" />
+              </Link>
+            )}
 
-            {/* RBAC Active Session Badge */}
+            {/* Locked session identity (role comes from signed-in account) */}
             <div className="flex items-center space-x-2 pl-3 border-l border-[#E8DFE0]">
               <div className="w-7 h-7 rounded-full bg-[#F9EBED] border border-[#F0D0D5] flex items-center justify-center text-[#9B1B30]">
-                <ShieldCheck className="w-3.5 h-3.5" />
+                {isCreator ? <Crown className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
               </div>
               <div className="hidden sm:block text-left">
-                <span className="text-[11px] font-bold text-[#1E1416] block leading-tight">
-                  Executive Session
+                <span className="text-[11px] font-bold text-[#1E1416] block leading-tight max-w-[160px] truncate">
+                  {user.name}
                 </span>
-                <select
-                  aria-label="RBAC Role"
-                  value={activeRole}
-                  onChange={(e) => handleRoleChange(e.target.value as AdminRole)}
-                  className="text-[10px] text-[#9B1B30] font-mono font-bold uppercase tracking-wider bg-transparent border-none p-0 focus:outline-none cursor-pointer"
-                >
-                  <option value="SUPER_ADMIN">SUPER ADMIN</option>
-                  <option value="OPS_ADMIN">OPS MANAGER</option>
-                  <option value="FINANCE_ADMIN">FINANCE ADMIN</option>
-                  <option value="VIEWER">VIEWER (READ-ONLY)</option>
-                </select>
+                <span className="text-[10px] text-[#9B1B30] font-mono font-bold uppercase tracking-wider">
+                  {isCreator ? "Master Creator" : "Operations Admin"}
+                </span>
               </div>
+              <button
+                type="button"
+                onClick={() => logout()}
+                className="ml-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#756568] hover:text-[#9B1B30] px-2 py-1 rounded-lg hover:bg-[#F4ECEE] transition"
+                title="Sign out"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Sign Out</span>
+              </button>
             </div>
           </div>
         </header>
 
         {/* Scrollable Workspace Body */}
         <main className="admin-workspace flex-1 overflow-y-auto bg-[#FAF7F5] flex flex-col justify-between">
-          <div className="flex-1">{children}</div>
+          <div className="flex-1">
+            {blockedForAdmin ? (
+              <div className="max-w-lg mx-auto mt-16 px-6">
+                <div className="rounded-2xl bg-white border border-[#E8DFE0] p-8 text-center shadow-sm">
+                  <div className="w-12 h-12 mx-auto rounded-full bg-[#F9EBED] flex items-center justify-center text-[#9B1B30] mb-4">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <h2 className="font-serif text-lg font-bold text-[#1E1416]">
+                    Master Creator Access Only
+                  </h2>
+                  <p className="text-xs text-[#756568] mt-2 leading-relaxed">
+                    This section (finances, expenses, user management, imports, audit and settings)
+                    is reserved for the Master Creator. Your Operations Admin account can manage
+                    leads, calendar, bookings, contracts, payments and the Santa roster.
+                  </p>
+                  <Link
+                    href="/admin"
+                    className="inline-flex mt-5 px-4 py-2 rounded-lg bg-[#9B1B30] text-white text-xs font-semibold hover:bg-[#7E1526] transition"
+                  >
+                    Return to Operations Overview
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              children
+            )}
+          </div>
 
           {/* Discreet Telemetry Footer (Replaces header developer pills) */}
           <footer className="px-6 lg:px-8 py-3 border-t border-[#E8DFE0] bg-[#FAF7F5] text-[11px] text-[#756568] font-mono flex flex-col sm:flex-row items-center justify-between gap-2">

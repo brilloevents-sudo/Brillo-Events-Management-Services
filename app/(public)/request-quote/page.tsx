@@ -306,16 +306,16 @@ function RequestQuoteForm() {
                 <span>Call Desk: 0927 887 2343</span>
               </a>
               <Link
-                href="/admin/crm"
+                href="/portal"
                 className="px-4 py-2.5 rounded-full bg-[#FAF3EB] hover:bg-[#F2E6D8] text-[#5C494E] font-semibold text-center transition"
               >
-                Staff: View in CRM Pipeline →
+                Track in Customer Portal (/portal) →
               </Link>
               <Link
-                href="/admin/calendar"
+                href="/client-login"
                 className="px-4 py-2.5 rounded-full bg-[#FAF3EB] hover:bg-[#F2E6D8] text-[#5C494E] font-semibold text-center transition"
               >
-                Staff: View on Master Calendar →
+                Client &amp; Account Sign In →
               </Link>
             </div>
           </div>

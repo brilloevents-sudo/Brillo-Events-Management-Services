@@ -8,6 +8,111 @@ import {
   SantaRateTerritory,
   SantaEventActivityTag,
 } from "@/lib/costing";
+import {
+  AppRole,
+  getPermissionsForRole,
+  normalizeAppRole,
+  SessionUser,
+} from "@/lib/auth-shared";
+
+const STATIC_SESSION_KEY = "brillo_auth_session_v3";
+const STATIC_USERS_KEY = "brillo_users_v3";
+const STATIC_PASSWORD_SALT = "brillo_v3_salt_2026";
+
+async function sha256SaltedBrowser(plain: string): Promise<string> {
+  const data = new TextEncoder().encode(`${STATIC_PASSWORD_SALT}:${plain}`);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+const DEFAULT_STATIC_USERS = [
+  {
+    id: "usr_creator_master",
+    name: "Brillo Master Creator",
+    email: "creator@brilloevent.com",
+    role: "CREATOR" as AppRole,
+    passwordHash: "6b67edbbf4b87e651eed2bc0effbcb3d61e87c7625ea6d1d37d84addb8ace46b",
+    isActive: true,
+    createdAt: "2026-10-01T00:00:00.000Z",
+  },
+  {
+    id: "usr_admin_ops",
+    name: "Brillo Operations Admin",
+    email: "admin@brilloevent.com",
+    role: "ADMIN" as AppRole,
+    passwordHash: "52c91325b12774ca87268e0d4e40b2893f816bfdc666ec1f29c9a59a110cfb05",
+    isActive: true,
+    createdAt: "2026-10-01T00:00:00.000Z",
+  },
+  {
+    id: "usr_client_demo",
+    name: "Corporate Partner Client",
+    email: "client@brilloevent.com",
+    role: "CLIENT" as AppRole,
+    passwordHash: "0be17be93d495bf23d2af373d975a873b92fa38e35d67c9e0663f5d7217cc788",
+    isActive: true,
+    createdAt: "2026-10-01T00:00:00.000Z",
+  },
+];
+
+function getStaticUsersList(): any[] {
+  if (typeof localStorage === "undefined") return DEFAULT_STATIC_USERS;
+  try {
+    const raw = localStorage.getItem(STATIC_USERS_KEY);
+    if (!raw) {
+      localStorage.setItem(STATIC_USERS_KEY, JSON.stringify(DEFAULT_STATIC_USERS));
+      return [...DEFAULT_STATIC_USERS];
+    }
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  } catch {}
+  return [...DEFAULT_STATIC_USERS];
+}
+
+function saveStaticUsersList(list: any[]) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(STATIC_USERS_KEY, JSON.stringify(list));
+  } catch {}
+}
+
+function getStaticSession(): SessionUser | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STATIC_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed.exp && parsed.exp < Date.now()) {
+      localStorage.removeItem(STATIC_SESSION_KEY);
+      return null;
+    }
+    return {
+      id: parsed.id,
+      name: parsed.name,
+      email: parsed.email,
+      role: normalizeAppRole(parsed.role),
+      bookingRef: parsed.bookingRef,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveStaticSession(user: SessionUser | null) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    if (!user) {
+      localStorage.removeItem(STATIC_SESSION_KEY);
+    } else {
+      localStorage.setItem(
+        STATIC_SESSION_KEY,
+        JSON.stringify({ ...user, exp: Date.now() + 7 * 86400 * 1000 })
+      );
+    }
+  } catch {}
+}
 
 let cachedSnapshot: any = null;
 let snapshotPromise: Promise<any> | null = null;
@@ -42,7 +147,11 @@ export function StaticApiFallback() {
 
       try {
         const res = await origFetch(input, init);
-        if (res.ok) return res;
+        const ct = (res.headers.get("content-type") || "").toLowerCase();
+        // Return real server responses (including 400/401/403/409 JSON errors) unless GitHub Pages returned 404/405 HTML
+        if (res.ok || (res.status !== 404 && res.status !== 405 && ct.includes("application/json"))) {
+          return res;
+        }
       } catch {
         // Fallback to static snapshot when hosted on static GitHub Pages
       }
@@ -52,9 +161,9 @@ export function StaticApiFallback() {
       const pathname = urlObj.pathname;
       const method = (init?.method || "GET").toUpperCase();
 
-      const jsonResponse = (data: any) =>
+      const jsonResponse = (data: any, status = 200) =>
         new Response(JSON.stringify(data), {
-          status: 200,
+          status,
           headers: { "Content-Type": "application/json" },
         });
 
@@ -64,6 +173,300 @@ export function StaticApiFallback() {
           parsedBody = JSON.parse(init.body);
         } catch {
           parsedBody = {};
+        }
+      }
+
+      // =========================================================================
+      // STATIC AUTH, CLIENT PORTAL & USER MANAGEMENT HANDLERS (brilloevent.com)
+      // =========================================================================
+      if (pathname === "/api/auth/me" && method === "GET") {
+        const sess = getStaticSession();
+        if (!sess) {
+          return jsonResponse({
+            authenticated: false,
+            user: null,
+            permissions: getPermissionsForRole(null),
+          });
+        }
+        return jsonResponse({
+          authenticated: true,
+          user: sess,
+          permissions: getPermissionsForRole(sess.role),
+        });
+      }
+
+      if (pathname === "/api/auth/logout" && method === "POST") {
+        saveStaticSession(null);
+        return jsonResponse({ success: true, authenticated: false });
+      }
+
+      if (pathname === "/api/auth/login" && method === "POST") {
+        const mode = String(parsedBody.mode || "ACCOUNT").toUpperCase();
+        const email = String(parsedBody.email || "").trim().toLowerCase();
+        if (!email || !email.includes("@")) {
+          return jsonResponse(
+            { success: false, error: "Please enter a valid email address." },
+            400
+          );
+        }
+
+        const usersList = getStaticUsersList();
+        let authenticatedUser: SessionUser | null = null;
+
+        if (mode === "BOOKING_REF") {
+          const refInput = String(parsedBody.bookingReference || "").trim().toUpperCase();
+          if (!refInput) {
+            return jsonResponse(
+              { success: false, error: "Please enter your Booking Reference #." },
+              400
+            );
+          }
+
+          let customList: any[] = [];
+          try {
+            const cRaw = localStorage.getItem("brillo_calendar_custom_bookings_v3");
+            if (cRaw) customList = JSON.parse(cRaw);
+          } catch {}
+          const allBk = [...customList, ...(snap.bookings?.bookings || [])];
+          const matched = allBk.find((b: any) => {
+            const bRef = String(b.bookingNumber || "").toUpperCase();
+            const bTok = String(b.secureToken || "").toUpperCase();
+            const bEmail = String(b.client?.email || "").trim().toLowerCase();
+            return (bRef === refInput || bTok === refInput) && bEmail === email;
+          });
+
+          if (!matched) {
+            return jsonResponse(
+              {
+                success: false,
+                error: "No matching booking was found for that Email and Booking Reference #.",
+              },
+              401
+            );
+          }
+
+          authenticatedUser = {
+            id: matched.client?.id || `cli_${Date.now()}`,
+            name:
+              matched.client?.primaryContact ||
+              matched.client?.companyName ||
+              "Valued Client",
+            email,
+            role: "CLIENT",
+            bookingRef: matched.bookingNumber,
+          };
+        } else if (mode === "CLIENT_REGISTER") {
+          const password = String(parsedBody.password || "");
+          const name = String(parsedBody.name || "").trim() || email.split("@")[0];
+          if (password.length < 6) {
+            return jsonResponse(
+              { success: false, error: "Password must be at least 6 characters long." },
+              400
+            );
+          }
+          if (usersList.some((u) => String(u.email).toLowerCase() === email)) {
+            return jsonResponse(
+              {
+                success: false,
+                error: "An account with this email already exists. Please use Sign In instead.",
+              },
+              409
+            );
+          }
+          const passwordHash = await sha256SaltedBrowser(password);
+          const newUser = {
+            id: `usr_${Date.now()}`,
+            name,
+            email,
+            role: "CLIENT" as AppRole,
+            passwordHash,
+            isActive: true,
+            createdAt: new Date().toISOString(),
+          };
+          saveStaticUsersList([...usersList, newUser]);
+          authenticatedUser = {
+            id: newUser.id,
+            name: newUser.name,
+            email: newUser.email,
+            role: "CLIENT",
+          };
+        } else {
+          const password = String(parsedBody.password || "");
+          if (!password) {
+            return jsonResponse({ success: false, error: "Please enter your password." }, 400);
+          }
+          const found = usersList.find((u) => String(u.email).toLowerCase() === email);
+          const candidateHash = await sha256SaltedBrowser(password);
+          if (!found || found.passwordHash !== candidateHash) {
+            return jsonResponse(
+              { success: false, error: "Invalid email address or password." },
+              401
+            );
+          }
+          if (found.isActive === false) {
+            return jsonResponse(
+              {
+                success: false,
+                error: "This account has been suspended by the Master Creator.",
+              },
+              403
+            );
+          }
+          authenticatedUser = {
+            id: found.id,
+            name: found.name,
+            email: found.email,
+            role: normalizeAppRole(found.role),
+          };
+        }
+
+        saveStaticSession(authenticatedUser);
+        return jsonResponse({
+          success: true,
+          authenticated: true,
+          user: authenticatedUser,
+          redirectTo: authenticatedUser.role === "CLIENT" ? "/portal" : "/admin",
+        });
+      }
+
+      if (pathname === "/api/portal/my-bookings" && method === "GET") {
+        const sess = getStaticSession();
+        if (!sess) {
+          return jsonResponse(
+            { success: false, error: "Please sign in at /login to view your bookings." },
+            401
+          );
+        }
+        let customList: any[] = [];
+        try {
+          const cRaw = localStorage.getItem("brillo_calendar_custom_bookings_v3");
+          if (cRaw) customList = JSON.parse(cRaw);
+        } catch {}
+        const allBk = [...customList, ...(snap.bookings?.bookings || [])];
+        const emailLower = sess.email.toLowerCase();
+        const mine = allBk
+          .filter((b: any) => String(b.client?.email || "").trim().toLowerCase() === emailLower)
+          .map((b: any) => {
+            const assignedTalent = b.talentAssignments?.[0]?.talent;
+            const contractAmt = Number(b.totalContractAmount || 0);
+            const dpPaid = Number(b.depositPaid || 0);
+            return {
+              id: b.id,
+              bookingNumber: b.bookingNumber,
+              secureToken: b.secureToken,
+              bookingType: b.bookingType,
+              eventName: b.eventName,
+              eventDate: b.eventDate,
+              startTime: b.startTime,
+              endTime: b.endTime,
+              durationHours: Number(b.durationHours || 3),
+              mallOrVenue: b.mallOrVenue,
+              city: b.city,
+              status: b.status,
+              totalContractAmount: contractAmt,
+              depositRequired: Number(b.depositRequired || Math.round(contractAmt * 0.5)),
+              depositPaid: dpPaid,
+              balanceDue: Math.max(0, contractAmt - dpPaid),
+              specialRequests: b.specialRequests,
+              assignedSanta: assignedTalent
+                ? {
+                    displayName: assignedTalent.displayName,
+                    talentType: assignedTalent.talentType,
+                    photoUrl:
+                      assignedTalent.images?.find((img: any) => img.isPrimary)?.publicUrl ||
+                      assignedTalent.images?.[0]?.publicUrl ||
+                      "/talents/Bob/bob_photo_1.png",
+                  }
+                : null,
+              latestContract: b.contracts?.[0]
+                ? {
+                    contractNumber: b.contracts[0].contractNumber,
+                    status: b.contracts[0].status,
+                  }
+                : null,
+              statusPortalUrl: `/request-status?token=${encodeURIComponent(
+                b.secureToken || "tok"
+              )}&booking=${encodeURIComponent(
+                b.bookingNumber
+              )}&amount=${contractAmt}&venue=${encodeURIComponent(b.mallOrVenue || "")}`,
+            };
+          });
+
+        return jsonResponse({
+          success: true,
+          customer: { name: sess.name, email: sess.email },
+          count: mine.length,
+          bookings: mine,
+        });
+      }
+
+      if (pathname === "/api/users") {
+        const sess = getStaticSession();
+        if (!sess || sess.role !== "CREATOR") {
+          return jsonResponse(
+            { success: false, error: "Master Creator permission required." },
+            403
+          );
+        }
+        const usersList = getStaticUsersList();
+        if (method === "GET") {
+          return jsonResponse({
+            success: true,
+            users: usersList.map(({ passwordHash: _ph, ...rest }) => rest),
+          });
+        }
+        if (method === "POST") {
+          const name = String(parsedBody.name || "").trim();
+          const email = String(parsedBody.email || "").trim().toLowerCase();
+          const password = String(parsedBody.password || "");
+          const role = normalizeAppRole(parsedBody.role);
+          if (!name || !email.includes("@") || password.length < 6) {
+            return jsonResponse(
+              { success: false, error: "Name, email, and 6+ char password required." },
+              400
+            );
+          }
+          if (usersList.some((u) => String(u.email).toLowerCase() === email)) {
+            return jsonResponse({ success: false, error: "Email already exists." }, 409);
+          }
+          const passwordHash = await sha256SaltedBrowser(password);
+          const created = {
+            id: `usr_${Date.now()}`,
+            name,
+            email,
+            role,
+            passwordHash,
+            isActive: true,
+            createdAt: new Date().toISOString(),
+          };
+          saveStaticUsersList([...usersList, created]);
+          const { passwordHash: _ph, ...safeUser } = created;
+          return jsonResponse({ success: true, user: safeUser });
+        }
+        if (method === "PATCH") {
+          const targetId = String(parsedBody.id || "");
+          const idx = usersList.findIndex((u) => u.id === targetId);
+          if (idx === -1) return jsonResponse({ success: false, error: "User not found." }, 404);
+          if (
+            usersList[idx].email.toLowerCase() === "creator@brilloevent.com" &&
+            parsedBody.isActive === false
+          ) {
+            return jsonResponse(
+              { success: false, error: "Primary Master Creator account cannot be deactivated." },
+              400
+            );
+          }
+          const next = { ...usersList[idx] };
+          if (parsedBody.name) next.name = String(parsedBody.name).trim();
+          if (parsedBody.role) next.role = normalizeAppRole(parsedBody.role);
+          if (typeof parsedBody.isActive === "boolean") next.isActive = parsedBody.isActive;
+          if (parsedBody.newPassword && String(parsedBody.newPassword).length >= 6) {
+            next.passwordHash = await sha256SaltedBrowser(String(parsedBody.newPassword));
+          }
+          usersList[idx] = next;
+          saveStaticUsersList(usersList);
+          const { passwordHash: _ph, ...safeUser } = next;
+          return jsonResponse({ success: true, user: safeUser });
         }
       }
 

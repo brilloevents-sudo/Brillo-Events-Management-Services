@@ -29,6 +29,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { BOOKING_STATUS_CONFIG, BookingStatus } from "@/lib/booking-state";
+import { useAuth } from "@/components/auth-context";
 
 // Enriched Santa Database & PA Directory from the live Google Sheet ("Santa database" tab)
 const SANTA_PA_DIRECTORY: Record<
@@ -256,6 +257,7 @@ function toDateInputString(dVal: any): string {
 }
 
 export default function CalendarPage() {
+  const { permissions } = useAuth();
   const [bookings, setBookings] = useState<any[]>([]);
   const [talents, setTalents] = useState<any[]>([]);
   const [currentMonth, setCurrentMonth] = useState<number>(9); // October 2026 default (9 = Oct)
@@ -2299,6 +2301,7 @@ export default function CalendarPage() {
                 <div className="flex items-center gap-2">
                   {isEditing && form.id && (
                     <>
+                      {permissions.canDeleteRecords && (
                       <button
                         type="button"
                         onClick={handleDeleteBooking}
@@ -2308,6 +2311,7 @@ export default function CalendarPage() {
                         <Trash2 className="w-3.5 h-3.5" />
                         <span>Delete</span>
                       </button>
+                      )}
                       <Link
                         href={`/admin/bookings/${form.id}`}
                         className="px-3 py-2 rounded-lg border border-[#D6C7C9] bg-[#FAF7F5] text-[#3D2C2E] hover:bg-white text-xs font-bold inline-flex items-center gap-1 transition"

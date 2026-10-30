@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Calendar, Sparkles, Menu, X, Phone } from "lucide-react";
+import { Calendar, Sparkles, Menu, X, Phone, LogIn, User, ShieldCheck } from "lucide-react";
+import { useAuth } from "@/components/auth-context";
 
 export function PublicNav() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user } = useAuth();
 
   const links = [
     { href: "/", label: "Home" },
@@ -18,6 +20,15 @@ export function PublicNav() {
     { href: "/#faq", label: "FAQs" },
     { href: "/availability", label: "Check Dates" },
   ];
+
+  const portalHref = !user ? "/login" : user.role === "CLIENT" ? "/portal" : "/admin";
+  const portalLabel = !user
+    ? "Login"
+    : user.role === "CLIENT"
+    ? "My Portal"
+    : user.role === "CREATOR"
+    ? "Creator Hub"
+    : "Admin Hub";
 
   return (
     <header className="sticky top-0 z-50 bg-[#211619]/95 backdrop-blur-md border-b border-[#D6B36A]/25 font-body">
@@ -38,7 +49,7 @@ export function PublicNav() {
             </div>
           </Link>
 
-          {/* Desktop Navigation (Montserrat 13-14px) */}
+          {/* Desktop Navigation */}
           <nav className="hidden xl:flex items-center space-x-1">
             {links.map((link) => {
               const active = pathname === link.href;
@@ -58,7 +69,7 @@ export function PublicNav() {
             })}
           </nav>
 
-          {/* Right CTAs & Staff CRM Link */}
+          {/* Right CTAs & Protected Login Link */}
           <div className="hidden md:flex items-center space-x-3">
             <a
               href="tel:09278872343"
@@ -69,11 +80,17 @@ export function PublicNav() {
             </a>
 
             <Link
-              href="/admin"
-              className="text-[11px] font-medium text-[#FFF8F0]/60 hover:text-[#FFF8F0] px-2.5 py-1.5 rounded-md border border-white/10 hover:border-[#D6B36A]/40 transition"
-              title="Brillo Operations Hub"
+              href={portalHref}
+              className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#FFF8F0]/90 hover:text-[#D6B36A] px-3.5 py-2 rounded-xl border border-[#D6B36A]/35 hover:border-[#D6B36A] bg-white/5 transition"
             >
-              Staff CRM
+              {!user ? (
+                <LogIn className="w-3.5 h-3.5 text-[#D6B36A]" />
+              ) : user.role === "CLIENT" ? (
+                <User className="w-3.5 h-3.5 text-[#D6B36A]" />
+              ) : (
+                <ShieldCheck className="w-3.5 h-3.5 text-[#D6B36A]" />
+              )}
+              <span>{portalLabel}</span>
             </Link>
 
             <Link
@@ -127,11 +144,11 @@ export function PublicNav() {
               Open Full Quotation Calculator
             </Link>
             <Link
-              href="/admin"
+              href={portalHref}
               onClick={() => setMobileMenuOpen(false)}
-              className="w-full text-center py-2 text-xs text-[#FFF8F0]/60"
+              className="w-full text-center py-2.5 rounded-xl text-xs font-semibold text-[#FFF8F0] bg-white/5 border border-white/15"
             >
-              Staff CRM Access
+              {portalLabel}
             </Link>
           </div>
         </div>

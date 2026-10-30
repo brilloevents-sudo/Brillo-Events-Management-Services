@@ -1,18 +1,23 @@
 import crypto from "crypto";
 import { NextRequest } from "next/server";
+import { getSessionFromRequest } from "@/lib/auth-server";
 
 /**
- * Security, RBAC, Input Validation, Rate Limiting & SHA-256 Integrity Module (v3.0)
- * Aligned with .agents/skills/security-audit & 90DaysOfCyberSecurity guidelines.
+ * Security, RBAC, Input Validation, Rate Limiting & SHA-256 Integrity Module (v3.1)
+ * Enforces signed session cookie boundaries between CREATOR, ADMIN, and CLIENT.
  */
 
-export type AdminRole = "SUPER_ADMIN" | "OPS_ADMIN" | "FINANCE_ADMIN" | "VIEWER";
+export type AdminRole =
+  | "CREATOR"
+  | "SUPER_ADMIN"
+  | "ADMIN"
+  | "OPS_ADMIN"
+  | "FINANCE_ADMIN"
+  | "CLIENT"
+  | "VIEWER";
 
 const RATE_LIMIT_BUCKETS = new Map<string, { count: number; resetAt: number }>();
 
-/**
- * Sliding-window in-memory rate limiter for sensitive mutation & import routes
- */
 export function checkRateLimit(
   key: string,
   maxRequests = 30,
@@ -33,18 +38,13 @@ export function checkRateLimit(
 
 /**
  * Resolves and authorizes the caller's RBAC role on admin API endpoints
+ * Verifies the signed `brillo_session` cookie so clients cannot spoof admin headers.
  */
 export function authorizeAdminRequest(
   req: NextRequest,
-  allowedRoles: AdminRole[] = ["SUPER_ADMIN", "OPS_ADMIN", "FINANCE_ADMIN"]
+  allowedRoles: AdminRole[] = ["CREATOR", "SUPER_ADMIN", "ADMIN", "OPS_ADMIN", "FINANCE_ADMIN"]
 ): { authorized: boolean; role: AdminRole; actor: string; error?: string } {
-  const headerRole = (req.headers.get("x-brillo-role") || "SUPER_ADMIN").toUpperCase() as AdminRole;
-  const actor = req.headers.get("x-brillo-actor") || "SUPER_ADMIN";
-
-  const validRoles: AdminRole[] = ["SUPER_ADMIN", "OPS_ADMIN", "FINANCE_ADMIN", "VIEWER"];
-  const role: AdminRole = validRoles.includes(headerRole) ? headerRole : "VIEWER";
-
-  // CSRF / Origin check for state-changing methods when Origin header is present
+  // 1. CSRF / Origin check for state-changing methods
   const method = req.method.toUpperCase();
   if (["POST", "PATCH", "PUT", "DELETE"].includes(method)) {
     const origin = req.headers.get("origin");
@@ -52,35 +52,83 @@ export function authorizeAdminRequest(
     if (origin && host) {
       try {
         const originHost = new URL(origin).host;
-        if (originHost !== host && !originHost.endsWith("brilloevent.com") && !originHost.startsWith("localhost")) {
+        if (
+          originHost !== host &&
+          !originHost.endsWith("brilloevent.com") &&
+          !originHost.startsWith("localhost") &&
+          !originHost.startsWith("192.168.")
+        ) {
           return {
             authorized: false,
-            role,
-            actor,
+            role: "VIEWER",
+            actor: "ANONYMOUS",
             error: "CSRF origin verification failed.",
           };
         }
       } catch {
-        return { authorized: false, role, actor, error: "Malformed Origin header." };
+        return {
+          authorized: false,
+          role: "VIEWER",
+          actor: "ANONYMOUS",
+          error: "Malformed Origin header.",
+        };
       }
     }
   }
 
-  if (!allowedRoles.includes(role)) {
+  // 2. Verify signed session cookie
+  const session = getSessionFromRequest(req);
+  if (!session) {
     return {
       authorized: false,
-      role,
-      actor,
-      error: `Role '${role}' is not permitted to perform this operation.`,
+      role: "VIEWER",
+      actor: "UNAUTHENTICATED",
+      error: "Authentication required. Please sign in at /login.",
     };
   }
 
-  return { authorized: true, role, actor };
+  if (session.role === "CLIENT") {
+    return {
+      authorized: false,
+      role: "CLIENT",
+      actor: session.email,
+      error: "Customer accounts are restricted to /portal and cannot access internal operations.",
+    };
+  }
+
+  const effectiveRole: AdminRole = session.role === "CREATOR" ? "CREATOR" : "ADMIN";
+
+  // Normalize allowedRoles: CREATOR satisfies CREATOR / SUPER_ADMIN; ADMIN satisfies ADMIN / OPS_ADMIN / FINANCE_ADMIN
+  const creatorAllowed =
+    allowedRoles.includes("CREATOR") || allowedRoles.includes("SUPER_ADMIN");
+  const adminAllowed =
+    allowedRoles.includes("ADMIN") ||
+    allowedRoles.includes("OPS_ADMIN") ||
+    allowedRoles.includes("FINANCE_ADMIN");
+
+  const permitted =
+    (effectiveRole === "CREATOR" && creatorAllowed) ||
+    (effectiveRole === "ADMIN" && adminAllowed);
+
+  if (!permitted) {
+    return {
+      authorized: false,
+      role: effectiveRole,
+      actor: session.email,
+      error:
+        effectiveRole === "ADMIN"
+          ? "Master Creator permission required for this action."
+          : `Role '${effectiveRole}' is not permitted to perform this operation.`,
+    };
+  }
+
+  return {
+    authorized: true,
+    role: effectiveRole,
+    actor: session.email || session.name,
+  };
 }
 
-/**
- * Computes cryptographic SHA-256 hex digest for signed contract documents or bank references
- */
 export function computeSha256Hex(input: string | Buffer): string {
   return crypto.createHash("sha256").update(input).digest("hex");
 }
@@ -97,10 +145,6 @@ export interface ValidatedContractInput {
   isSigned: boolean;
 }
 
-/**
- * Strict schema & path-traversal validator for /api/contracts
- * Rejects raw local filesystem paths, "../" traversal, backslashes, or unverified protocols.
- */
 export function validateContractPayload(raw: any): {
   valid: boolean;
   data?: ValidatedContractInput;
@@ -136,7 +180,6 @@ export function validateContractPayload(raw: any): {
   }
 
   if (raw.uploadedFileBase64 && typeof raw.uploadedFileBase64 === "string") {
-    // Compute server-side SHA-256 digest of uploaded PDF/Image bytes
     const base64Clean = raw.uploadedFileBase64.replace(/^data:[^;]+;base64,/, "");
     const buf = Buffer.from(base64Clean, "base64");
     if (buf.byteLength > 10 * 1024 * 1024) {
@@ -155,7 +198,6 @@ export function validateContractPayload(raw: any): {
   } else if (raw.signedFileUrl && String(raw.signedFileUrl).trim().length > 0) {
     const candidate = String(raw.signedFileUrl).trim();
 
-    // Reject path traversal, Windows drive paths, backslashes, or local file:// schemes
     if (
       candidate.includes("..") ||
       candidate.includes("\\") ||

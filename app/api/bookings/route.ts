@@ -3,9 +3,14 @@ import prisma from "@/lib/prisma";
 import { checkTalentConflict } from "@/lib/concurrency";
 import { logAudit } from "@/lib/audit";
 import { getTargetGuidance } from "@/lib/costing";
+import { authorizeAdminRequest } from "@/lib/security";
 
 export async function GET(req: NextRequest) {
   try {
+    const auth = authorizeAdminRequest(req, ["CREATOR", "ADMIN"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
     const { searchParams } = new URL(req.url);
     const talentId = searchParams.get("talentId");
     const status = searchParams.get("status");
@@ -52,7 +57,20 @@ export async function GET(req: NextRequest) {
       orderBy: { eventDate: "asc" },
     });
 
-    return NextResponse.json({ success: true, count: bookings.length, bookings });
+    const sanitizedBookings =
+      auth.role === "CREATOR"
+        ? bookings
+        : bookings.map((b) => ({
+            ...b,
+            projectedGrossProfit: 0,
+            totalDirectCost: 0,
+          }));
+
+    return NextResponse.json({
+      success: true,
+      count: sanitizedBookings.length,
+      bookings: sanitizedBookings,
+    });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -60,6 +78,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = authorizeAdminRequest(req, ["CREATOR", "ADMIN"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
     const body = await req.json();
     const {
       companyName,

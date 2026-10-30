@@ -7,8 +7,12 @@ import { runImportDryRun, executeImportCommit, parseWorkbookBuffer } from "@/lib
 import { logAudit } from "@/lib/audit";
 import { authorizeAdminRequest, checkRateLimit } from "@/lib/security";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const auth = authorizeAdminRequest(req, ["CREATOR"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
     const batches = await prisma.importBatch.findMany({
       include: {
         _count: { select: { rows: true, conflicts: true } },
@@ -24,7 +28,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = authorizeAdminRequest(req, ["SUPER_ADMIN", "OPS_ADMIN"]);
+    const auth = authorizeAdminRequest(req, ["CREATOR"]);
     if (!auth.authorized) {
       return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
     }

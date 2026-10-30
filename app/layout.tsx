@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { StaticApiFallback } from "@/components/static-api-fallback";
+import { AuthProvider } from "@/components/auth-context";
 
 export const metadata: Metadata = {
   title: "Real Beard Santa for Hire Philippines | Brillo Events",
@@ -45,7 +46,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased min-h-screen">
         <StaticApiFallback />
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

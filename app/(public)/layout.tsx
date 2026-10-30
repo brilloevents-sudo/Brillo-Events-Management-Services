@@ -99,6 +99,11 @@ export default function PublicLayout({
                     Request a Formal Quotation →
                   </Link>
                 </li>
+                <li>
+                  <Link href="/client-login" className="hover:text-[#D6B36A] transition">
+                    Client &amp; Portal Login
+                  </Link>
+                </li>
               </ul>
             </div>
 

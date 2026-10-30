@@ -266,6 +266,7 @@ export function StaticApiFallback() {
           internalNotes: parsedBody.internalNotes || "",
           specialRequests: parsedBody.specialRequests || "",
           venueNotes: parsedBody.venueNotes || "",
+          ledgerMeta: parsedBody.ledgerMeta || null,
           client: {
             id: `cli_${Date.now()}`,
             companyName: parsedBody.companyName || "SM Supermalls / Direct",
@@ -332,6 +333,7 @@ export function StaticApiFallback() {
           if (parsedBody.internalNotes !== undefined) updated.internalNotes = parsedBody.internalNotes;
           if (parsedBody.specialRequests !== undefined) updated.specialRequests = parsedBody.specialRequests;
           if (parsedBody.venueNotes !== undefined) updated.venueNotes = parsedBody.venueNotes;
+          if (parsedBody.ledgerMeta !== undefined) updated.ledgerMeta = parsedBody.ledgerMeta;
           if (parsedBody.totalContractAmount !== undefined)
             updated.totalContractAmount = Number(parsedBody.totalContractAmount);
           if (parsedBody.depositPaid !== undefined)

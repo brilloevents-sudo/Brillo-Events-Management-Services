@@ -134,9 +134,22 @@ interface BookingFormState {
   totalContractAmount: number;
   depositPaid: number;
   balanceDue: number;
-  specialRequests: string; // Booking Details & Description
-  venueNotes: string; // TF / Allowance / Cash Advance Notes
-  internalNotes: string; // Internal Audit / Contract Notes
+  specialRequests: string; // Event Details / Booking Description
+  venueNotes: string; // Talent Fee Notes / Cash Advance / Transpo Notes
+  internalNotes: string; // Internal Audit / JSON Ledger Meta
+  // Extended Excel Master Ledger Columns:
+  dpDate: string;
+  dpStatus: "Paid" | "Pending";
+  dpProof: string;
+  dpNotes: string;
+  collectiblesDateSettled: string;
+  collectiblesStatus: "Collected" | "Pending";
+  collectiblesNotes: string;
+  collectiblesProof: string;
+  remainingBalance: number;
+  remainingDateSettled: string;
+  remainingProof: string;
+  contractStatus: string;
 }
 
 const DEFAULT_FORM_STATE: BookingFormState = {
@@ -156,7 +169,83 @@ const DEFAULT_FORM_STATE: BookingFormState = {
   specialRequests: "",
   venueNotes: "",
   internalNotes: "",
+  dpDate: "",
+  dpStatus: "Paid",
+  dpProof: "",
+  dpNotes: "",
+  collectiblesDateSettled: "",
+  collectiblesStatus: "Pending",
+  collectiblesNotes: "",
+  collectiblesProof: "",
+  remainingBalance: 0,
+  remainingDateSettled: "",
+  remainingProof: "",
+  contractStatus: "Signed",
 };
+
+function parseBookingLedgerMeta(b: any) {
+  const contractAmt = Number(b.totalContractAmount || 18000);
+  const dpAmt = Number(b.depositPaid || 0);
+  const collectiblesAmt = Number(b.balanceDue ?? Math.max(0, contractAmt - dpAmt));
+  const tfAmt = Number(b.talentAssignments?.[0]?.agreedTalentFee || b.totalDirectCost || 12000);
+
+  let parsed: any = b.ledgerMeta || {};
+  if (!b.ledgerMeta && typeof b.internalNotes === "string" && b.internalNotes.includes("||LEDGER_META:")) {
+    try {
+      const jsonPart = b.internalNotes.split("||LEDGER_META:")[1];
+      parsed = JSON.parse(jsonPart);
+    } catch {}
+  }
+
+  // Derive intelligent defaults from payments/contracts/notes when not explicitly edited yet
+  const payments: any[] = b.payments || [];
+  const dpPayment = payments.find((p: any) => p.paymentType === "DOWNPAYMENT") || payments[0];
+  const balPayment = payments.find((p: any) => p.paymentType === "FULL_BALANCE" || p.paymentType === "PARTIAL");
+  const cleanInternalNotes =
+    typeof b.internalNotes === "string"
+      ? b.internalNotes.split("||LEDGER_META:")[0].trim()
+      : "";
+
+  const isConfirmed =
+    b.status === "READY_FOR_DEPLOYMENT" ||
+    b.status === "EVENT_COMPLETED" ||
+    b.status === "Confirmed";
+
+  return {
+    agency: b.client?.companyName || "SM Supermalls",
+    bookingStatusLabel: isConfirmed ? "Confirmed" : "Confirming",
+    contractAmt,
+    dpAmt,
+    dpDate:
+      parsed.dpDate ??
+      (dpPayment?.paymentDate ? toDateInputString(dpPayment.paymentDate) : dpAmt > 0 ? toDateInputString(b.eventDate) : ""),
+    dpStatus: (parsed.dpStatus || (dpAmt > 0 ? "Paid" : "Pending")) as "Paid" | "Pending",
+    dpProof: parsed.dpProof ?? dpPayment?.proofUrl ?? dpPayment?.referenceNumber ?? "",
+    dpNotes: parsed.dpNotes ?? dpPayment?.notes ?? "",
+    collectiblesAmt,
+    collectiblesDateSettled:
+      parsed.collectiblesDateSettled ??
+      (balPayment?.paymentDate ? toDateInputString(balPayment.paymentDate) : ""),
+    collectiblesStatus: (parsed.collectiblesStatus ||
+      (collectiblesAmt === 0 && contractAmt > 0 ? "Collected" : "Pending")) as
+      | "Collected"
+      | "Pending",
+    collectiblesNotes: parsed.collectiblesNotes ?? cleanInternalNotes ?? "",
+    collectiblesProof: parsed.collectiblesProof ?? balPayment?.proofUrl ?? "",
+    tfAmt,
+    tfNotes: b.venueNotes || "",
+    remainingBalance:
+      parsed.remainingBalance !== undefined ? Number(parsed.remainingBalance) : collectiblesAmt,
+    remainingDateSettled: parsed.remainingDateSettled ?? "",
+    remainingProof: parsed.remainingProof ?? "",
+    profitAmt: contractAmt - tfAmt,
+    contractStatus:
+      parsed.contractStatus ||
+      (b.contracts?.[0]?.status === "SIGNED" || isConfirmed ? "Signed Contract" : "Draft / Pending"),
+    eventDetails: b.specialRequests || cleanInternalNotes || `${b.startTime || "14:00"} - ${b.endTime || "18:00"}`,
+    cleanInternalNotes,
+  };
+}
 
 function toDateInputString(dVal: any): string {
   const d = new Date(dVal);
@@ -328,6 +417,7 @@ export default function CalendarPage() {
     setForm({
       ...DEFAULT_FORM_STATE,
       eventDate: defaultDate,
+      dpDate: defaultDate,
       talentId: prefillTalentId || "",
       agreedTalentFee: matchedTalent ? Number(matchedTalent.baseTalentFee || 12000) : 12000,
     });
@@ -337,9 +427,7 @@ export default function CalendarPage() {
   // Open Modal to Edit an Existing Booking
   const openEditModal = (b: any) => {
     const assignment = b.talentAssignments?.[0];
-    const contractAmt = Number(b.totalContractAmount || 18000);
-    const dpAmt = Number(b.depositPaid || 0);
-    const balAmt = Number(b.balanceDue ?? Math.max(0, contractAmt - dpAmt));
+    const meta = parseBookingLedgerMeta(b);
     setIsEditing(true);
     setFeedbackMsg(null);
     setForm({
@@ -347,20 +435,32 @@ export default function CalendarPage() {
       bookingNumber: b.bookingNumber,
       eventName: b.eventName || `${b.mallOrVenue} — Santa Appearance`,
       mallOrVenue: b.mallOrVenue || "",
-      companyName: b.client?.companyName || "SM Supermalls",
+      companyName: meta.agency,
       eventDate: toDateInputString(b.eventDate),
       callTime: b.callTime || "13:00",
       startTime: b.startTime || "14:00",
       endTime: b.endTime || "18:00",
       status: b.status || "READY_FOR_DEPLOYMENT",
       talentId: assignment?.talentId || assignment?.talent?.id || "",
-      agreedTalentFee: Number(assignment?.agreedTalentFee || b.totalDirectCost || 12000),
-      totalContractAmount: contractAmt,
-      depositPaid: dpAmt,
-      balanceDue: balAmt,
-      specialRequests: b.specialRequests || "",
+      agreedTalentFee: meta.tfAmt,
+      totalContractAmount: meta.contractAmt,
+      depositPaid: meta.dpAmt,
+      balanceDue: meta.collectiblesAmt,
+      specialRequests: b.specialRequests || meta.cleanInternalNotes || "",
       venueNotes: b.venueNotes || "",
-      internalNotes: b.internalNotes || "",
+      internalNotes: meta.cleanInternalNotes,
+      dpDate: meta.dpDate,
+      dpStatus: meta.dpStatus,
+      dpProof: meta.dpProof,
+      dpNotes: meta.dpNotes,
+      collectiblesDateSettled: meta.collectiblesDateSettled,
+      collectiblesStatus: meta.collectiblesStatus,
+      collectiblesNotes: meta.collectiblesNotes,
+      collectiblesProof: meta.collectiblesProof,
+      remainingBalance: meta.remainingBalance,
+      remainingDateSettled: meta.remainingDateSettled,
+      remainingProof: meta.remainingProof,
+      contractStatus: meta.contractStatus,
     });
     setModalOpen(true);
   };
@@ -376,11 +476,31 @@ export default function CalendarPage() {
     setSaving(true);
     setFeedbackMsg(null);
 
+    const ledgerMeta = {
+      dpDate: form.dpDate,
+      dpStatus: form.dpStatus,
+      dpProof: form.dpProof,
+      dpNotes: form.dpNotes,
+      collectiblesDateSettled: form.collectiblesDateSettled,
+      collectiblesStatus: form.collectiblesStatus,
+      collectiblesNotes: form.collectiblesNotes,
+      collectiblesProof: form.collectiblesProof,
+      remainingBalance: Number(form.remainingBalance || 0),
+      remainingDateSettled: form.remainingDateSettled,
+      remainingProof: form.remainingProof,
+      contractStatus: form.contractStatus,
+    };
+
+    const cleanNotes = (form.internalNotes || "").split("||LEDGER_META:")[0].trim();
+    const packedInternalNotes = `${cleanNotes} ||LEDGER_META:${JSON.stringify(ledgerMeta)}`;
+
     const payload = {
       ...form,
       eventName: form.eventName.trim() || `${form.mallOrVenue.trim()} — Santa Appearance`,
       mallOrVenue: form.mallOrVenue.trim(),
       companyName: form.companyName.trim() || "SM Supermalls",
+      internalNotes: packedInternalNotes,
+      ledgerMeta,
       isCalendarDirectEdit: true,
       allowConflictOverride: true,
     };
@@ -857,19 +977,26 @@ export default function CalendarPage() {
 
       {/* =====================================================================
           VIEW 2: EXCEL DAY-BY-DAY MASTER SHEET (REPLICA OF GOOGLE SHEET)
+          WITH FROZEN (STICKY) HEADER AREA WHEN SCROLLING DOWN
          ===================================================================== */}
       {viewMode === "EXCEL_SHEET" && (
-        <div className="dashboard-card overflow-hidden">
-          <div className="p-4 border-b border-[#E8DFE0] bg-[#FAF7F5] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="dashboard-card overflow-hidden flex flex-col">
+          {/* Top Title Banner */}
+          <div className="p-4 border-b border-[#E8DFE0] bg-[#FAF7F5] flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
             <div>
-              <h2 className="text-base font-bold text-[#1E1416] flex items-center gap-2">
-                <Table2 className="w-4 h-4 text-[#9B1B30]" />
-                <span>
-                  {monthNames[currentMonth].toUpperCase()} {currentYear} — MASTER EXCEL SCHEDULE LEDGER
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-[#1E1416] flex items-center gap-2">
+                  <Table2 className="w-4 h-4 text-[#9B1B30]" />
+                  <span>
+                    {monthNames[currentMonth].toUpperCase()} {currentYear} — MASTER EXCEL SCHEDULE LEDGER
+                  </span>
+                </h2>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#F9EBED] text-[#9B1B30] border border-[#F0D0D5]">
+                  ❄️ Frozen Header Active (23 Columns)
                 </span>
-              </h2>
-              <p className="text-xs text-[#6E5D5F]">
-                Mirrors your Google Sheet day-by-day rows (Day 1 to Day {daysInMonth}) with merged multi-mall dates, receivables, talent fees, descriptions, and direct row editing.
+              </div>
+              <p className="text-xs text-[#6E5D5F] mt-0.5">
+                Full Google Sheet columns with frozen top header row &amp; frozen left Booking Date column when scrolling down or across.
               </p>
             </div>
             <button
@@ -881,32 +1008,152 @@ export default function CalendarPage() {
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-[#E8DFE0] bg-[#FAF7F5] text-[11px] font-mono uppercase text-[#3D2C2E]">
-                  <th className="py-3 px-3 font-bold border-r border-[#E8DFE0] w-36">
-                    Booking Date
-                  </th>
-                  <th className="py-3 px-3 font-bold">Agency / Company</th>
-                  <th className="py-3 px-3 font-bold">Name of Mall / Venue</th>
-                  <th className="py-3 px-3 font-bold">Status</th>
-                  <th className="py-3 px-3 font-bold">Assigned Santa</th>
-                  <th className="py-3 px-3 font-bold min-w-[220px]">
-                    Booking Details / Description & Notes
+          {/* Scrollable Table Container with Frozen (Sticky) Top Header & Frozen Left Column */}
+          <div className="overflow-auto max-h-[70vh] relative">
+            <table className="w-full text-left border-separate border-spacing-0 text-xs min-w-[2750px]">
+              <thead className="sticky top-0 z-30 shadow-md">
+                {/* Group Banner Row (Frozen Top Row 1) */}
+                <tr className="bg-[#231517] text-[#F5ECEE] text-[10px] font-mono uppercase tracking-wider">
+                  <th
+                    colSpan={5}
+                    className="py-1.5 px-3 font-bold border-b border-r border-[#3B2428] sticky left-0 z-40 bg-[#231517]"
+                  >
+                    1. Core Deployment &amp; Mall Schedule
                   </th>
                   {showFinancials && (
                     <>
-                      <th className="py-3 px-3 font-bold text-right">Contract Total</th>
-                      <th className="py-3 px-3 font-bold text-right">DP Paid</th>
-                      <th className="py-3 px-3 font-bold text-right">Collectibles</th>
-                      <th className="py-3 px-3 font-bold text-right">Talent Fee</th>
-                      <th className="py-3 px-3 font-bold text-right">Net Profit</th>
+                      <th
+                        colSpan={6}
+                        className="py-1.5 px-3 font-bold border-b border-r border-[#3B2428] bg-[#2C1A1D] text-[#F2C94C]"
+                      >
+                        2. Contract &amp; Downpayment (DP) Tracking
+                      </th>
+                      <th
+                        colSpan={4}
+                        className="py-1.5 px-3 font-bold border-b border-r border-[#3B2428] bg-[#231517] text-[#F2994A]"
+                      >
+                        3. Collectibles Ledger
+                      </th>
+                      <th
+                        colSpan={3}
+                        className="py-1.5 px-3 font-bold border-b border-r border-[#3B2428] bg-[#2C1A1D] text-[#6FCF97]"
+                      >
+                        4. Talents &amp; Talent Fee
+                      </th>
+                      <th
+                        colSpan={5}
+                        className="py-1.5 px-3 font-bold border-b border-r border-[#3B2428] bg-[#231517] text-[#56CCF2]"
+                      >
+                        5. Remaining Balance, Profit &amp; Contracts
+                      </th>
                     </>
                   )}
-                  <th className="py-3 px-3 font-bold text-right">Actions</th>
+                  <th
+                    colSpan={2}
+                    className="py-1.5 px-3 font-bold border-b border-[#3B2428] bg-[#2C1A1D]"
+                  >
+                    6. Event Details &amp; Edit
+                  </th>
+                </tr>
+
+                {/* Exact 23 Column Headers Requested by User (Frozen Top Row 2) */}
+                <tr className="bg-[#FAF7F5] text-[11px] font-mono uppercase text-[#1E1416] shadow-xs">
+                  {/* Group 1: Core Deployment */}
+                  <th className="py-3 px-3 font-bold border-b-2 border-r border-[#9B1B30] sticky left-0 z-40 bg-[#FAF7F5] min-w-[145px]">
+                    Booking Date
+                  </th>
+                  <th className="py-3 px-3 font-bold border-b-2 border-r border-[#E8DFE0] bg-[#FAF7F5] min-w-[140px]">
+                    Agency
+                  </th>
+                  <th className="py-3 px-3 font-bold border-b-2 border-r border-[#E8DFE0] bg-[#FAF7F5] min-w-[175px]">
+                    Name of Mall
+                  </th>
+                  <th className="py-3 px-3 font-bold border-b-2 border-r border-[#E8DFE0] bg-[#FAF7F5] min-w-[130px]">
+                    Status (Confirmed / Confirming)
+                  </th>
+                  <th className="py-3 px-3 font-bold border-b-2 border-r border-[#9B1B30] bg-[#FAF7F5] min-w-[145px]">
+                    Talent
+                  </th>
+
+                  {showFinancials && (
+                    <>
+                      {/* Group 2: Contract & Downpayment (DP) */}
+                      <th className="py-3 px-3 font-bold text-right border-b-2 border-r border-[#E8DFE0] bg-[#FDFBF7] min-w-[135px]">
+                        Total Amounts of Contract
+                      </th>
+                      <th className="py-3 px-3 font-bold text-right border-b-2 border-r border-[#E8DFE0] bg-[#FDFBF7] min-w-[115px]">
+                        DP Amounts
+                      </th>
+                      <th className="py-3 px-3 font-bold border-b-2 border-r border-[#E8DFE0] bg-[#FDFBF7] min-w-[110px]">
+                        DP Dates
+                      </th>
+                      <th className="py-3 px-3 font-bold border-b-2 border-r border-[#E8DFE0] bg-[#FDFBF7] min-w-[115px]">
+                        DP Status (Paid / Pending)
+                      </th>
+                      <th className="py-3 px-3 font-bold border-b-2 border-r border-[#E8DFE0] bg-[#FDFBF7] min-w-[125px]">
+                        Payment Proof (DP)
+                      </th>
+                      <th className="py-3 px-3 font-bold border-b-2 border-r border-[#9B1B30] bg-[#FDFBF7] min-w-[150px]">
+                        DP Notes
+                      </th>
+
+                      {/* Group 3: Collectibles */}
+                      <th className="py-3 px-3 font-bold text-right border-b-2 border-r border-[#E8DFE0] bg-[#FAF7F5] min-w-[115px]">
+                        Collectibles
+                      </th>
+                      <th className="py-3 px-3 font-bold border-b-2 border-r border-[#E8DFE0] bg-[#FAF7F5] min-w-[110px]">
+                        Date Settled
+                      </th>
+                      <th className="py-3 px-3 font-bold border-b-2 border-r border-[#E8DFE0] bg-[#FAF7F5] min-w-[130px]">
+                        Status (Collected / Pending)
+                      </th>
+                      <th className="py-3 px-3 font-bold border-b-2 border-r border-[#E8DFE0] bg-[#FAF7F5] min-w-[150px]">
+                        Collectibles Notes
+                      </th>
+                      <th className="py-3 px-3 font-bold border-b-2 border-r border-[#9B1B30] bg-[#FAF7F5] min-w-[125px]">
+                        Payment Proof
+                      </th>
+
+                      {/* Group 4: Talents & Talent Fee */}
+                      <th className="py-3 px-3 font-bold border-b-2 border-r border-[#E8DFE0] bg-[#FDFBF7] min-w-[135px]">
+                        Talents
+                      </th>
+                      <th className="py-3 px-3 font-bold text-right border-b-2 border-r border-[#E8DFE0] bg-[#FDFBF7] min-w-[115px]">
+                        Talent Fee
+                      </th>
+                      <th className="py-3 px-3 font-bold border-b-2 border-r border-[#9B1B30] bg-[#FDFBF7] min-w-[165px]">
+                        Talent Notes
+                      </th>
+
+                      {/* Group 5: Remaining Balance, Profit & Contracts */}
+                      <th className="py-3 px-3 font-bold text-right border-b-2 border-r border-[#E8DFE0] bg-[#FAF7F5] min-w-[130px]">
+                        Remaining Balance
+                      </th>
+                      <th className="py-3 px-3 font-bold border-b-2 border-r border-[#E8DFE0] bg-[#FAF7F5] min-w-[110px]">
+                        Date Settled
+                      </th>
+                      <th className="py-3 px-3 font-bold border-b-2 border-r border-[#E8DFE0] bg-[#FAF7F5] min-w-[125px]">
+                        Payment Proof
+                      </th>
+                      <th className="py-3 px-3 font-bold text-right border-b-2 border-r border-[#E8DFE0] bg-[#FAF7F5] min-w-[115px]">
+                        Profit
+                      </th>
+                      <th className="py-3 px-3 font-bold border-b-2 border-r border-[#9B1B30] bg-[#FAF7F5] min-w-[130px]">
+                        Contracts
+                      </th>
+                    </>
+                  )}
+
+                  {/* Group 6: Event Details & Actions */}
+                  <th className="py-3 px-3 font-bold border-b-2 border-r border-[#E8DFE0] bg-[#FAF7F5] min-w-[240px]">
+                    Event Details
+                  </th>
+                  <th className="py-3 px-3 font-bold text-right border-b-2 border-[#E8DFE0] bg-[#FAF7F5] min-w-[100px] sticky right-0 z-40">
+                    Actions
+                  </th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-[#E8DFE0]">
                 {allDaysOfMonth.map((day) => {
                   const dateKey = `${currentYear}-${String(currentMonth + 1).padStart(
@@ -926,16 +1173,16 @@ export default function CalendarPage() {
                         key={dateKey}
                         className="hover:bg-[#FAF7F5]/80 transition text-[#9A8A8C]"
                       >
-                        <td className="py-2 px-3 font-mono text-[11px] font-semibold text-[#6E5D5F] border-r border-[#E8DFE0] bg-[#FAF7F5]/40">
+                        <td className="py-2 px-3 font-mono text-[11px] font-semibold text-[#6E5D5F] border-b border-r border-[#E8DFE0] bg-[#FAF7F5] sticky left-0 z-10">
                           {monthNames[currentMonth].slice(0, 3)} {day}, {currentYear} ({dayOfWeek})
                         </td>
                         <td
-                          colSpan={showFinancials ? 10 : 5}
-                          className="py-2 px-3 text-[11px] italic text-[#9A8A8C]"
+                          colSpan={showFinancials ? 23 : 5}
+                          className="py-2 px-3 text-[11px] italic text-[#9A8A8C] border-b border-[#E8DFE0]"
                         >
                           Open Date — No deployments scheduled yet
                         </td>
-                        <td className="py-2 px-3 text-right">
+                        <td className="py-2 px-3 text-right border-b border-[#E8DFE0] bg-white sticky right-0 z-10">
                           <button
                             onClick={() => openCreateModal(dateKey)}
                             className="px-2 py-1 rounded border border-[#D6C7C9] text-[10px] font-bold text-[#3D2C2E] hover:border-[#9B1B30] hover:text-[#9B1B30] hover:bg-[#F9EBED] inline-flex items-center gap-1 transition"
@@ -951,29 +1198,24 @@ export default function CalendarPage() {
                   return dayBookings.map((b, bIdx) => {
                     const talent = b.talentAssignments?.[0]?.talent;
                     const tName = talent?.displayName;
-                    const contractAmt = Number(b.totalContractAmount || 18000);
-                    const dpAmt = Number(b.depositPaid || 0);
-                    const collectiblesAmt = Number(
-                      b.balanceDue ?? Math.max(0, contractAmt - dpAmt)
-                    );
-                    const tfAmt = Number(
-                      b.talentAssignments?.[0]?.agreedTalentFee || b.totalDirectCost || 12000
-                    );
-                    const profitAmt = contractAmt - tfAmt;
+                    const meta = parseBookingLedgerMeta(b);
                     const isDoubleBooked =
                       tName && (doubleBookedMap[`${dateKey}_${tName}`]?.length || 0) > 1;
 
                     return (
                       <tr
                         key={b.id}
-                        className={`transition hover:bg-[#FAF7F5] ${
+                        onClick={() => openEditModal(b)}
+                        className={`transition cursor-pointer hover:bg-[#FAF7F5] ${
                           isDoubleBooked ? "bg-[#FEF2F2]/60" : "bg-white"
                         }`}
                       >
+                        {/* 1. Booking Date (Frozen Left Column) */}
                         {bIdx === 0 && (
                           <td
                             rowSpan={dayBookings.length}
-                            className="py-2.5 px-3 font-mono text-xs font-bold text-[#1E1416] border-r border-[#E8DFE0] bg-[#FAF7F5]/70 align-top"
+                            onClick={(e) => e.stopPropagation()}
+                            className="py-2.5 px-3 font-mono text-xs font-bold text-[#1E1416] border-b border-r border-[#9B1B30]/40 bg-[#FAF7F5] align-top sticky left-0 z-20"
                           >
                             <div>
                               {monthNames[currentMonth].slice(0, 3)} {day}, {currentYear}
@@ -992,84 +1234,193 @@ export default function CalendarPage() {
                           </td>
                         )}
 
-                        <td className="py-2.5 px-3 font-medium text-[#3D2C2E]">
-                          {b.client?.companyName || "SM Supermalls"}
+                        {/* 2. Agency */}
+                        <td className="py-2.5 px-3 font-semibold text-[#3D2C2E] border-b border-r border-[#E8DFE0]">
+                          {meta.agency}
                         </td>
 
-                        <td className="py-2.5 px-3 font-bold text-[#1E1416]">
+                        {/* 3. Name of Mall */}
+                        <td className="py-2.5 px-3 font-bold text-[#1E1416] border-b border-r border-[#E8DFE0]">
                           <div>{b.mallOrVenue}</div>
                           <div className="text-[10px] font-mono text-[#6E5D5F]">
                             {b.bookingNumber}
                           </div>
                         </td>
 
-                        <td className="py-2.5 px-3">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8F5EE] text-[#1E7E48] border border-[#C3E6D1]">
-                            {b.status === "READY_FOR_DEPLOYMENT" ? "Confirmed" : b.status}
+                        {/* 4. Status - Confirmed / Confirming */}
+                        <td className="py-2.5 px-3 border-b border-r border-[#E8DFE0]">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                              meta.bookingStatusLabel === "Confirmed"
+                                ? "bg-[#E8F5EE] text-[#1E7E48] border-[#C3E6D1]"
+                                : "bg-[#FEF6E6] text-[#B87D14] border-[#F2DEC0]"
+                            }`}
+                          >
+                            {meta.bookingStatusLabel}
                           </span>
                         </td>
 
-                        <td className="py-2.5 px-3">
+                        {/* 5. Talent */}
+                        <td className="py-2.5 px-3 border-b border-r border-[#9B1B30]/30">
                           <div className="font-bold text-[#9B1B30]">
                             {tName ? `Santa ${tName}` : "Unassigned"}
                           </div>
-                          {tName && SANTA_PA_DIRECTORY[tName] && (
-                            <div className="text-[10px] text-[#6E5D5F]">
-                              PA: {SANTA_PA_DIRECTORY[tName].paName}
-                            </div>
-                          )}
                           {isDoubleBooked && (
                             <div className="text-[10px] font-bold text-[#B91C1C] flex items-center gap-1 mt-0.5">
                               <AlertTriangle className="w-3 h-3" />
-                              <span>Conflict on {monthNames[currentMonth].slice(0, 3)} {day}</span>
+                              <span>Conflict</span>
                             </div>
-                          )}
-                        </td>
-
-                        <td className="py-2.5 px-3 text-[#3D2C2E] max-w-xs">
-                          {b.specialRequests && (
-                            <div className="font-semibold text-[#1E1416]">
-                              {b.specialRequests}
-                            </div>
-                          )}
-                          {b.venueNotes && (
-                            <div className="text-[11px] text-[#9B1B30]">
-                              TF/Transpo: {b.venueNotes}
-                            </div>
-                          )}
-                          {b.internalNotes && (
-                            <div className="text-[11px] text-[#6E5D5F] line-clamp-2">
-                              {b.internalNotes}
-                            </div>
-                          )}
-                          {!b.specialRequests && !b.venueNotes && !b.internalNotes && (
-                            <span className="text-[11px] italic text-[#9A8A8C]">
-                              Click Edit to add description...
-                            </span>
                           )}
                         </td>
 
                         {showFinancials && (
                           <>
-                            <td className="py-2.5 px-3 font-mono font-bold text-right text-[#1E1416]">
-                              ₱{contractAmt.toLocaleString()}
+                            {/* 6. Total Amounts of Contract */}
+                            <td className="py-2.5 px-3 font-mono font-bold text-right text-[#1E1416] border-b border-r border-[#E8DFE0] bg-[#FDFBF7]/50">
+                              ₱{meta.contractAmt.toLocaleString()}
                             </td>
-                            <td className="py-2.5 px-3 font-mono text-right text-[#1E7E48]">
-                              ₱{dpAmt.toLocaleString()}
+
+                            {/* 7. DP Amounts */}
+                            <td className="py-2.5 px-3 font-mono font-semibold text-right text-[#1E7E48] border-b border-r border-[#E8DFE0] bg-[#FDFBF7]/50">
+                              ₱{meta.dpAmt.toLocaleString()}
                             </td>
-                            <td className="py-2.5 px-3 font-mono text-right text-[#C68A12]">
-                              ₱{collectiblesAmt.toLocaleString()}
+
+                            {/* 8. DP Dates */}
+                            <td className="py-2.5 px-3 font-mono text-[11px] text-[#3D2C2E] border-b border-r border-[#E8DFE0] bg-[#FDFBF7]/50">
+                              {meta.dpDate || "—"}
                             </td>
-                            <td className="py-2.5 px-3 font-mono text-right text-[#3D2C2E]">
-                              ₱{tfAmt.toLocaleString()}
+
+                            {/* 9. DP Status - Paid / Pending */}
+                            <td className="py-2.5 px-3 border-b border-r border-[#E8DFE0] bg-[#FDFBF7]/50">
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  meta.dpStatus === "Paid"
+                                    ? "bg-[#E8F5EE] text-[#1E7E48] border-[#C3E6D1]"
+                                    : "bg-[#FEF6E6] text-[#B87D14] border-[#F2DEC0]"
+                                }`}
+                              >
+                                {meta.dpStatus}
+                              </span>
                             </td>
-                            <td className="py-2.5 px-3 font-mono font-bold text-right text-[#1E7E48]">
-                              ₱{profitAmt.toLocaleString()}
+
+                            {/* 10. Payment Proof (DP) */}
+                            <td className="py-2.5 px-3 text-[11px] font-mono text-[#3D2C2E] border-b border-r border-[#E8DFE0] bg-[#FDFBF7]/50">
+                              {meta.dpProof ? (
+                                <span className="px-1.5 py-0.5 rounded bg-[#E8F5EE] text-[#1E7E48] border border-[#C3E6D1] text-[10px]">
+                                  {meta.dpProof}
+                                </span>
+                              ) : (
+                                <span className="text-[#9A8A8C]">—</span>
+                              )}
+                            </td>
+
+                            {/* 11. DP Notes */}
+                            <td className="py-2.5 px-3 text-[11px] text-[#3D2C2E] border-b border-r border-[#9B1B30]/30 bg-[#FDFBF7]/50 max-w-[160px] truncate">
+                              {meta.dpNotes || "—"}
+                            </td>
+
+                            {/* 12. Collectibles */}
+                            <td className="py-2.5 px-3 font-mono font-bold text-right text-[#C68A12] border-b border-r border-[#E8DFE0]">
+                              ₱{meta.collectiblesAmt.toLocaleString()}
+                            </td>
+
+                            {/* 13. Date Settled (Collectibles) */}
+                            <td className="py-2.5 px-3 font-mono text-[11px] text-[#3D2C2E] border-b border-r border-[#E8DFE0]">
+                              {meta.collectiblesDateSettled || "—"}
+                            </td>
+
+                            {/* 14. Status - Collected / Pending */}
+                            <td className="py-2.5 px-3 border-b border-r border-[#E8DFE0]">
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  meta.collectiblesStatus === "Collected"
+                                    ? "bg-[#E8F5EE] text-[#1E7E48] border-[#C3E6D1]"
+                                    : "bg-[#FEF6E6] text-[#B87D14] border-[#F2DEC0]"
+                                }`}
+                              >
+                                {meta.collectiblesStatus}
+                              </span>
+                            </td>
+
+                            {/* 15. Collectibles Notes */}
+                            <td className="py-2.5 px-3 text-[11px] text-[#3D2C2E] border-b border-r border-[#E8DFE0] max-w-[160px] truncate">
+                              {meta.collectiblesNotes || "—"}
+                            </td>
+
+                            {/* 16. Payment Proof (Collectibles) */}
+                            <td className="py-2.5 px-3 text-[11px] font-mono text-[#3D2C2E] border-b border-r border-[#9B1B30]/30">
+                              {meta.collectiblesProof ? (
+                                <span className="px-1.5 py-0.5 rounded bg-[#E8F5EE] text-[#1E7E48] border border-[#C3E6D1] text-[10px]">
+                                  {meta.collectiblesProof}
+                                </span>
+                              ) : (
+                                <span className="text-[#9A8A8C]">—</span>
+                              )}
+                            </td>
+
+                            {/* 17. Talents */}
+                            <td className="py-2.5 px-3 border-b border-r border-[#E8DFE0] bg-[#FDFBF7]/50">
+                              <div className="font-bold text-[#1E1416]">
+                                {tName ? `Santa ${tName}` : "Unassigned"}
+                              </div>
+                              {tName && SANTA_PA_DIRECTORY[tName] && (
+                                <div className="text-[10px] text-[#6E5D5F]">
+                                  PA: {SANTA_PA_DIRECTORY[tName].paName}
+                                </div>
+                              )}
+                            </td>
+
+                            {/* 18. Talent Fee */}
+                            <td className="py-2.5 px-3 font-mono font-bold text-right text-[#3D2C2E] border-b border-r border-[#E8DFE0] bg-[#FDFBF7]/50">
+                              ₱{meta.tfAmt.toLocaleString()}
+                            </td>
+
+                            {/* 19. Talent Notes */}
+                            <td className="py-2.5 px-3 text-[11px] text-[#9B1B30] border-b border-r border-[#9B1B30]/30 bg-[#FDFBF7]/50 max-w-[180px] truncate">
+                              {meta.tfNotes || "Standard TF"}
+                            </td>
+
+                            {/* 20. Remaining Balance */}
+                            <td className="py-2.5 px-3 font-mono font-bold text-right text-[#C68A12] border-b border-r border-[#E8DFE0]">
+                              ₱{meta.remainingBalance.toLocaleString()}
+                            </td>
+
+                            {/* 21. Date Settled (Remaining Balance) */}
+                            <td className="py-2.5 px-3 font-mono text-[11px] text-[#3D2C2E] border-b border-r border-[#E8DFE0]">
+                              {meta.remainingDateSettled || "—"}
+                            </td>
+
+                            {/* 22. Payment Proof (Remaining Balance) */}
+                            <td className="py-2.5 px-3 text-[11px] font-mono text-[#3D2C2E] border-b border-r border-[#E8DFE0]">
+                              {meta.remainingProof || "—"}
+                            </td>
+
+                            {/* 23. Profit */}
+                            <td className="py-2.5 px-3 font-mono font-bold text-right text-[#1E7E48] border-b border-r border-[#E8DFE0]">
+                              ₱{meta.profitAmt.toLocaleString()}
+                            </td>
+
+                            {/* 24. Contracts */}
+                            <td className="py-2.5 px-3 border-b border-r border-[#9B1B30]/30">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-[#F9EBED] text-[#9B1B30] border border-[#F0D0D5]">
+                                {meta.contractStatus}
+                              </span>
                             </td>
                           </>
                         )}
 
-                        <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                        {/* 25. Event Details */}
+                        <td className="py-2.5 px-3 text-[#3D2C2E] border-b border-r border-[#E8DFE0] max-w-[260px]">
+                          <div className="font-semibold text-[#1E1416] line-clamp-2">
+                            {meta.eventDetails}
+                          </div>
+                        </td>
+
+                        {/* 26. Actions (Frozen Right Column) */}
+                        <td
+                          onClick={(e) => e.stopPropagation()}
+                          className="py-2.5 px-3 text-right whitespace-nowrap border-b border-[#E8DFE0] bg-white sticky right-0 z-20"
+                        >
                           <button
                             onClick={() => openEditModal(b)}
                             className="px-2.5 py-1 rounded-lg bg-[#F9EBED] text-[#9B1B30] border border-[#F0D0D5] hover:bg-[#9B1B30] hover:text-white text-xs font-bold inline-flex items-center gap-1 transition"
@@ -1084,27 +1435,38 @@ export default function CalendarPage() {
                 })}
               </tbody>
               {showFinancials && (
-                <tfoot>
-                  <tr className="border-t-2 border-[#9B1B30] bg-[#FAF7F5] font-mono text-xs font-bold text-[#1E1416]">
-                    <td colSpan={6} className="py-3 px-3 text-right uppercase">
-                      {monthNames[currentMonth]} {currentYear} Master Sheet Totals ({monthMetrics.count} Bookings):
+                <tfoot className="sticky bottom-0 z-30 shadow-inner">
+                  <tr className="bg-[#FAF7F5] font-mono text-xs font-bold text-[#1E1416]">
+                    <td
+                      colSpan={5}
+                      className="py-3 px-3 text-right uppercase border-t-2 border-r border-[#9B1B30] bg-[#FAF7F5] sticky left-0 z-40"
+                    >
+                      {monthNames[currentMonth]} {currentYear} Totals ({monthMetrics.count} Gigs):
                     </td>
-                    <td className="py-3 px-3 text-right">
+                    <td className="py-3 px-3 text-right border-t-2 border-r border-[#9B1B30]">
                       ₱{monthMetrics.totalRevenue.toLocaleString()}
                     </td>
-                    <td className="py-3 px-3 text-right text-[#1E7E48]">
+                    <td className="py-3 px-3 text-right text-[#1E7E48] border-t-2 border-r border-[#9B1B30]">
                       ₱{monthMetrics.totalDpPaid.toLocaleString()}
                     </td>
-                    <td className="py-3 px-3 text-right text-[#C68A12]">
+                    <td colSpan={4} className="border-t-2 border-r border-[#9B1B30]" />
+                    <td className="py-3 px-3 text-right text-[#C68A12] border-t-2 border-r border-[#9B1B30]">
                       ₱{monthMetrics.totalCollectibles.toLocaleString()}
                     </td>
-                    <td className="py-3 px-3 text-right">
+                    <td colSpan={4} className="border-t-2 border-r border-[#9B1B30]" />
+                    <td className="border-t-2 border-r border-[#9B1B30]" />
+                    <td className="py-3 px-3 text-right border-t-2 border-r border-[#9B1B30]">
                       ₱{monthMetrics.totalTf.toLocaleString()}
                     </td>
-                    <td className="py-3 px-3 text-right text-[#1E7E48]">
+                    <td className="border-t-2 border-r border-[#9B1B30]" />
+                    <td className="py-3 px-3 text-right text-[#C68A12] border-t-2 border-r border-[#9B1B30]">
+                      ₱{monthMetrics.totalCollectibles.toLocaleString()}
+                    </td>
+                    <td colSpan={2} className="border-t-2 border-r border-[#9B1B30]" />
+                    <td className="py-3 px-3 text-right text-[#1E7E48] border-t-2 border-r border-[#9B1B30]">
                       ₱{monthMetrics.netProfit.toLocaleString()}
                     </td>
-                    <td />
+                    <td colSpan={3} className="border-t-2 border-[#9B1B30]" />
                   </tr>
                 </tfoot>
               )}
@@ -1721,6 +2083,173 @@ export default function CalendarPage() {
                     }
                     className="w-full px-3 py-1.5 text-xs font-mono"
                   />
+                </div>
+              </div>
+
+              {/* Row 8: Extended Excel Ledger Fields (DP Tracking, Collectibles, Remaining Balance & Contracts) */}
+              <div className="p-3.5 rounded-xl bg-[#FAF7F5] border border-[#E8DFE0] space-y-3">
+                <div className="text-[11px] font-mono font-bold uppercase text-[#9B1B30] tracking-wider">
+                  Excel Master Ledger Columns (Downpayment, Collectibles, Balance &amp; Contracts)
+                </div>
+
+                {/* Sub-grid A: Downpayment (DP) Details */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1">DP Date</label>
+                    <input
+                      type="date"
+                      value={form.dpDate}
+                      onChange={(e) => setForm({ ...form, dpDate: e.target.value })}
+                      className="w-full px-2.5 py-1.5 text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1">DP Status</label>
+                    <select
+                      value={form.dpStatus}
+                      onChange={(e) =>
+                        setForm({ ...form, dpStatus: e.target.value as "Paid" | "Pending" })
+                      }
+                      className="w-full px-2.5 py-1.5 text-xs font-semibold"
+                    >
+                      <option value="Paid">Paid</option>
+                      <option value="Pending">Pending</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1">DP Payment Proof</label>
+                    <input
+                      type="text"
+                      value={form.dpProof}
+                      onChange={(e) => setForm({ ...form, dpProof: e.target.value })}
+                      placeholder="e.g. GCash / Check / OR #"
+                      className="w-full px-2.5 py-1.5 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1">DP Notes</label>
+                    <input
+                      type="text"
+                      value={form.dpNotes}
+                      onChange={(e) => setForm({ ...form, dpNotes: e.target.value })}
+                      placeholder="e.g. 50% DP received"
+                      className="w-full px-2.5 py-1.5 text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Sub-grid B: Collectibles Details */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-[#E8DFE0]">
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1">
+                      Collectibles Date Settled
+                    </label>
+                    <input
+                      type="date"
+                      value={form.collectiblesDateSettled}
+                      onChange={(e) =>
+                        setForm({ ...form, collectiblesDateSettled: e.target.value })
+                      }
+                      className="w-full px-2.5 py-1.5 text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1">
+                      Collectibles Status
+                    </label>
+                    <select
+                      value={form.collectiblesStatus}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          collectiblesStatus: e.target.value as "Collected" | "Pending",
+                        })
+                      }
+                      className="w-full px-2.5 py-1.5 text-xs font-semibold"
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="Collected">Collected</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1">
+                      Collectibles Proof
+                    </label>
+                    <input
+                      type="text"
+                      value={form.collectiblesProof}
+                      onChange={(e) => setForm({ ...form, collectiblesProof: e.target.value })}
+                      placeholder="e.g. Bank Transfer Ref #"
+                      className="w-full px-2.5 py-1.5 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1">
+                      Collectibles Notes
+                    </label>
+                    <input
+                      type="text"
+                      value={form.collectiblesNotes}
+                      onChange={(e) => setForm({ ...form, collectiblesNotes: e.target.value })}
+                      placeholder="e.g. Billing submitted"
+                      className="w-full px-2.5 py-1.5 text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Sub-grid C: Remaining Balance & Contracts */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-[#E8DFE0]">
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1">
+                      Remaining Balance (₱)
+                    </label>
+                    <input
+                      type="number"
+                      value={form.remainingBalance}
+                      onChange={(e) =>
+                        setForm({ ...form, remainingBalance: Number(e.target.value || 0) })
+                      }
+                      className="w-full px-2.5 py-1.5 text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1">
+                      Balance Date Settled
+                    </label>
+                    <input
+                      type="date"
+                      value={form.remainingDateSettled}
+                      onChange={(e) =>
+                        setForm({ ...form, remainingDateSettled: e.target.value })
+                      }
+                      className="w-full px-2.5 py-1.5 text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1">
+                      Balance Payment Proof
+                    </label>
+                    <input
+                      type="text"
+                      value={form.remainingProof}
+                      onChange={(e) => setForm({ ...form, remainingProof: e.target.value })}
+                      placeholder="e.g. Full settlement ref"
+                      className="w-full px-2.5 py-1.5 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold mb-1">Contracts Status</label>
+                    <select
+                      value={form.contractStatus}
+                      onChange={(e) => setForm({ ...form, contractStatus: e.target.value })}
+                      className="w-full px-2.5 py-1.5 text-xs font-semibold"
+                    >
+                      <option value="Signed Contract">Signed Contract</option>
+                      <option value="Sent for Signature">Sent for Signature</option>
+                      <option value="Draft / Pending">Draft / Pending</option>
+                      <option value="LOA / PO Issued">LOA / PO Issued</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 

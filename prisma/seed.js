@@ -336,6 +336,66 @@ async function main() {
       photos: [
         { fileName: 'richard_photo_1.jpg', publicUrl: '/talents/Richard/richard_photo_1.jpg', isPrimary: true, caption: 'Santa Richard' }
       ]
+    },
+    {
+      canonicalId: 'TAL-PATRICK',
+      sourceName: 'Patrick',
+      displayName: 'Patrick',
+      talentType: 'REAL_BEARD',
+      status: 'ACTIVE',
+      age: 61,
+      height: '6ft',
+      nationality: 'International',
+      baseTalentFee: 12000,
+      metroManilaRate: 18000,
+      provincialRate: 23400,
+      holidayRate: 21000,
+      specialRateNote: 'Marquee Mall November 22 & November 29 confirmed talent.',
+      rateSourceNote: 'November booking rows 29 & 40 + Invidual Booking row 107',
+      approvedForPublicDisplay: false,
+      bio: 'Confirmed real-beard Santa for Marquee Mall holiday appearances.',
+      aliases: ['Patrick', 'Patrick '],
+      photos: []
+    },
+    {
+      canonicalId: 'TAL-REY',
+      sourceName: 'Rey',
+      displayName: 'Rey',
+      talentType: 'REAL_BEARD',
+      status: 'ACTIVE',
+      age: 58,
+      height: '5’10',
+      nationality: 'Filipino / International',
+      baseTalentFee: 10000,
+      metroManilaRate: 17000,
+      provincialRate: 22000,
+      holidayRate: 20000,
+      specialRateNote: 'SMDC Mplace December 19 confirmed talent.',
+      rateSourceNote: 'December Booking row 47',
+      approvedForPublicDisplay: false,
+      bio: 'Confirmed Santa for SMDC Mplace holiday tour.',
+      aliases: ['Rey'],
+      photos: []
+    },
+    {
+      canonicalId: 'TAL-FRED',
+      sourceName: 'Fred (fake Beard)',
+      displayName: 'Fred',
+      talentType: 'REGULAR_SANTA',
+      status: 'ACTIVE',
+      age: 55,
+      height: '5’9',
+      nationality: 'Filipino',
+      baseTalentFee: 8000,
+      metroManilaRate: 15000,
+      provincialRate: 15000,
+      holidayRate: 16900,
+      specialRateNote: 'SM City Cabanatuan & SM Cabanatuan Megacenter (Oct 22-23) confirmed talent. ₱8,000 TF + ₱1,000 transpo.',
+      rateSourceNote: 'October Booking rows 33 & 39',
+      approvedForPublicDisplay: false,
+      bio: 'Traditional costumed Santa for regional SM Supermalls appearances.',
+      aliases: ['Fred', 'Fred (fake Beard)'],
+      photos: []
     }
   ];
 

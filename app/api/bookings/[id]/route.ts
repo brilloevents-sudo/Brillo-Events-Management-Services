@@ -55,6 +55,8 @@ export async function PATCH(
     const body = await req.json();
     const {
       status: targetStatus,
+      eventName,
+      companyName,
       eventDate,
       startTime,
       endTime,
@@ -63,10 +65,16 @@ export async function PATCH(
       venueAddress,
       talentId,
       agreedTalentFee,
+      totalContractAmount,
+      depositPaid,
+      balanceDue,
       extendHoldHours,
       extendHoldReason,
       cancellationReason,
       internalNotes,
+      specialRequests,
+      venueNotes,
+      isCalendarDirectEdit = false,
       forceDualGateOverride = false,
       actor = auth.actor,
     } = body;
@@ -74,6 +82,7 @@ export async function PATCH(
     const existing = await prisma.booking.findUnique({
       where: { id: params.id },
       include: {
+        client: true,
         contracts: true,
         payments: true,
         talentAssignments: true,
@@ -87,8 +96,11 @@ export async function PATCH(
     const updates: any = {};
 
     // 1. Check Date / Time / Talent conflict
-    const newDate = eventDate ? new Date(eventDate) : existing.eventDate;
-    const effectiveTalentId = talentId || existing.talentAssignments[0]?.talentId;
+    const rawNewDate = eventDate ? new Date(eventDate) : existing.eventDate;
+    const newDate = eventDate
+      ? new Date(Date.UTC(rawNewDate.getFullYear(), rawNewDate.getMonth(), rawNewDate.getDate(), 12, 0, 0))
+      : existing.eventDate;
+    const effectiveTalentId = talentId !== undefined ? talentId : existing.talentAssignments[0]?.talentId;
     let hasScheduleOverlap = false;
 
     if (effectiveTalentId) {
@@ -102,7 +114,7 @@ export async function PATCH(
 
       hasScheduleOverlap = conflict.hasConflict;
 
-      if (conflict.hasConflict && (eventDate || startTime || endTime || talentId)) {
+      if (conflict.hasConflict && !isCalendarDirectEdit && (eventDate || startTime || endTime || talentId)) {
         return NextResponse.json(
           {
             success: false,
@@ -113,6 +125,7 @@ export async function PATCH(
       }
     }
 
+    if (eventName !== undefined) updates.eventName = eventName;
     if (eventDate) updates.eventDate = newDate;
     if (startTime !== undefined) updates.startTime = startTime;
     if (endTime !== undefined) updates.endTime = endTime;
@@ -120,6 +133,18 @@ export async function PATCH(
     if (mallOrVenue !== undefined) updates.mallOrVenue = mallOrVenue;
     if (venueAddress !== undefined) updates.venueAddress = venueAddress;
     if (internalNotes !== undefined) updates.internalNotes = internalNotes;
+    if (specialRequests !== undefined) updates.specialRequests = specialRequests;
+    if (venueNotes !== undefined) updates.venueNotes = venueNotes;
+    if (totalContractAmount !== undefined) updates.totalContractAmount = Number(totalContractAmount);
+    if (depositPaid !== undefined) updates.depositPaid = Number(depositPaid);
+    if (balanceDue !== undefined) updates.balanceDue = Number(balanceDue);
+
+    if (companyName && existing.clientId) {
+      await prisma.client.update({
+        where: { id: existing.clientId },
+        data: { companyName },
+      });
+    }
 
     // 2. Extend Hold Action
     if (extendHoldHours) {
@@ -153,8 +178,9 @@ export async function PATCH(
         .reduce((s, p) => s + Number(p.amount), 0);
       const hasVerifiedPayment = verifiedDepositPaid > 0;
 
-      // Enforce Dual-Gate Approval when locking booking from AWAITING_STAFF_APPROVAL
+      // Enforce Dual-Gate Approval when locking booking from AWAITING_STAFF_APPROVAL (unless direct calendar edit)
       if (
+        !isCalendarDirectEdit &&
         (targetStatus === "SECURED_UNASSIGNED" || targetStatus === "READY_FOR_DEPLOYMENT") &&
         !(forceDualGateOverride && auth.role === "SUPER_ADMIN")
       ) {
@@ -180,16 +206,18 @@ export async function PATCH(
         }
       }
 
-      const validation = validateStateTransition(
-        existing.status as BookingStatus,
-        targetStatus as BookingStatus,
-        hasSignedAgreement || (forceDualGateOverride && auth.role === "SUPER_ADMIN"),
-        hasVerifiedPayment || hasInstitutionalWaiver || (forceDualGateOverride && auth.role === "SUPER_ADMIN"),
-        true
-      );
+      if (!isCalendarDirectEdit) {
+        const validation = validateStateTransition(
+          existing.status as BookingStatus,
+          targetStatus as BookingStatus,
+          hasSignedAgreement || (forceDualGateOverride && auth.role === "SUPER_ADMIN"),
+          hasVerifiedPayment || hasInstitutionalWaiver || (forceDualGateOverride && auth.role === "SUPER_ADMIN"),
+          true
+        );
 
-      if (!validation.allowed) {
-        return NextResponse.json({ success: false, error: validation.reason }, { status: 400 });
+        if (!validation.allowed) {
+          return NextResponse.json({ success: false, error: validation.reason }, { status: 400 });
+        }
       }
 
       updates.status = targetStatus;
@@ -206,24 +234,31 @@ export async function PATCH(
           actor,
           reason:
             cancellationReason ||
-            `Dual-Gate Signoff passed (${auth.role}) -> ${targetStatus}`,
+            `Calendar / Staff Update (${auth.role}) -> ${targetStatus}`,
         },
       });
     }
 
     // 4. Update talent assignment if changed
-    if (talentId) {
+    if (talentId !== undefined) {
       await prisma.talentAssignment.deleteMany({
         where: { bookingId: existing.id },
       });
-      await prisma.talentAssignment.create({
-        data: {
-          bookingId: existing.id,
-          talentId,
-          agreedTalentFee: agreedTalentFee || 12000,
-          callTime: callTime || existing.callTime,
-          status: "CONFIRMED",
-        },
+      if (talentId) {
+        await prisma.talentAssignment.create({
+          data: {
+            bookingId: existing.id,
+            talentId,
+            agreedTalentFee: Number(agreedTalentFee || 12000),
+            callTime: callTime || existing.callTime,
+            status: "CONFIRMED",
+          },
+        });
+      }
+    } else if (agreedTalentFee !== undefined && existing.talentAssignments[0]) {
+      await prisma.talentAssignment.update({
+        where: { id: existing.talentAssignments[0].id },
+        data: { agreedTalentFee: Number(agreedTalentFee) },
       });
     }
 
@@ -245,6 +280,26 @@ export async function PATCH(
     });
 
     return NextResponse.json({ success: true, booking: updated });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const auth = authorizeAdminRequest(req, ["SUPER_ADMIN", "OPS_ADMIN"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
+
+    await prisma.talentAssignment.deleteMany({ where: { bookingId: params.id } });
+    await prisma.bookingStatusHistory.deleteMany({ where: { bookingId: params.id } });
+    await prisma.booking.delete({ where: { id: params.id } });
+
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

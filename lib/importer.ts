@@ -34,7 +34,7 @@ export interface ImportCommitResult {
 }
 
 export function parseWorkbookBuffer(buffer: Buffer): XLSX.WorkBook {
-  return XLSX.read(buffer, { type: "buffer", cellDates: true, raw: false });
+  return XLSX.read(buffer, { type: "buffer", cellDates: false, raw: false });
 }
 
 export async function runImportDryRun(
@@ -153,167 +153,309 @@ export async function executeImportCommit(
     return null;
   }
 
-  // 2. Process Bookings: "Confirmed Booking", "October Booking", "November booking", "December Booking"
+  // 2. Process Bookings: "October Booking", "November booking", "December Booking", then "Confirmed Booking"
+  const bookingSheetsOrder = [
+    ...wb.SheetNames.filter(
+      (s) =>
+        s.toLowerCase().includes("booking") &&
+        !s.toLowerCase().includes("confirmed") &&
+        !s.toLowerCase().includes("invidual")
+    ),
+    ...wb.SheetNames.filter((s) => s.toLowerCase().includes("confirmed")),
+  ];
+
+  function parseFlexibleExcelDate(raw: any, fallbackDate: Date | null): { date: Date | null; hasTypo: boolean } {
+    if (raw === undefined || raw === null || String(raw).trim() === "") {
+      return { date: fallbackDate, hasTypo: false };
+    }
+    if (raw instanceof Date && !isNaN(raw.getTime())) {
+      return { date: raw, hasTypo: false };
+    }
+    let str = String(raw).trim();
+    let hasTypo = false;
+    if (str.includes("20206")) {
+      hasTypo = true;
+      str = str.replace("20206", "2026");
+    }
+    // Remove day-of-week in parens e.g. "(Sunday)" or "(Saturday) |"
+    str = str.replace(/\([^)]*\)/g, "").replace(/\|/g, "").trim();
+    // If string has month + day but no 4-digit year (e.g. "December 5," or "October 21")
+    if (!/\b20\d{2}\b/.test(str) && /[A-Za-z]+\s+\d{1,2}/.test(str)) {
+      str = `${str.replace(/,\s*$/, "")}, 2026`;
+    }
+    // Check Excel serial number e.g. 46311
+    if (/^\d{5}$/.test(str)) {
+      const serial = parseInt(str, 10);
+      const utcDays = serial - 25569;
+      const d = new Date(utcDays * 86400 * 1000);
+      if (!isNaN(d.getTime())) return { date: d, hasTypo };
+    }
+    const attempt = new Date(str);
+    if (!isNaN(attempt.getTime())) {
+      // Normalize to Noon UTC so every timezone (UTC and Asia/Manila UTC+8) resolves to the exact calendar day
+      const normalized = new Date(Date.UTC(attempt.getFullYear(), attempt.getMonth(), attempt.getDate(), 12, 0, 0));
+      return { date: normalized, hasTypo };
+    }
+    return { date: fallbackDate, hasTypo };
+  }
+
+  for (const sheetName of bookingSheetsOrder) {
+    const ws = wb.Sheets[sheetName];
+    const data = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: "", raw: false });
+
+    // Find header row (usually row 2)
+    let headerIdx = 1;
+    for (let i = 0; i < Math.min(5, data.length); i++) {
+      const rowText = (data[i] || []).join(" ").toLowerCase();
+      if (rowText.includes("mall") || rowText.includes("booking date")) {
+        headerIdx = i;
+        break;
+      }
+    }
+
+    const isConfirmedSheet = sheetName.toLowerCase().includes("confirmed");
+    let lastValidDate: Date | null = null;
+    let lastCompany = "";
+    let lastMall = "";
+    let lastTalent = "";
+    let lastPackageDesc = "";
+
+    for (let r = headerIdx + 1; r < data.length; r++) {
+      const row = data[r];
+      if (!row || !row.some((c) => c !== "")) {
+        skippedRows++;
+        continue;
+      }
+
+      const rawCell0 = String(row[0] || "").trim();
+      const rawCell1 = String(row[1] || "").trim();
+      const rawCell2 = String(row[2] || "").trim();
+
+      if (isConfirmedSheet) {
+        if (rawCell0) lastCompany = rawCell0;
+        if (rawCell1) {
+          lastMall = rawCell1;
+          lastTalent = String(row[3] || row[15] || "").trim();
+          lastPackageDesc = String(row[5] || "").trim();
+        }
+      }
+
+      const companyRaw = isConfirmedSheet ? (rawCell0 || lastCompany) : rawCell0;
+      const mallRaw = isConfirmedSheet ? (rawCell1 || lastMall) : rawCell2;
+      const dateRaw = isConfirmedSheet ? row[2] : row[1];
+      const statusColRaw = isConfirmedSheet ? String(row[8] || "Confirmed") : String(row[3] || "Confirmed");
+      const talentRaw = isConfirmedSheet
+        ? String(row[3] || row[15] || lastTalent || "").trim()
+        : String(row[4] || row[16] || "").trim();
+      const totalAmountRaw = row[5];
+      const dpRaw = row[6];
+      const dpDateRaw = row[7];
+      const dpStatusRaw = row[8];
+      const clientNotesRaw = row[10];
+      const collectiblesRaw = row[11];
+      const dateSettledRaw = row[12];
+      const collectibleStatusRaw = row[13];
+      const tfRaw = isConfirmedSheet ? (row[16] || row[4]) : (row[17] || row[16]);
+      const tfNotesRaw = isConfirmedSheet ? row[21] : row[18];
+      const profitRaw = isConfirmedSheet ? row[20] : row[22];
+      const contractRaw = isConfirmedSheet ? row[22] : row[23];
+
+      // Update lastValidDate whenever a date cell is present
+      const { date: parsedCandidate, hasTypo: hasDateTypo } = parseFlexibleExcelDate(dateRaw, lastValidDate);
+      if (parsedCandidate) {
+        lastValidDate = parsedCandidate;
+      }
+
+      // Skip empty day-spacer rows or summary rows that have no Mall/Venue
+      if (!mallRaw || mallRaw.toLowerCase() === "none") {
+        skippedRows++;
+        continue;
+      }
+
+      if (!lastValidDate) {
+        skippedRows++;
+        continue;
+      }
+
+      const parsedDate = lastValidDate;
+
+      if (hasDateTypo) {
+        await prisma.dataConflict.create({
+          data: {
+            batchId: batch.id,
+            category: "DATE_TYPO",
+            sourceCoordinates: `${sheetName}!C${r + 1}`,
+            rawText: String(dateRaw),
+            description: `Date typo '20206' detected in row ${r + 1}. Normalized to 2026 for scheduling while preserving raw value.`,
+            suggestedResolution: "Normalized to 2026",
+            status: "PENDING_REVIEW",
+          },
+        });
+        createdConflicts++;
+      }
+
+      // Money parsing
+      const parseMoney = (val: any): number => {
+        if (typeof val === "number") return val;
+        if (typeof val === "string") {
+          const clean = val.replace(/[^\d.-]/g, "");
+          const n = parseFloat(clean);
+          return isNaN(n) ? 0 : n;
+        }
+        return 0;
+      };
+
+      let totalVal = parseMoney(totalAmountRaw);
+      let dpVal = parseMoney(dpRaw);
+      let collectiblesVal = parseMoney(collectiblesRaw);
+      let tfVal = parseMoney(tfRaw);
+      let profitVal = parseMoney(profitRaw);
+
+      if (totalVal === 0 && collectiblesVal > 0) {
+        totalVal = collectiblesVal + dpVal;
+      }
+      if (totalVal === 0) {
+        totalVal = 18000;
+      }
+      if (String(dpRaw).toLowerCase().includes("full") || String(dpStatusRaw).toLowerCase() === "paid") {
+        if (dpVal === 0 && collectiblesVal === 0) dpVal = totalVal;
+      }
+
+      // Find or create Client
+      const companyName = String(companyRaw || "SM Supermalls / Direct").trim();
+      let client = await prisma.client.findFirst({
+        where: { companyName },
+      });
+      if (!client) {
+        client = await prisma.client.create({
+          data: {
+            companyName,
+            primaryContact: "Authorized Event Coordinator",
+            email: "events@client.local",
+            phone: "N/A",
+            clientType: companyName.toLowerCase().includes("sm") ? "MALL" : "CORPORATE",
+          },
+        });
+      }
+
+      const venueName = String(mallRaw).trim();
+
+      // Build structured description & operational notes
+      const noteParts: string[] = [];
+      if (isConfirmedSheet && lastPackageDesc) noteParts.push(`Package: ${lastPackageDesc}`);
+      if (clientNotesRaw) noteParts.push(`Client Note: ${String(clientNotesRaw).trim()}`);
+      if (tfNotesRaw) noteParts.push(`TF/Allowance: ${String(tfNotesRaw).trim()}`);
+      if (collectibleStatusRaw) noteParts.push(`Collectibles Status: ${String(collectibleStatusRaw).trim()}`);
+      if (dpDateRaw) noteParts.push(`DP Note: ${String(dpDateRaw).trim()}`);
+      if (profitVal !== 0) noteParts.push(`Net Profit: ₱${profitVal.toLocaleString()}`);
+      if (contractRaw) noteParts.push(`Contract Ref: ${String(contractRaw).trim()}`);
+      const combinedNotes = noteParts.join(" • ") || `Confirmed deployment at ${venueName}`;
+
+      // If Confirmed Booking sheet, check if this exact Date + Venue already exists from the Monthly sheet to avoid duplicates
+      if (isConfirmedSheet) {
+        const startOfDay = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate(), 0, 0, 0);
+        const endOfDay = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate(), 23, 59, 59);
+        const existingSameDay = await prisma.booking.findMany({
+          where: {
+            eventDate: { gte: startOfDay, lte: endOfDay },
+          },
+        });
+        const normVenue = venueName.toLowerCase().replace(/[^a-z0-9]/g, "");
+        const duplicate = existingSameDay.find((b) => {
+          const bNorm = b.mallOrVenue.toLowerCase().replace(/[^a-z0-9]/g, "");
+          return bNorm.includes(normVenue) || normVenue.includes(bNorm);
+        });
+        if (duplicate) {
+          // Enrich the existing monthly booking with package/financial details if needed
+          await prisma.booking.update({
+            where: { id: duplicate.id },
+            data: {
+              totalContractAmount: totalVal > 18000 ? totalVal : duplicate.totalContractAmount,
+              depositPaid: dpVal > 0 ? dpVal : duplicate.depositPaid,
+              internalNotes: duplicate.internalNotes
+                ? `${duplicate.internalNotes} | ${combinedNotes}`
+                : combinedNotes,
+            },
+          });
+          continue;
+        }
+      }
+
+      const bookingNum = `BR-2026-${sheetName.substring(0, 3).toUpperCase()}-${String(r + 1).padStart(2, "0")}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+      const secureTok = `tok_${Math.random().toString(36).substring(2, 12)}`;
+      const matchedTalent = resolveTalent(String(talentRaw));
+      const effectiveTf = tfVal > 0 ? tfVal : Number(matchedTalent?.baseTalentFee || 12000);
+      const effectiveProfit = profitVal !== 0 ? profitVal : Math.max(0, totalVal - effectiveTf);
+
+      const bookingStatus =
+        matchedTalent
+          ? "READY_FOR_DEPLOYMENT"
+          : dpVal > 0 || statusColRaw.toLowerCase().includes("confirm")
+          ? "SECURED_UNASSIGNED"
+          : "AWAITING_STAFF_APPROVAL";
+
+      const booking = await prisma.booking.create({
+        data: {
+          bookingNumber: bookingNum,
+          secureToken: secureTok,
+          clientId: client.id,
+          bookingType: isConfirmedSheet ? "PACKAGE" : "CORPORATE",
+          eventName: `${venueName} — Santa Appearance`,
+          eventDate: parsedDate,
+          startTime: "14:00",
+          endTime: "18:00",
+          callTime: "13:00",
+          mallOrVenue: venueName,
+          status: bookingStatus,
+          pipelineStage: matchedTalent ? 3 : 2,
+          totalContractAmount: totalVal,
+          depositRequired: dpVal > 0 ? dpVal : Math.round(totalVal * 0.5),
+          depositPaid: dpVal,
+          balanceDue: collectiblesVal > 0 ? collectiblesVal : Math.max(0, totalVal - dpVal),
+          totalDirectCost: effectiveTf,
+          projectedGrossProfit: effectiveProfit,
+          isHistoricalImport: true,
+          sourceSheet: sheetName,
+          sourceRowIndex: r + 1,
+          internalNotes: combinedNotes,
+          specialRequests: clientNotesRaw ? String(clientNotesRaw).trim() : undefined,
+          venueNotes: tfNotesRaw ? String(tfNotesRaw).trim() : undefined,
+        },
+      });
+
+      // Link Talent Assignment if talent specified
+      if (matchedTalent) {
+        await prisma.talentAssignment.create({
+          data: {
+            bookingId: booking.id,
+            talentId: matchedTalent.id,
+            agreedTalentFee: tfVal > 0 ? tfVal : matchedTalent.baseTalentFee || 12000,
+            callTime: "13:00",
+            status: "CONFIRMED",
+          },
+        });
+      } else if (talentRaw && String(talentRaw).trim() !== "" && !String(talentRaw).toLowerCase().includes("real beard")) {
+        await prisma.dataConflict.create({
+          data: {
+            batchId: batch.id,
+            category: "TALENT_NAME_MISMATCH",
+            sourceCoordinates: `${sheetName}!D${r + 1}`,
+            rawText: String(talentRaw),
+            description: `Unrecognized talent name '${talentRaw}' in booking row. Created booking without auto-assignment.`,
+            suggestedResolution: "Review and map to canonical talent profile",
+            status: "PENDING_REVIEW",
+          },
+        });
+        createdConflicts++;
+      }
+
+      createdBookings++;
+    }
+  }
+
   for (const sheetName of wb.SheetNames) {
     const ws = wb.Sheets[sheetName];
     const data = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: "" });
-
-    if (sheetName.toLowerCase().includes("booking")) {
-      // Find header row (usually row 2)
-      let headerIdx = 1;
-      for (let i = 0; i < Math.min(5, data.length); i++) {
-        const rowText = (data[i] || []).join(" ").toLowerCase();
-        if (rowText.includes("mall") || rowText.includes("booking date")) {
-          headerIdx = i;
-          break;
-        }
-      }
-
-      for (let r = headerIdx + 1; r < data.length; r++) {
-        const row = data[r];
-        if (!row || !row.some((c) => c !== "")) {
-          skippedRows++;
-          continue;
-        }
-
-        // Check date and venue
-        // For Confirmed Booking: [0]=Company, [1]=Mall, [2]=Date, [3]=Talents, [4]=Rates, [5]=Total, [6]=DP, [7]=DP Date...
-        // For Monthly sheets: [0]=Agency, [1]=Booking Date, [2]=Name of Mall, [3]=Status, [4]=Talent, [5]=Total Contract, [6]=DP...
-        const isConfirmedSheet = sheetName.toLowerCase().includes("confirmed");
-        const companyRaw = isConfirmedSheet ? row[0] : row[0];
-        const mallRaw = isConfirmedSheet ? row[1] : row[2];
-        const dateRaw = isConfirmedSheet ? row[2] : row[1];
-        const talentRaw = isConfirmedSheet ? (row[3] || row[15]) : (row[4] || row[16]);
-        const totalAmountRaw = isConfirmedSheet ? row[5] : row[5];
-        const dpRaw = isConfirmedSheet ? row[6] : row[6];
-        const contractRaw = isConfirmedSheet ? row[22] : row[22];
-        const notesRaw = isConfirmedSheet ? row[10] : row[10];
-
-        // If row has no mall and no talent, might be empty day spacer
-        if (!mallRaw && !talentRaw && !totalAmountRaw) {
-          skippedRows++;
-          continue;
-        }
-
-        // Parse date
-        let parsedDate = new Date();
-        let dateString = String(dateRaw || "");
-        let hasDateTypo = false;
-
-        if (dateString.includes("20206")) {
-          hasDateTypo = true;
-          dateString = dateString.replace("20206", "2026");
-        }
-
-        const dateAttempt = new Date(dateString);
-        if (!isNaN(dateAttempt.getTime())) {
-          parsedDate = dateAttempt;
-        }
-
-        if (hasDateTypo) {
-          await prisma.dataConflict.create({
-            data: {
-              batchId: batch.id,
-              category: "DATE_TYPO",
-              sourceCoordinates: `${sheetName}!C${r + 1}`,
-              rawText: String(dateRaw),
-              description: `Date typo '20206' detected in row ${r + 1}. Normalized to 2026 for scheduling while preserving raw value.`,
-              suggestedResolution: "Normalized to 2026",
-              status: "PENDING_REVIEW",
-            },
-          });
-          createdConflicts++;
-        }
-
-        // Money parsing
-        let totalVal = 0;
-        if (typeof totalAmountRaw === "number") totalVal = totalAmountRaw;
-        else if (typeof totalAmountRaw === "string") {
-          const num = parseFloat(totalAmountRaw.replace(/[^\d.-]/g, ""));
-          if (!isNaN(num)) totalVal = num;
-        }
-
-        let dpVal = 0;
-        if (typeof dpRaw === "number") dpVal = dpRaw;
-        else if (typeof dpRaw === "string") {
-          const num = parseFloat(dpRaw.replace(/[^\d.-]/g, ""));
-          if (!isNaN(num)) dpVal = num;
-        }
-
-        // Find or create Client
-        const companyName = String(companyRaw || "Direct Mall / Client").trim();
-        let client = await prisma.client.findFirst({
-          where: { companyName },
-        });
-        if (!client) {
-          client = await prisma.client.create({
-            data: {
-              companyName,
-              primaryContact: "Point Person",
-              email: "events@client.local",
-              phone: "N/A",
-              clientType: companyName.toLowerCase().includes("sm") ? "MALL" : "CORPORATE",
-            },
-          });
-        }
-
-        // Determine venue & mall
-        const venueName = String(mallRaw || "To be confirmed").trim();
-        const bookingNum = `HIST-${sheetName.substring(0, 3).toUpperCase()}-${r + 1}-${Date.now().toString().slice(-4)}`;
-        const secureTok = `tok_${Math.random().toString(36).substring(2, 12)}`;
-
-        const booking = await prisma.booking.create({
-          data: {
-            bookingNumber: bookingNum,
-            secureToken: secureTok,
-            clientId: client.id,
-            bookingType: "CORPORATE",
-            eventName: `${venueName} Santa Appearance`,
-            eventDate: parsedDate,
-            mallOrVenue: venueName,
-            status: dpVal > 0 ? "SECURED_UNASSIGNED" : "AWAITING_STAFF_APPROVAL",
-            pipelineStage: dpVal > 0 ? 2 : 1,
-            totalContractAmount: totalVal,
-            depositRequired: dpVal > 0 ? dpVal : Math.round(totalVal * 0.5),
-            depositPaid: dpVal,
-            balanceDue: Math.max(0, totalVal - dpVal),
-            isHistoricalImport: true,
-            sourceSheet: sheetName,
-            sourceRowIndex: r + 1,
-            internalNotes: notesRaw ? String(notesRaw) : undefined,
-          },
-        });
-
-        // Link Talent Assignment if talent specified
-        const matchedTalent = resolveTalent(String(talentRaw));
-        if (matchedTalent) {
-          await prisma.talentAssignment.create({
-            data: {
-              bookingId: booking.id,
-              talentId: matchedTalent.id,
-              agreedTalentFee: matchedTalent.baseTalentFee || 12000,
-              status: "CONFIRMED",
-            },
-          });
-        } else if (talentRaw && String(talentRaw).trim() !== "") {
-          // Log candidate talent name conflict
-          await prisma.dataConflict.create({
-            data: {
-              batchId: batch.id,
-              category: "TALENT_NAME_MISMATCH",
-              sourceCoordinates: `${sheetName}!D${r + 1}`,
-              rawText: String(talentRaw),
-              description: `Unrecognized talent name '${talentRaw}' in booking row. Created booking without auto-assignment.`,
-              suggestedResolution: "Review and map to canonical talent profile",
-              status: "PENDING_REVIEW",
-            },
-          });
-          createdConflicts++;
-        }
-
-        createdBookings++;
-      }
-    }
 
     // 3. Process Expense sheet
     if (sheetName.toLowerCase().includes("expense")) {

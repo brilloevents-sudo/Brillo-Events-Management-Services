@@ -82,6 +82,13 @@ export async function POST(req: NextRequest) {
       talentId,
       agreedTalentFee,
       quotedAmount,
+      totalContractAmount,
+      depositPaid,
+      balanceDue,
+      status: customStatus,
+      specialRequests,
+      venueNotes,
+      allowConflictOverride = true,
       createHold = false,
       internalNotes,
     } = body;
@@ -93,10 +100,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const parsedEventDate = new Date(eventDate);
+    const rawDate = new Date(eventDate);
+    const parsedEventDate = new Date(
+      Date.UTC(rawDate.getFullYear(), rawDate.getMonth(), rawDate.getDate(), 12, 0, 0)
+    );
 
-    // 1. Concurrency Check if talent selected
-    if (talentId) {
+    // 1. Concurrency Check if talent selected (unless overridden by admin calendar)
+    if (talentId && !allowConflictOverride) {
       const conflict = await checkTalentConflict({
         talentId,
         eventDate: parsedEventDate,
@@ -117,13 +127,13 @@ export async function POST(req: NextRequest) {
 
     // 2. Find or create Client
     let client = await prisma.client.findFirst({
-      where: { email: email || "unknown@client.local" },
+      where: companyName ? { companyName } : { email: email || "unknown@client.local" },
     });
 
     if (!client) {
       client = await prisma.client.create({
         data: {
-          companyName: companyName || "Private Client",
+          companyName: companyName || "Direct Mall / Client",
           primaryContact: primaryContact || "Client Contact",
           email: email || `lead-${Date.now()}@brilloevents.com`,
           phone: phone || "N/A",
@@ -136,20 +146,24 @@ export async function POST(req: NextRequest) {
 
     // 3. Guidance calculation
     const guidance = getTargetGuidance(isProvincial, isHoliday);
-    const finalQuoteAmount = quotedAmount || guidance.targetEstimate;
+    const finalQuoteAmount = Number(totalContractAmount ?? quotedAmount ?? guidance.targetEstimate);
     const finalDeposit = Math.round(finalQuoteAmount * 0.5);
+    const finalDepositPaid = Number(depositPaid ?? 0);
+    const finalBalanceDue =
+      balanceDue !== undefined ? Number(balanceDue) : Math.max(0, finalQuoteAmount - finalDepositPaid);
 
     // 4. Hold expiration if requested
     let holdExpiresAt: Date | null = null;
-    let initialStatus = "INQUIRY_RECEIVED";
+    let initialStatus = customStatus || (talentId ? "READY_FOR_DEPLOYMENT" : "INQUIRY_RECEIVED");
     if (createHold) {
       initialStatus = "TEMPORARY_HOLD";
       holdExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
     }
 
     const bookingCount = await prisma.booking.count();
-    const bookingNumber = `BR-2026-${String(bookingCount + 1).padStart(3, "0")}`;
+    const bookingNumber = `BR-2026-${String(bookingCount + 1).padStart(3, "0")}-${Math.random().toString(36).substring(2, 4).toUpperCase()}`;
     const secureToken = `req_${Math.random().toString(36).substring(2, 12)}`;
+    const effectiveTf = Number(agreedTalentFee || 12000);
 
     const booking = await prisma.booking.create({
       data: {
@@ -170,13 +184,18 @@ export async function POST(req: NextRequest) {
         isProvincial,
         isHoliday,
         status: initialStatus,
-        pipelineStage: 1,
+        pipelineStage: talentId ? 3 : 1,
         holdCreatedAt: createHold ? new Date() : null,
         holdExpiresAt,
         totalContractAmount: finalQuoteAmount,
         depositRequired: finalDeposit,
-        balanceDue: finalQuoteAmount,
+        depositPaid: finalDepositPaid,
+        balanceDue: finalBalanceDue,
+        totalDirectCost: effectiveTf,
+        projectedGrossProfit: Math.max(0, finalQuoteAmount - effectiveTf),
         internalNotes,
+        specialRequests,
+        venueNotes,
       },
     });
 

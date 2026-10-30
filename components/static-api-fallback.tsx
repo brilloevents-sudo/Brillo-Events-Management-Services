@@ -191,16 +191,248 @@ export function StaticApiFallback() {
         });
       }
 
-      // Handle Dual-Gate Booking Signoff in Static Mode
+      // Helper to sync bookings with localStorage in Static Mode
+      const getMergedBookings = (): any[] => {
+        const baseList: any[] = snap.bookings?.bookings || [];
+        if (typeof localStorage === "undefined") return baseList;
+        try {
+          const customRaw = localStorage.getItem("brillo_calendar_custom_bookings_v3");
+          const editsRaw = localStorage.getItem("brillo_calendar_booking_edits_v3");
+          const deletedRaw = localStorage.getItem("brillo_calendar_deleted_ids_v3");
+          const customList: any[] = customRaw ? JSON.parse(customRaw) : [];
+          const editsMap: Record<string, any> = editsRaw ? JSON.parse(editsRaw) : {};
+          const deletedIds: string[] = deletedRaw ? JSON.parse(deletedRaw) : [];
+
+          const combined = [...customList, ...baseList].filter(
+            (b) => !deletedIds.includes(b.id)
+          );
+          // Deduplicate by id
+          const seen = new Set<string>();
+          const result: any[] = [];
+          for (const b of combined) {
+            if (seen.has(b.id)) continue;
+            seen.add(b.id);
+            result.push(editsMap[b.id] ? { ...b, ...editsMap[b.id] } : b);
+          }
+          return result;
+        } catch {
+          return baseList;
+        }
+      };
+
+      // Handle Create New Booking in Static Mode (POST /api/bookings)
+      if (pathname === "/api/bookings" && method === "POST") {
+        const rawDate = parsedBody.eventDate ? new Date(parsedBody.eventDate) : new Date();
+        const isoDate = new Date(
+          Date.UTC(rawDate.getFullYear(), rawDate.getMonth(), rawDate.getDate(), 12, 0, 0)
+        ).toISOString();
+        const allTalents: any[] = snap.talents?.talents || [];
+        const matchedTalent = parsedBody.talentId
+          ? allTalents.find((t) => t.id === parsedBody.talentId)
+          : null;
+        const contractAmt = Number(parsedBody.totalContractAmount ?? parsedBody.quotedAmount ?? 18000);
+        const dpPaid = Number(parsedBody.depositPaid ?? 0);
+        const balDue =
+          parsedBody.balanceDue !== undefined
+            ? Number(parsedBody.balanceDue)
+            : Math.max(0, contractAmt - dpPaid);
+        const tfAmt = Number(parsedBody.agreedTalentFee || matchedTalent?.baseTalentFee || 12000);
+        const newId = `bk_custom_${Date.now()}`;
+        const refNum = `BR-2026-${Math.floor(100 + Math.random() * 900)}`;
+        const tok = `tok_${Date.now()}`;
+
+        const newBooking = {
+          id: newId,
+          bookingNumber: refNum,
+          secureToken: tok,
+          bookingType: parsedBody.bookingType || "CORPORATE",
+          eventName: parsedBody.eventName || `${parsedBody.mallOrVenue || "Venue"} — Santa Appearance`,
+          eventDate: isoDate,
+          startTime: parsedBody.startTime || "14:00",
+          endTime: parsedBody.endTime || "18:00",
+          callTime: parsedBody.callTime || "13:00",
+          mallOrVenue: parsedBody.mallOrVenue || "Corporate Venue",
+          venueAddress: parsedBody.venueAddress || "",
+          status:
+            parsedBody.status ||
+            (matchedTalent ? "READY_FOR_DEPLOYMENT" : "SECURED_UNASSIGNED"),
+          pipelineStage: matchedTalent ? 3 : 2,
+          totalContractAmount: contractAmt,
+          depositRequired: Math.round(contractAmt * 0.5),
+          depositPaid: dpPaid,
+          balanceDue: balDue,
+          totalDirectCost: tfAmt,
+          projectedGrossProfit: Math.max(0, contractAmt - tfAmt),
+          internalNotes: parsedBody.internalNotes || "",
+          specialRequests: parsedBody.specialRequests || "",
+          venueNotes: parsedBody.venueNotes || "",
+          client: {
+            id: `cli_${Date.now()}`,
+            companyName: parsedBody.companyName || "SM Supermalls / Direct",
+            primaryContact: parsedBody.primaryContact || "Authorized Coordinator",
+            email: parsedBody.email || "events@client.local",
+            phone: parsedBody.phone || "N/A",
+          },
+          talentAssignments: matchedTalent
+            ? [
+                {
+                  id: `ta_${Date.now()}`,
+                  bookingId: newId,
+                  talentId: matchedTalent.id,
+                  agreedTalentFee: tfAmt,
+                  status: "CONFIRMED",
+                  talent: matchedTalent,
+                },
+              ]
+            : [],
+          contracts: [],
+          payments: [],
+        };
+
+        if (typeof localStorage !== "undefined") {
+          try {
+            const prev = JSON.parse(
+              localStorage.getItem("brillo_calendar_custom_bookings_v3") || "[]"
+            );
+            localStorage.setItem(
+              "brillo_calendar_custom_bookings_v3",
+              JSON.stringify([newBooking, ...prev])
+            );
+          } catch {}
+        }
+        if (snap.bookings?.bookings) {
+          snap.bookings.bookings.unshift(newBooking);
+        }
+
+        return jsonResponse({
+          success: true,
+          booking: newBooking,
+          bookingId: newBooking.id,
+          bookingNumber: refNum,
+          lookupToken: tok,
+        });
+      }
+
+      // Handle Booking Edit / Dual-Gate Signoff in Static Mode (PATCH /api/bookings/[id])
       if (pathname.startsWith("/api/bookings/") && method === "PATCH") {
-        const id = pathname.split("/").pop();
-        const target = snap.bookings?.bookings?.find(
-          (b: any) => b.id === id || b.bookingNumber === id
-        );
-        if (target && parsedBody.status) {
-          target.status = parsedBody.status;
+        const id = pathname.split("/").pop() || "";
+        const merged = getMergedBookings();
+        const target = merged.find((b: any) => b.id === id || b.bookingNumber === id);
+        if (target) {
+          const allTalents: any[] = snap.talents?.talents || [];
+          const updated: any = { ...target };
+
+          if (parsedBody.status) updated.status = parsedBody.status;
+          if (parsedBody.eventName !== undefined) updated.eventName = parsedBody.eventName;
+          if (parsedBody.mallOrVenue !== undefined) updated.mallOrVenue = parsedBody.mallOrVenue;
+          if (parsedBody.venueAddress !== undefined) updated.venueAddress = parsedBody.venueAddress;
+          if (parsedBody.startTime !== undefined) updated.startTime = parsedBody.startTime;
+          if (parsedBody.endTime !== undefined) updated.endTime = parsedBody.endTime;
+          if (parsedBody.callTime !== undefined) updated.callTime = parsedBody.callTime;
+          if (parsedBody.internalNotes !== undefined) updated.internalNotes = parsedBody.internalNotes;
+          if (parsedBody.specialRequests !== undefined) updated.specialRequests = parsedBody.specialRequests;
+          if (parsedBody.venueNotes !== undefined) updated.venueNotes = parsedBody.venueNotes;
+          if (parsedBody.totalContractAmount !== undefined)
+            updated.totalContractAmount = Number(parsedBody.totalContractAmount);
+          if (parsedBody.depositPaid !== undefined)
+            updated.depositPaid = Number(parsedBody.depositPaid);
+          if (parsedBody.balanceDue !== undefined)
+            updated.balanceDue = Number(parsedBody.balanceDue);
+
+          if (parsedBody.eventDate) {
+            const rd = new Date(parsedBody.eventDate);
+            updated.eventDate = new Date(
+              Date.UTC(rd.getFullYear(), rd.getMonth(), rd.getDate(), 12, 0, 0)
+            ).toISOString();
+          }
+
+          if (parsedBody.companyName) {
+            updated.client = {
+              ...(updated.client || {}),
+              companyName: parsedBody.companyName,
+            };
+          }
+
+          if (parsedBody.talentId !== undefined) {
+            if (!parsedBody.talentId) {
+              updated.talentAssignments = [];
+            } else {
+              const matchedTalent = allTalents.find((t) => t.id === parsedBody.talentId);
+              if (matchedTalent) {
+                const tfAmt = Number(
+                  parsedBody.agreedTalentFee ||
+                    updated.talentAssignments?.[0]?.agreedTalentFee ||
+                    matchedTalent.baseTalentFee ||
+                    12000
+                );
+                updated.talentAssignments = [
+                  {
+                    id: `ta_${Date.now()}`,
+                    bookingId: updated.id,
+                    talentId: matchedTalent.id,
+                    agreedTalentFee: tfAmt,
+                    status: "CONFIRMED",
+                    talent: matchedTalent,
+                  },
+                ];
+              }
+            }
+          } else if (
+            parsedBody.agreedTalentFee !== undefined &&
+            updated.talentAssignments?.[0]
+          ) {
+            updated.talentAssignments = [
+              {
+                ...updated.talentAssignments[0],
+                agreedTalentFee: Number(parsedBody.agreedTalentFee),
+              },
+            ];
+          }
+
+          if (typeof localStorage !== "undefined") {
+            try {
+              const editsMap = JSON.parse(
+                localStorage.getItem("brillo_calendar_booking_edits_v3") || "{}"
+              );
+              editsMap[updated.id] = updated;
+              localStorage.setItem(
+                "brillo_calendar_booking_edits_v3",
+                JSON.stringify(editsMap)
+              );
+            } catch {}
+          }
+
+          const snapIdx = snap.bookings?.bookings?.findIndex((b: any) => b.id === updated.id);
+          if (snapIdx !== undefined && snapIdx >= 0) {
+            snap.bookings.bookings[snapIdx] = updated;
+          }
+
+          return jsonResponse({ success: true, booking: updated });
         }
         return jsonResponse({ success: true, booking: target });
+      }
+
+      // Handle Booking Delete in Static Mode (DELETE /api/bookings/[id])
+      if (pathname.startsWith("/api/bookings/") && method === "DELETE") {
+        const id = pathname.split("/").pop() || "";
+        if (typeof localStorage !== "undefined") {
+          try {
+            const deletedIds: string[] = JSON.parse(
+              localStorage.getItem("brillo_calendar_deleted_ids_v3") || "[]"
+            );
+            if (!deletedIds.includes(id)) {
+              deletedIds.push(id);
+              localStorage.setItem(
+                "brillo_calendar_deleted_ids_v3",
+                JSON.stringify(deletedIds)
+              );
+            }
+          } catch {}
+        }
+        if (snap.bookings?.bookings) {
+          snap.bookings.bookings = snap.bookings.bookings.filter((b: any) => b.id !== id);
+        }
+        return jsonResponse({ success: true });
       }
 
       if (method !== "GET") {
@@ -216,7 +448,7 @@ export function StaticApiFallback() {
       }
 
       if (pathname === "/api/dashboard") {
-        const allB = snap.bookings?.bookings || [];
+        const allB = getMergedBookings();
         return jsonResponse({
           ...snap.dashboard,
           queues: {
@@ -228,12 +460,15 @@ export function StaticApiFallback() {
           immediateActionQueue: allB.slice(0, 8),
         });
       }
-      if (pathname === "/api/bookings") return jsonResponse(snap.bookings);
+      if (pathname === "/api/bookings") {
+        const allB = getMergedBookings();
+        return jsonResponse({ success: true, count: allB.length, bookings: allB });
+      }
       if (pathname.startsWith("/api/bookings/")) {
         const id = pathname.split("/").pop();
+        const allB = getMergedBookings();
         const booking =
-          snap.bookings.bookings.find((b: any) => b.id === id || b.bookingNumber === id) ||
-          snap.bookings.bookings[0];
+          allB.find((b: any) => b.id === id || b.bookingNumber === id) || allB[0];
         return jsonResponse({ success: true, booking, talents: snap.talents.talents });
       }
       if (pathname === "/api/individual-bookings") return jsonResponse(snap.individualBookings);

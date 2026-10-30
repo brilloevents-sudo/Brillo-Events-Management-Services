@@ -79,7 +79,7 @@ export default function AdminLayout({
         </header>
 
         {/* Scrollable Workspace Body */}
-        <main className="flex-1 overflow-y-auto bg-[#F6F3EC]">
+        <main className="admin-workspace flex-1 overflow-y-auto bg-[#F6F3EC]">
           {children}
         </main>
       </div>

@@ -75,24 +75,24 @@ export default function QuotesPage() {
   return (
     <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-[#E8DFE0]">
         <div>
           <div className="flex items-center space-x-2">
-            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-950 text-indigo-300 border border-indigo-800 font-mono">
+            <span className="badge-esign px-2.5 py-0.5 rounded text-[10px] font-mono">
               COSTING ENGINE
             </span>
-            <h1 className="text-2xl font-bold text-white tracking-tight flex items-center">
+            <h1 className="page-title text-2xl tracking-tight flex items-center">
               Quotes &amp; Cost Estimation Builder
             </h1>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="page-subtitle text-xs mt-1">
             Real-time direct cost modeling, gross margin calculation, and quotation generation.
           </p>
         </div>
       </div>
 
       {feedback && (
-        <div className="p-4 rounded-xl bg-emerald-950/80 border border-emerald-800 text-emerald-200 text-xs">
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium">
           {feedback}
         </div>
       )}
@@ -101,9 +101,9 @@ export default function QuotesPage() {
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 text-xs">
         {/* Form Inputs (7 cols) */}
         <form onSubmit={handleCreateQuote} className="md:col-span-7 space-y-4">
-          <div className="p-5 rounded-xl bg-obsidian-900 border border-slate-800 space-y-4">
-            <h2 className="text-sm font-bold text-white flex items-center">
-              <Calculator className="w-4 h-4 mr-2 text-gold-400" />
+          <div className="dashboard-card p-5 space-y-4">
+            <h2 className="text-sm font-bold text-[#1E1416] flex items-center">
+              <Calculator className="w-4 h-4 mr-2 text-[#9B1B30]" />
               Quotation Line Items
             </h2>
 

@@ -72,43 +72,43 @@ export default function ContractsPage() {
   return (
     <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-[#E8DFE0]">
         <div>
           <div className="flex items-center space-x-2">
-            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-950 text-purple-300 border border-purple-800 font-mono">
+            <span className="badge-esign px-2.5 py-0.5 rounded text-[10px] font-mono">
               E-SIGN &amp; ARCHIVE
             </span>
-            <h1 className="text-2xl font-bold text-white tracking-tight flex items-center">
+            <h1 className="page-title text-2xl tracking-tight flex items-center">
               Contracts &amp; Agreement Archive
             </h1>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="page-subtitle text-xs mt-1">
             Framework agreement generation, revisions, and manual signed document archival.
           </p>
         </div>
       </div>
 
       {feedback && (
-        <div className="p-4 rounded-xl bg-emerald-950/80 border border-emerald-800 text-emerald-200 text-xs">
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium">
           {feedback}
         </div>
       )}
 
       {/* Generator & Uploader Card */}
-      <form onSubmit={handleCreateContract} className="p-5 rounded-xl bg-obsidian-900 border border-slate-800 space-y-4 text-xs">
-        <h2 className="text-sm font-bold text-white flex items-center">
-          <FileCheck2 className="w-4 h-4 mr-2 text-gold-400" />
+      <form onSubmit={handleCreateContract} className="dashboard-card p-5 space-y-4 text-xs">
+        <h2 className="text-sm font-bold text-[#1E1416] flex items-center">
+          <FileCheck2 className="w-4 h-4 mr-2 text-[#9B1B30]" />
           Generate Agreement or Archive Signed Document
         </h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="block text-slate-400 mb-1 font-medium">Select Booking *</label>
+            <label className="block mb-1">Select Booking *</label>
             <select
               required
               value={selectedBookingId}
               onChange={(e) => setSelectedBookingId(e.target.value)}
-              className="w-full px-3 py-2 bg-obsidian-950 border border-slate-700 rounded-lg text-white"
+              className="w-full px-3 py-2"
             >
               {bookings.map((b) => (
                 <option key={b.id} value={b.id}>
@@ -119,11 +119,11 @@ export default function ContractsPage() {
           </div>
 
           <div>
-            <label className="block text-slate-400 mb-1 font-medium">Agreement Framework Template *</label>
+            <label className="block mb-1">Agreement Framework Template *</label>
             <select
               value={templateType}
               onChange={(e) => setTemplateType(e.target.value)}
-              className="w-full px-3 py-2 bg-obsidian-950 border border-slate-700 rounded-lg text-white"
+              className="w-full px-3 py-2"
             >
               <option value="WITH_DP">Standard Framework (With 50% Downpayment)</option>
               <option value="NO_DP">Special Framework (No Downpayment Clause)</option>
@@ -132,19 +132,19 @@ export default function ContractsPage() {
           </div>
 
           <div>
-            <label className="block text-slate-400 mb-1 font-medium">Client Signer Name</label>
+            <label className="block mb-1">Client Signer Name</label>
             <input
               type="text"
               placeholder="e.g. Maria Santos (Marketing Director)"
               value={signerName}
               onChange={(e) => setSignerName(e.target.value)}
-              className="w-full px-3 py-2 bg-obsidian-950 border border-slate-700 rounded-lg text-white"
+              className="w-full px-3 py-2"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-slate-400 mb-1 font-medium">
+          <label className="block mb-1">
             Manual Signed Document URL / Fallback Upload Evidence
           </label>
           <input
@@ -152,15 +152,15 @@ export default function ContractsPage() {
             placeholder="e.g. /proofs/signed-sm-pasig-contract.pdf"
             value={signedFileUrl}
             onChange={(e) => setSignedFileUrl(e.target.value)}
-            className="w-full px-3 py-2 bg-obsidian-950 border border-slate-700 rounded-lg text-white font-mono"
+            className="w-full px-3 py-2 font-mono"
           />
         </div>
 
-        <div className="flex justify-end pt-2 border-t border-slate-800">
+        <div className="flex justify-end pt-2 border-t border-[#E8DFE0]">
           <button
             type="submit"
             disabled={generating}
-            className="px-5 py-2.5 rounded-lg bg-crimson-700 hover:bg-crimson-600 text-white font-semibold transition shadow-md disabled:opacity-50"
+            className="btn-primary px-5 py-2.5 rounded-lg font-semibold transition disabled:opacity-50"
           >
             {generating ? "Processing..." : "Generate & Archive Contract"}
           </button>
@@ -168,7 +168,7 @@ export default function ContractsPage() {
       </form>
 
       {/* Contracts Table */}
-      <div className="rounded-xl bg-obsidian-900 border border-slate-800 overflow-hidden shadow-sm">
+      <div className="dashboard-card overflow-hidden">
         <div className="p-4 border-b border-slate-800 text-xs font-mono font-bold text-slate-400">
           Executed &amp; Generated Agreements ({contracts.length})
         </div>

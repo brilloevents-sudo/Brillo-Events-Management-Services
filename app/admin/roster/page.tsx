@@ -161,15 +161,50 @@ export default function UnifiedRosterPage() {
     approvedForPublicDisplay: true,
   });
 
-  // Photo Upload states inside Tab 2 (Photo Gallery)
+  // Photo & Video Upload states inside Tab 2 (Photo & Video Gallery)
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string>("");
   const [photoFileName, setPhotoFileName] = useState<string>("");
+  const [pickedIsVideo, setPickedIsVideo] = useState<boolean>(false);
+  const [videoExternalUrl, setVideoExternalUrl] = useState<string>("");
   const [photoCaption, setPhotoCaption] = useState<string>("");
   const [photoSetPrimary, setPhotoSetPrimary] = useState<boolean>(true);
   const [photoPublicApproved, setPhotoPublicApproved] = useState<boolean>(true);
   const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
   const [editingCaptionText, setEditingCaptionText] = useState<string>("");
+
+  function isVideoMedia(img: any): boolean {
+    if (!img) return false;
+    const url = String(img.publicUrl || img.originalPath || "");
+    const fName = String(img.fileName || "");
+    return (
+      img.mediaType === "VIDEO" ||
+      url.startsWith("data:video/") ||
+      /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url) ||
+      /\.(mp4|webm|mov|m4v)$/i.test(fName) ||
+      /youtube\.com|youtu\.be|vimeo\.com|drive\.google\.com/i.test(url)
+    );
+  }
+
+  function toEmbedVideoUrl(url: string): string | null {
+    if (!url) return null;
+    const ytMatch = url.match(
+      /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/
+    );
+    if (ytMatch) {
+      return `https://www.youtube.com/embed/${ytMatch[1]}`;
+    }
+    const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+    if (vimeoMatch) {
+      return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+    }
+    const driveMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+    if (driveMatch) {
+      return `https://drive.google.com/file/d/${driveMatch[1]}/preview`;
+    }
+    return null;
+  }
 
   function loadRoster() {
     setLoading(true);
@@ -302,8 +337,13 @@ export default function UnifiedRosterPage() {
   function handleFilePicked(file: File | undefined) {
     if (!file) return;
     setPhotoFileName(file.name);
-    if (!photoCaption && selectedTalent) {
-      setPhotoCaption(`Santa ${selectedTalent.displayName} Portrait`);
+    const isVid = file.type.startsWith("video/") || /\.(mp4|webm|mov|m4v)$/i.test(file.name);
+    setPickedIsVideo(isVid);
+    setVideoExternalUrl("");
+    if (selectedTalent) {
+      setPhotoCaption(
+        `Santa ${selectedTalent.displayName} ${isVid ? "Performance Video Clip" : "Portrait"}`
+      );
     }
     const reader = new FileReader();
     reader.onload = () => {
@@ -316,38 +356,52 @@ export default function UnifiedRosterPage() {
 
   async function handleUploadPhotoSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedTalent?.id || !photoPreviewUrl) return;
+    const hasFile = Boolean(photoPreviewUrl);
+    const hasLink = Boolean(videoExternalUrl.trim());
+    if (!selectedTalent?.id || (!hasFile && !hasLink)) return;
     setSaving(true);
     setFeedback(null);
+    const isVid = pickedIsVideo || hasLink;
     try {
       const res = await fetch(`/api/talents/${selectedTalent.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "ADD_PHOTO",
-          fileName: photoFileName || `santa_${selectedTalent.displayName}.jpg`,
-          fileDataUrl: photoPreviewUrl,
-          caption: photoCaption || `Santa ${selectedTalent.displayName} Portrait`,
-          setAsPrimary: photoSetPrimary,
+          fileName:
+            photoFileName ||
+            (isVid
+              ? `santa_${selectedTalent.displayName}_video.mp4`
+              : `santa_${selectedTalent.displayName}.jpg`),
+          fileDataUrl: hasFile ? photoPreviewUrl : undefined,
+          publicUrl: hasLink ? videoExternalUrl.trim() : undefined,
+          caption:
+            photoCaption ||
+            `Santa ${selectedTalent.displayName} ${isVid ? "Video Clip" : "Portrait"}`,
+          setAsPrimary: isVid ? false : photoSetPrimary,
           approvedForClient: photoPublicApproved,
         }),
       });
       const data = await res.json();
       if (!res.ok || data.success === false) {
-        throw new Error(data.error || "Failed to upload photo");
+        throw new Error(data.error || "Failed to upload media");
       }
       if (data.talent) {
         setSelectedTalent(data.talent);
       }
       setPhotoPreviewUrl("");
       setPhotoFileName("");
+      setPickedIsVideo(false);
+      setVideoExternalUrl("");
       loadRoster();
       setFeedback({
         type: "success",
-        text: "New portrait photo uploaded to Tab 2: Photo Gallery!",
+        text: isVid
+          ? "New video uploaded and saved to Tab 2: Photo & Video Gallery!"
+          : "New portrait photo uploaded to Tab 2: Photo & Video Gallery!",
       });
     } catch (err: any) {
-      setFeedback({ type: "error", text: err.message || "Could not upload photo" });
+      setFeedback({ type: "error", text: err.message || "Could not upload media" });
     } finally {
       setSaving(false);
     }
@@ -425,7 +479,7 @@ export default function UnifiedRosterPage() {
 
   const dossierTabs: { id: DossierTabId; label: string }[] = [
     { id: "profile", label: "1. Profile & Bio" },
-    { id: "gallery", label: `2. Photo Gallery (${selectedTalent?.images?.length || 0})` },
+    { id: "gallery", label: `2. Photo & Video Gallery (${selectedTalent?.images?.length || 0})` },
     { id: "bookings", label: `3. Booking History (${selectedTalentBookings.length})` },
     { id: "availability", label: "4. Availability" },
     { id: "rates", label: "5. Rates & Costing" },
@@ -776,21 +830,35 @@ export default function UnifiedRosterPage() {
                 </button>
 
                 {!isNewTalent && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDossierTab("gallery");
-                      setTimeout(() => fileInputRef.current?.click(), 120);
-                    }}
-                    className={`px-3 py-2 rounded-lg text-xs font-bold border flex items-center gap-1.5 transition ${
-                      dossierTab === "gallery"
-                        ? "bg-[#F9EBED] text-[#9B1B30] border-[#9B1B30]"
-                        : "bg-white text-[#3D2C2E] border-[#D6C7C9] hover:bg-[#FAF7F5]"
-                    }`}
-                  >
-                    <Camera className="w-3.5 h-3.5 text-[#9B1B30]" />
-                    <span>+ Upload Photo</span>
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDossierTab("gallery");
+                        setTimeout(() => fileInputRef.current?.click(), 120);
+                      }}
+                      className={`px-3 py-2 rounded-lg text-xs font-bold border flex items-center gap-1.5 transition ${
+                        dossierTab === "gallery"
+                          ? "bg-[#F9EBED] text-[#9B1B30] border-[#9B1B30]"
+                          : "bg-white text-[#3D2C2E] border-[#D6C7C9] hover:bg-[#FAF7F5]"
+                      }`}
+                    >
+                      <Camera className="w-3.5 h-3.5 text-[#9B1B30]" />
+                      <span>+ Upload Photo</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDossierTab("gallery");
+                        setTimeout(() => videoInputRef.current?.click(), 120);
+                      }}
+                      className="px-3 py-2 rounded-lg text-xs font-bold border border-[#D6C7C9] bg-white text-[#3D2C2E] hover:border-[#9B1B30] hover:text-[#9B1B30] flex items-center gap-1.5 transition"
+                    >
+                      <Upload className="w-3.5 h-3.5 text-[#9B1B30]" />
+                      <span>🎬 + Upload Video</span>
+                    </button>
+                  </>
                 )}
 
                 <button
@@ -1060,7 +1128,7 @@ export default function UnifiedRosterPage() {
               )}
 
               {/* ===============================================================
-                  TAB 2: 2. PHOTO GALLERY (UPLOAD, SET PRIMARY, CAPTION, DELETE)
+                  TAB 2: 2. PHOTO & VIDEO GALLERY (UPLOAD PHOTOS/VIDEOS, SET PRIMARY, CAPTION, DELETE)
                  =============================================================== */}
               {dossierTab === "gallery" && (
                 <div className="space-y-5">
@@ -1075,23 +1143,39 @@ export default function UnifiedRosterPage() {
                         e.preventDefault();
                         handleFilePicked(e.dataTransfer.files?.[0]);
                       }}
-                      className="border-2 border-dashed border-[#D6C7C9] hover:border-[#9B1B30] rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer bg-white transition min-h-[150px]"
+                      className="border-2 border-dashed border-[#D6C7C9] hover:border-[#9B1B30] rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer bg-white transition min-h-[165px]"
                     >
                       <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/*"
+                        accept="image/*,video/*"
+                        onChange={(e) => handleFilePicked(e.target.files?.[0])}
+                        className="hidden"
+                      />
+                      <input
+                        ref={videoInputRef}
+                        type="file"
+                        accept="video/*"
                         onChange={(e) => handleFilePicked(e.target.files?.[0])}
                         className="hidden"
                       />
                       {photoPreviewUrl ? (
-                        <div className="space-y-1.5">
-                          <img
-                            src={photoPreviewUrl}
-                            alt="Upload Preview"
-                            className="h-32 w-32 object-cover rounded-lg mx-auto border border-[#D6C7C9]"
-                          />
+                        <div className="space-y-1.5 w-full">
+                          {pickedIsVideo ? (
+                            <video
+                              src={photoPreviewUrl}
+                              controls
+                              className="h-32 w-full max-w-[220px] object-cover rounded-lg mx-auto border border-[#D6C7C9] bg-black"
+                            />
+                          ) : (
+                            <img
+                              src={photoPreviewUrl}
+                              alt="Upload Preview"
+                              className="h-32 w-32 object-cover rounded-lg mx-auto border border-[#D6C7C9]"
+                            />
+                          )}
                           <div className="text-[11px] font-mono font-bold text-[#1E7E48]">
+                            {pickedIsVideo ? "🎬 VIDEO READY: " : "📷 PHOTO READY: "}
                             {photoFileName} — Click to replace
                           </div>
                         </div>
@@ -1099,10 +1183,32 @@ export default function UnifiedRosterPage() {
                         <div className="space-y-1.5">
                           <Upload className="w-7 h-7 text-[#9B1B30] mx-auto" />
                           <div className="font-bold text-[#1E1416]">
-                            Choose Photo File or Drag &amp; Drop Here
+                            Choose Photo or Video File (or Drag &amp; Drop Here)
                           </div>
                           <div className="text-[11px] text-[#6E5D5F]">
-                            JPG, PNG, WebP high-res portraits
+                            Photos (JPG, PNG, WebP) &amp; Videos (MP4, WebM, MOV)
+                          </div>
+                          <div className="flex items-center justify-center gap-2 pt-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                fileInputRef.current?.click();
+                              }}
+                              className="px-2.5 py-1 rounded bg-[#F9EBED] text-[#9B1B30] border border-[#F0D0D5] text-[10px] font-bold"
+                            >
+                              📷 Pick Photo
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                videoInputRef.current?.click();
+                              }}
+                              className="px-2.5 py-1 rounded bg-[#9B1B30] text-white text-[10px] font-bold"
+                            >
+                              🎬 Pick Video File
+                            </button>
                           </div>
                         </div>
                       )}
@@ -1110,27 +1216,49 @@ export default function UnifiedRosterPage() {
 
                     <div className="lg:col-span-2 flex flex-col justify-between space-y-3">
                       <div className="space-y-2.5">
-                        <div>
-                          <label className="block font-bold mb-1">
-                            Photo Caption / Portrait Title
-                          </label>
-                          <input
-                            type="text"
-                            value={photoCaption}
-                            onChange={(e) => setPhotoCaption(e.target.value)}
-                            placeholder={`e.g. Santa ${editForm.displayName} Mall Portrait`}
-                            className="w-full px-3 py-2"
-                          />
-                        </div>
-                        <div className="flex flex-wrap items-center gap-5 pt-1">
-                          <label className="flex items-center gap-2 cursor-pointer font-semibold">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block font-bold mb-1">
+                              Photo / Video Caption Title
+                            </label>
                             <input
-                              type="checkbox"
-                              checked={photoSetPrimary}
-                              onChange={(e) => setPhotoSetPrimary(e.target.checked)}
+                              type="text"
+                              value={photoCaption}
+                              onChange={(e) => setPhotoCaption(e.target.value)}
+                              placeholder={`e.g. Santa ${editForm.displayName} Mall Portrait / Video Reel`}
+                              className="w-full px-3 py-2"
                             />
-                            <span>Set as Primary Roster &amp; Funnel Portrait</span>
-                          </label>
+                          </div>
+                          <div>
+                            <label className="block font-bold mb-1">
+                              Or Paste Video Link (MP4 / YouTube / Google Drive / Vimeo)
+                            </label>
+                            <input
+                              type="url"
+                              value={videoExternalUrl}
+                              onChange={(e) => {
+                                setVideoExternalUrl(e.target.value);
+                                if (e.target.value.trim()) {
+                                  setPickedIsVideo(true);
+                                }
+                              }}
+                              placeholder="https://... (optional if uploading a video file)"
+                              className="w-full px-3 py-2 font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-5 pt-1">
+                          {!pickedIsVideo && !videoExternalUrl.trim() && (
+                            <label className="flex items-center gap-2 cursor-pointer font-semibold">
+                              <input
+                                type="checkbox"
+                                checked={photoSetPrimary}
+                                onChange={(e) => setPhotoSetPrimary(e.target.checked)}
+                              />
+                              <span>Set as Primary Roster &amp; Funnel Portrait</span>
+                            </label>
+                          )}
                           <label className="flex items-center gap-2 cursor-pointer font-semibold">
                             <input
                               type="checkbox"
@@ -1143,111 +1271,160 @@ export default function UnifiedRosterPage() {
                       </div>
 
                       <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E8DFE0]">
+                        {(photoPreviewUrl || videoExternalUrl.trim()) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPhotoPreviewUrl("");
+                              setPhotoFileName("");
+                              setPickedIsVideo(false);
+                              setVideoExternalUrl("");
+                            }}
+                            className="px-3 py-2 rounded-lg border border-[#D6C7C9] bg-white text-[#3D2C2E] font-semibold"
+                          >
+                            Clear
+                          </button>
+                        )}
                         <button
                           type="submit"
-                          disabled={!photoPreviewUrl || saving}
+                          disabled={(!photoPreviewUrl && !videoExternalUrl.trim()) || saving}
                           className="btn-primary px-5 py-2 rounded-lg font-bold flex items-center gap-1.5 disabled:opacity-50"
                         >
                           <Upload className="w-3.5 h-3.5" />
-                          <span>{saving ? "Uploading..." : "Upload & Save to Gallery"}</span>
+                          <span>
+                            {saving
+                              ? "Uploading..."
+                              : pickedIsVideo || videoExternalUrl.trim()
+                              ? "🎬 Upload & Save Video to Gallery"
+                              : "📷 Upload & Save Photo to Gallery"}
+                          </span>
                         </button>
                       </div>
                     </div>
                   </form>
 
-                  {/* Existing Photos Grid */}
+                  {/* Existing Photos & Videos Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {(selectedTalent?.images || []).map((img: any) => (
-                      <div
-                        key={img.id}
-                        className={`rounded-xl overflow-hidden border flex flex-col justify-between bg-white ${
-                          img.isPrimary ? "border-2 border-[#C68A12]" : "border-[#E8DFE0]"
-                        }`}
-                      >
-                        <div>
-                          <div className="relative h-48 overflow-hidden bg-[#FAF7F5]">
-                            <img
-                              src={img.publicUrl}
-                              alt={img.caption || editForm.displayName}
-                              className="w-full h-full object-cover object-top"
-                            />
-                            {img.isPrimary ? (
-                              <span className="absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#C68A12] text-white flex items-center gap-1">
-                                <Star className="w-3 h-3 fill-white" />
-                                <span>Primary Portrait</span>
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleSetPrimaryPhoto(img.id)}
-                                className="absolute top-2 left-2 px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/95 hover:bg-[#9B1B30] text-[#1E1416] hover:text-white border border-[#D6C7C9] transition"
-                              >
-                                ★ Set Primary
-                              </button>
-                            )}
-                          </div>
+                    {(selectedTalent?.images || []).map((img: any) => {
+                      const isVid = isVideoMedia(img);
+                      const embedUrl = isVid ? toEmbedVideoUrl(img.publicUrl) : null;
 
-                          <div className="p-2.5">
-                            {editingPhotoId === img.id ? (
-                              <div className="space-y-1.5">
-                                <input
-                                  type="text"
-                                  value={editingCaptionText}
-                                  onChange={(e) => setEditingCaptionText(e.target.value)}
-                                  className="w-full px-2 py-1 text-xs"
+                      return (
+                        <div
+                          key={img.id}
+                          className={`rounded-xl overflow-hidden border flex flex-col justify-between bg-white ${
+                            img.isPrimary ? "border-2 border-[#C68A12]" : "border-[#E8DFE0]"
+                          }`}
+                        >
+                          <div>
+                            <div className="relative h-48 overflow-hidden bg-[#FAF7F5]">
+                              {isVid ? (
+                                embedUrl ? (
+                                  <iframe
+                                    src={embedUrl}
+                                    title={img.caption || "Santa Video"}
+                                    className="w-full h-full border-0 bg-black"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                  />
+                                ) : (
+                                  <video
+                                    src={img.publicUrl}
+                                    controls
+                                    preload="metadata"
+                                    className="w-full h-full object-cover bg-black"
+                                  />
+                                )
+                              ) : (
+                                <img
+                                  src={img.publicUrl}
+                                  alt={img.caption || editForm.displayName}
+                                  className="w-full h-full object-cover object-top"
                                 />
-                                <div className="flex items-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSavePhotoCaption(img.id)}
-                                    className="btn-primary px-2 py-0.5 rounded text-[10px] font-bold"
-                                  >
-                                    Save
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingPhotoId(null)}
-                                    className="px-2 py-0.5 rounded border border-[#D6C7C9] text-[10px]"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-between gap-1">
-                                <span className="font-semibold text-[#1E1416] truncate">
-                                  {img.caption || img.fileName}
+                              )}
+
+                              {isVid ? (
+                                <span className="absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#9B1B30] text-white flex items-center gap-1 shadow-xs pointer-events-none">
+                                  <span>🎬 Video Clip</span>
                                 </span>
+                              ) : img.isPrimary ? (
+                                <span className="absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#C68A12] text-white flex items-center gap-1">
+                                  <Star className="w-3 h-3 fill-white" />
+                                  <span>Primary Portrait</span>
+                                </span>
+                              ) : (
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setEditingPhotoId(img.id);
-                                    setEditingCaptionText(img.caption || img.fileName || "");
-                                  }}
-                                  className="text-[#9B1B30] hover:underline text-[10px] font-bold shrink-0"
+                                  onClick={() => handleSetPrimaryPhoto(img.id)}
+                                  className="absolute top-2 left-2 px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/95 hover:bg-[#9B1B30] text-[#1E1416] hover:text-white border border-[#D6C7C9] transition"
                                 >
-                                  Edit
+                                  ★ Set Primary
                                 </button>
-                              </div>
-                            )}
+                              )}
+                            </div>
+
+                            <div className="p-2.5">
+                              {editingPhotoId === img.id ? (
+                                <div className="space-y-1.5">
+                                  <input
+                                    type="text"
+                                    value={editingCaptionText}
+                                    onChange={(e) => setEditingCaptionText(e.target.value)}
+                                    className="w-full px-2 py-1 text-xs"
+                                  />
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSavePhotoCaption(img.id)}
+                                      className="btn-primary px-2 py-0.5 rounded text-[10px] font-bold"
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingPhotoId(null)}
+                                      className="px-2 py-0.5 rounded border border-[#D6C7C9] text-[10px]"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-between gap-1">
+                                  <span className="font-semibold text-[#1E1416] truncate">
+                                    {img.caption || img.fileName}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingPhotoId(img.id);
+                                      setEditingCaptionText(img.caption || img.fileName || "");
+                                    }}
+                                    className="text-[#9B1B30] hover:underline text-[10px] font-bold shrink-0"
+                                  >
+                                    Edit
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="px-2.5 py-1.5 border-t border-[#E8DFE0] bg-[#FAF7F5] flex items-center justify-between text-[10px]">
+                            <span className="font-mono text-[#6E5D5F] truncate max-w-[120px]">
+                              {img.fileName}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePhoto(img.id)}
+                              className="text-[#B91C1C] hover:underline font-bold flex items-center gap-0.5"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Delete</span>
+                            </button>
                           </div>
                         </div>
-
-                        <div className="px-2.5 py-1.5 border-t border-[#E8DFE0] bg-[#FAF7F5] flex items-center justify-between text-[10px]">
-                          <span className="font-mono text-[#6E5D5F] truncate max-w-[120px]">
-                            {img.fileName}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleDeletePhoto(img.id)}
-                            className="text-[#B91C1C] hover:underline font-bold flex items-center gap-0.5"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                            <span>Delete</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

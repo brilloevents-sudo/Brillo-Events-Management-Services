@@ -111,19 +111,23 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: "Talent not found" }, { status: 404 });
     }
 
-    // 1. Handle Photo Gallery Actions
-    if (action === "ADD_PHOTO") {
+    // 1. Handle Photo & Video Gallery Actions
+    if (action === "ADD_PHOTO" || action === "ADD_MEDIA") {
       let resolvedUrl = customPublicUrl || "";
       const safeName = (fileName || `santa_${existing.displayName}_${Date.now()}.jpg`).replace(
         /[^a-zA-Z0-9._-]/g,
         "_"
       );
 
-      if (fileDataUrl && typeof fileDataUrl === "string" && fileDataUrl.startsWith("data:image/")) {
+      if (
+        fileDataUrl &&
+        typeof fileDataUrl === "string" &&
+        (fileDataUrl.startsWith("data:image/") || fileDataUrl.startsWith("data:video/"))
+      ) {
         try {
-          const matches = fileDataUrl.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+          const matches = fileDataUrl.match(/^data:(image|video)\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
           if (matches) {
-            const buffer = Buffer.from(matches[2], "base64");
+            const buffer = Buffer.from(matches[3], "base64");
             const uploadDir = path.join(process.cwd(), "public", "talents", "uploads");
             fs.mkdirSync(uploadDir, { recursive: true });
             const uniqueFile = `${Date.now()}_${safeName}`;
@@ -139,12 +143,23 @@ export async function PATCH(
 
       if (!resolvedUrl) {
         return NextResponse.json(
-          { success: false, error: "Please select an image file or provide a valid photo URL." },
+          {
+            success: false,
+            error: "Please select a photo/video file or provide a valid video URL.",
+          },
           { status: 400 }
         );
       }
 
-      const shouldBePrimary = Boolean(setAsPrimary || existing.images.length === 0);
+      const isVideoItem =
+        (fileDataUrl && fileDataUrl.startsWith("data:video/")) ||
+        /\.(mp4|webm|mov|m4v)(\?|$)/i.test(resolvedUrl) ||
+        /\.(mp4|webm|mov|m4v)$/i.test(safeName) ||
+        /youtube\.com|youtu\.be|vimeo\.com|drive\.google\.com/i.test(resolvedUrl);
+
+      const shouldBePrimary = Boolean(
+        !isVideoItem && (setAsPrimary || existing.images.length === 0)
+      );
       if (shouldBePrimary) {
         await prisma.talentImage.updateMany({
           where: { talentId: existing.id },

@@ -521,20 +521,33 @@ export function StaticApiFallback() {
           const updated = { ...target, images: [...(target.images || [])] };
           const action = parsedBody.action;
 
-          if (action === "ADD_PHOTO") {
+          if (action === "ADD_PHOTO" || action === "ADD_MEDIA") {
             const url = parsedBody.fileDataUrl || parsedBody.publicUrl || "";
-            const shouldBePrimary = Boolean(parsedBody.setAsPrimary || updated.images.length === 0);
+            const isVideoItem =
+              (url && url.startsWith("data:video/")) ||
+              /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url) ||
+              /\.(mp4|webm|mov|m4v)$/i.test(parsedBody.fileName || "") ||
+              /youtube\.com|youtu\.be|vimeo\.com|drive\.google\.com/i.test(url);
+
+            const shouldBePrimary = Boolean(
+              !isVideoItem && (parsedBody.setAsPrimary || updated.images.length === 0)
+            );
             if (shouldBePrimary) {
               updated.images = updated.images.map((img: any) => ({ ...img, isPrimary: false }));
             }
             const newImg = {
               id: `img_${Date.now()}`,
               talentId: updated.id,
-              fileName: parsedBody.fileName || `santa_${updated.displayName}.jpg`,
+              fileName:
+                parsedBody.fileName ||
+                (isVideoItem ? `santa_${updated.displayName}.mp4` : `santa_${updated.displayName}.jpg`),
               publicUrl: url,
               originalPath: url,
               isPrimary: shouldBePrimary,
-              caption: parsedBody.caption || `Santa ${updated.displayName} Portrait`,
+              mediaType: isVideoItem ? "VIDEO" : "IMAGE",
+              caption:
+                parsedBody.caption ||
+                `Santa ${updated.displayName} ${isVideoItem ? "Video Clip" : "Portrait"}`,
               approvedForClient:
                 parsedBody.approvedForClient !== undefined
                   ? Boolean(parsedBody.approvedForClient)

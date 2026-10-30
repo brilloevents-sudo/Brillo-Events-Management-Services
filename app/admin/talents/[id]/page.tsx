@@ -54,18 +54,47 @@ export default function TalentDetailPage() {
   const [bio, setBio] = useState("");
   const [approvedForPublicDisplay, setApprovedForPublicDisplay] = useState(false);
 
-  // Photo Upload states in Tab 2 (Photo Gallery)
+  // Photo & Video Upload states in Tab 2 (Photo & Video Gallery)
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string>("");
   const [uploadFileName, setUploadFileName] = useState<string>("");
+  const [uploadIsVideo, setUploadIsVideo] = useState<boolean>(false);
+  const [uploadExternalVideoUrl, setUploadExternalVideoUrl] = useState<string>("");
   const [uploadCaption, setUploadCaption] = useState<string>("");
   const [uploadSetPrimary, setUploadSetPrimary] = useState<boolean>(true);
   const [uploadPublicApproved, setUploadPublicApproved] = useState<boolean>(true);
   const [uploadingPhoto, setUploadingPhoto] = useState<boolean>(false);
 
-  // Inline Caption Editor for existing gallery photos
+  // Inline Caption Editor for existing gallery photos/videos
   const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
   const [editingCaptionText, setEditingCaptionText] = useState<string>("");
+
+  function isVideoMedia(img: any): boolean {
+    if (!img) return false;
+    const url = String(img.publicUrl || img.originalPath || "");
+    const fName = String(img.fileName || "");
+    return (
+      img.mediaType === "VIDEO" ||
+      url.startsWith("data:video/") ||
+      /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url) ||
+      /\.(mp4|webm|mov|m4v)$/i.test(fName) ||
+      /youtube\.com|youtu\.be|vimeo\.com|drive\.google\.com/i.test(url)
+    );
+  }
+
+  function toEmbedVideoUrl(url: string): string | null {
+    if (!url) return null;
+    const ytMatch = url.match(
+      /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/
+    );
+    if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`;
+    const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+    if (vimeoMatch) return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+    const driveMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+    if (driveMatch) return `https://drive.google.com/file/d/${driveMatch[1]}/preview`;
+    return null;
+  }
 
   function populateFormFromTalent(t: any) {
     setTalent(t);
@@ -144,13 +173,16 @@ export default function TalentDetailPage() {
     }
   }
 
-  // Handle File Selection / Drag-and-Drop for Photo Upload
+  // Handle File Selection / Drag-and-Drop for Photo or Video Upload
   function handleFileSelected(file: File | undefined) {
     if (!file) return;
     setUploadFileName(file.name);
-    if (!uploadCaption) {
-      setUploadCaption(`Santa ${displayName || talent?.displayName} Portrait`);
-    }
+    const isVid = file.type.startsWith("video/") || /\.(mp4|webm|mov|m4v)$/i.test(file.name);
+    setUploadIsVideo(isVid);
+    setUploadExternalVideoUrl("");
+    setUploadCaption(
+      `Santa ${displayName || talent?.displayName} ${isVid ? "Performance Video Clip" : "Portrait"}`
+    );
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
@@ -160,14 +192,20 @@ export default function TalentDetailPage() {
     reader.readAsDataURL(file);
   }
 
-  // Upload Photo to Gallery
+  // Upload Photo or Video to Gallery
   async function handleUploadPhoto(e: React.FormEvent) {
     e.preventDefault();
-    if (!uploadPreviewUrl) {
-      setFeedback({ type: "error", text: "Please select or drop an image file first." });
+    const hasFile = Boolean(uploadPreviewUrl);
+    const hasLink = Boolean(uploadExternalVideoUrl.trim());
+    if (!hasFile && !hasLink) {
+      setFeedback({
+        type: "error",
+        text: "Please select a photo/video file or paste a video link first.",
+      });
       return;
     }
 
+    const isVid = uploadIsVideo || hasLink;
     setUploadingPhoto(true);
     setFeedback(null);
     try {
@@ -176,16 +214,19 @@ export default function TalentDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "ADD_PHOTO",
-          fileName: uploadFileName || `santa_${displayName}_portrait.jpg`,
-          fileDataUrl: uploadPreviewUrl,
-          caption: uploadCaption || `Santa ${displayName} Portrait`,
-          setAsPrimary: uploadSetPrimary,
+          fileName:
+            uploadFileName ||
+            (isVid ? `santa_${displayName}_video.mp4` : `santa_${displayName}_portrait.jpg`),
+          fileDataUrl: hasFile ? uploadPreviewUrl : undefined,
+          publicUrl: hasLink ? uploadExternalVideoUrl.trim() : undefined,
+          caption: uploadCaption || `Santa ${displayName} ${isVid ? "Video Clip" : "Portrait"}`,
+          setAsPrimary: isVid ? false : uploadSetPrimary,
           approvedForClient: uploadPublicApproved,
         }),
       });
       const data = await res.json();
       if (!res.ok || data.success === false) {
-        throw new Error(data.error || "Failed to upload photo");
+        throw new Error(data.error || "Failed to upload media");
       }
       if (data.talent) {
         setTalent((prev: any) => ({ ...prev, images: data.talent.images }));
@@ -194,10 +235,14 @@ export default function TalentDetailPage() {
       }
       setUploadPreviewUrl("");
       setUploadFileName("");
+      setUploadIsVideo(false);
+      setUploadExternalVideoUrl("");
       setUploadCaption("");
       setFeedback({
         type: "success",
-        text: "New portrait uploaded and added to Photo Gallery!",
+        text: isVid
+          ? "New video uploaded and added to Tab 2: Photo & Video Gallery!"
+          : "New portrait uploaded and added to Tab 2: Photo & Video Gallery!",
       });
     } catch (err: any) {
       setFeedback({ type: "error", text: err.message || "Upload failed" });
@@ -297,7 +342,7 @@ export default function TalentDetailPage() {
 
   const tabs = [
     { id: "profile", label: "1. Profile & Bio" },
-    { id: "gallery", label: `2. Photo Gallery (${talent.images?.length || 0})` },
+    { id: "gallery", label: `2. Photo & Video Gallery (${talent.images?.length || 0})` },
     { id: "bookings", label: `3. Booking History (${talent.assignments?.length || 0})` },
     { id: "availability", label: "4. Availability" },
     { id: "rates", label: "5. Rates & Costing" },
@@ -388,6 +433,18 @@ export default function TalentDetailPage() {
           >
             <Camera className="w-3.5 h-3.5 text-[#9B1B30]" />
             <span>+ Upload Photo</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("gallery");
+              setTimeout(() => videoInputRef.current?.click(), 150);
+            }}
+            className="px-3.5 py-2 rounded-lg text-xs font-bold border border-[#D6C7C9] bg-white text-[#3D2C2E] hover:border-[#9B1B30] hover:text-[#9B1B30] flex items-center gap-1.5 transition"
+          >
+            <Upload className="w-3.5 h-3.5 text-[#9B1B30]" />
+            <span>🎬 + Upload Video</span>
           </button>
 
           <button
@@ -645,7 +702,7 @@ export default function TalentDetailPage() {
       )}
 
       {/* =====================================================================
-          TAB 2: PHOTO GALLERY (UPLOAD PHOTOS, SET PRIMARY, EDIT CAPTION, DELETE)
+          TAB 2: PHOTO & VIDEO GALLERY (UPLOAD PHOTOS & VIDEOS, SET PRIMARY, CAPTION, DELETE)
          ===================================================================== */}
       {activeTab === "gallery" && (
         <div className="space-y-6">
@@ -655,10 +712,10 @@ export default function TalentDetailPage() {
               <div>
                 <h2 className="text-base font-bold text-[#1E1416] flex items-center gap-2">
                   <Camera className="w-4 h-4 text-[#9B1B30]" />
-                  <span>Upload New Portrait Photo for Santa {displayName}</span>
+                  <span>Upload Photos &amp; Videos for Santa {displayName}</span>
                 </h2>
                 <p className="text-xs text-[#6E5D5F]">
-                  Drag &amp; drop a photo file or click below to select from your computer. You can set it as the Primary Portrait immediately.
+                  Drag &amp; drop a photo (JPG/PNG/WebP) or video file (MP4/WebM/MOV), or paste a video link.
                 </p>
               </div>
             </div>
@@ -677,18 +734,34 @@ export default function TalentDetailPage() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/*"
+                  onChange={(e) => handleFileSelected(e.target.files?.[0])}
+                  className="hidden"
+                />
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/*"
                   onChange={(e) => handleFileSelected(e.target.files?.[0])}
                   className="hidden"
                 />
                 {uploadPreviewUrl ? (
-                  <div className="space-y-2">
-                    <img
-                      src={uploadPreviewUrl}
-                      alt="Upload Preview"
-                      className="h-36 w-36 object-cover rounded-xl mx-auto border border-[#D6C7C9] shadow-xs"
-                    />
+                  <div className="space-y-2 w-full">
+                    {uploadIsVideo ? (
+                      <video
+                        src={uploadPreviewUrl}
+                        controls
+                        className="h-36 w-full max-w-[230px] object-cover rounded-xl mx-auto border border-[#D6C7C9] bg-black"
+                      />
+                    ) : (
+                      <img
+                        src={uploadPreviewUrl}
+                        alt="Upload Preview"
+                        className="h-36 w-36 object-cover rounded-xl mx-auto border border-[#D6C7C9] shadow-xs"
+                      />
+                    )}
                     <div className="text-[11px] font-mono font-bold text-[#1E7E48]">
+                      {uploadIsVideo ? "🎬 VIDEO READY: " : "📷 PHOTO READY: "}
                       {uploadFileName} — Click to replace
                     </div>
                   </div>
@@ -696,10 +769,32 @@ export default function TalentDetailPage() {
                   <div className="space-y-2">
                     <Upload className="w-8 h-8 text-[#9B1B30] mx-auto" />
                     <div className="font-bold text-[#1E1416] text-sm">
-                      Choose Photo File or Drag &amp; Drop Here
+                      Choose Photo or Video File (or Drag &amp; Drop Here)
                     </div>
                     <div className="text-[11px] text-[#6E5D5F]">
-                      PNG, JPG, WebP up to 10MB
+                      Photos (PNG, JPG, WebP) &amp; Videos (MP4, WebM, MOV)
+                    </div>
+                    <div className="flex items-center justify-center gap-2 pt-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          fileInputRef.current?.click();
+                        }}
+                        className="px-2.5 py-1 rounded bg-[#F9EBED] text-[#9B1B30] border border-[#F0D0D5] text-[10px] font-bold"
+                      >
+                        📷 Pick Photo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          videoInputRef.current?.click();
+                        }}
+                        className="px-2.5 py-1 rounded bg-[#9B1B30] text-white text-[10px] font-bold"
+                      >
+                        🎬 Pick Video File
+                      </button>
                     </div>
                   </div>
                 )}
@@ -708,28 +803,47 @@ export default function TalentDetailPage() {
               {/* Upload Metadata & Action */}
               <div className="lg:col-span-2 flex flex-col justify-between space-y-4">
                 <div className="space-y-3">
-                  <div>
-                    <label className="block font-bold mb-1">
-                      Photo Caption / Portrait Title
-                    </label>
-                    <input
-                      type="text"
-                      value={uploadCaption}
-                      onChange={(e) => setUploadCaption(e.target.value)}
-                      placeholder={`e.g. Santa ${displayName} Flagship Mall Portrait`}
-                      className="w-full px-3 py-2"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold mb-1">
+                        Photo / Video Caption Title
+                      </label>
+                      <input
+                        type="text"
+                        value={uploadCaption}
+                        onChange={(e) => setUploadCaption(e.target.value)}
+                        placeholder={`e.g. Santa ${displayName} Portrait or Video Reel`}
+                        className="w-full px-3 py-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold mb-1">
+                        Or Paste Video Link (MP4 / YouTube / Google Drive / Vimeo)
+                      </label>
+                      <input
+                        type="url"
+                        value={uploadExternalVideoUrl}
+                        onChange={(e) => {
+                          setUploadExternalVideoUrl(e.target.value);
+                          if (e.target.value.trim()) setUploadIsVideo(true);
+                        }}
+                        placeholder="https://... (optional if uploading a video file)"
+                        className="w-full px-3 py-2 font-mono"
+                      />
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-6 pt-1">
-                    <label className="flex items-center gap-2 cursor-pointer font-semibold text-[#1E1416]">
-                      <input
-                        type="checkbox"
-                        checked={uploadSetPrimary}
-                        onChange={(e) => setUploadSetPrimary(e.target.checked)}
-                      />
-                      <span>Set as Primary Roster &amp; Profile Portrait</span>
-                    </label>
+                    {!uploadIsVideo && !uploadExternalVideoUrl.trim() && (
+                      <label className="flex items-center gap-2 cursor-pointer font-semibold text-[#1E1416]">
+                        <input
+                          type="checkbox"
+                          checked={uploadSetPrimary}
+                          onChange={(e) => setUploadSetPrimary(e.target.checked)}
+                        />
+                        <span>Set as Primary Roster &amp; Profile Portrait</span>
+                      </label>
+                    )}
 
                     <label className="flex items-center gap-2 cursor-pointer font-semibold text-[#1E1416]">
                       <input
@@ -743,12 +857,14 @@ export default function TalentDetailPage() {
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#E8DFE0]">
-                  {uploadPreviewUrl && (
+                  {(uploadPreviewUrl || uploadExternalVideoUrl.trim()) && (
                     <button
                       type="button"
                       onClick={() => {
                         setUploadPreviewUrl("");
                         setUploadFileName("");
+                        setUploadIsVideo(false);
+                        setUploadExternalVideoUrl("");
                       }}
                       className="px-4 py-2 rounded-lg border border-[#D6C7C9] bg-white text-[#3D2C2E] font-semibold"
                     >
@@ -757,12 +873,16 @@ export default function TalentDetailPage() {
                   )}
                   <button
                     type="submit"
-                    disabled={!uploadPreviewUrl || uploadingPhoto}
+                    disabled={(!uploadPreviewUrl && !uploadExternalVideoUrl.trim()) || uploadingPhoto}
                     className="btn-primary px-5 py-2.5 rounded-lg font-bold flex items-center gap-1.5 disabled:opacity-50"
                   >
                     <Upload className="w-4 h-4" />
                     <span>
-                      {uploadingPhoto ? "Uploading Portrait..." : "Upload & Save to Gallery"}
+                      {uploadingPhoto
+                        ? "Uploading..."
+                        : uploadIsVideo || uploadExternalVideoUrl.trim()
+                        ? "🎬 Upload & Save Video to Gallery"
+                        : "📷 Upload & Save Photo to Gallery"}
                     </span>
                   </button>
                 </div>
@@ -775,115 +895,143 @@ export default function TalentDetailPage() {
             <div className="flex items-center justify-between pb-3 border-b border-[#E8DFE0]">
               <div>
                 <h2 className="text-base font-bold text-[#1E1416]">
-                  Cleared &amp; Extracted Portraits ({talent.images?.length || 0})
+                  Cleared Portraits &amp; Performance Videos ({talent.images?.length || 0})
                 </h2>
                 <p className="text-xs text-[#6E5D5F]">
-                  Click &ldquo;Set Primary&rdquo; on any photo to make it Santa {displayName}&apos;s main avatar, edit captions inline, or delete unwanted photos.
+                  Click &ldquo;Set Primary&rdquo; on any photo to make it Santa {displayName}&apos;s main avatar, play video clips inline, edit captions, or delete items.
                 </p>
               </div>
             </div>
 
             {!talent.images || talent.images.length === 0 ? (
               <div className="p-10 text-center text-xs text-[#6E5D5F]">
-                No photos in gallery yet. Use the uploader above to add Santa {displayName}&apos;s first portrait.
+                No photos or videos in gallery yet. Use the uploader above to add Santa {displayName}&apos;s first portrait or video.
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-                {talent.images.map((img: any) => (
-                  <div
-                    key={img.id}
-                    className={`rounded-xl overflow-hidden border flex flex-col justify-between bg-white shadow-xs transition ${
-                      img.isPrimary ? "border-2 border-[#C68A12]" : "border-[#E8DFE0]"
-                    }`}
-                  >
-                    <div>
-                      <div className="relative h-52 overflow-hidden bg-[#FAF7F5]">
-                        <img
-                          src={img.publicUrl}
-                          alt={img.caption || talent.displayName}
-                          className="w-full h-full object-cover object-top"
-                        />
-                        {img.isPrimary ? (
-                          <span className="absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#C68A12] text-white flex items-center gap-1 shadow-xs">
-                            <Star className="w-3 h-3 fill-white" />
-                            <span>Primary Portrait</span>
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleSetPrimaryPhoto(img.id)}
-                            className="absolute top-2 left-2 px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/95 hover:bg-[#9B1B30] text-[#1E1416] hover:text-white border border-[#D6C7C9] shadow-xs transition"
-                          >
-                            ★ Set Primary
-                          </button>
-                        )}
-                      </div>
+                {talent.images.map((img: any) => {
+                  const isVid = isVideoMedia(img);
+                  const embedUrl = isVid ? toEmbedVideoUrl(img.publicUrl) : null;
 
-                      {/* Caption Display or Inline Editor */}
-                      <div className="p-3">
-                        {editingPhotoId === img.id ? (
-                          <div className="space-y-2">
-                            <input
-                              type="text"
-                              value={editingCaptionText}
-                              onChange={(e) => setEditingCaptionText(e.target.value)}
-                              className="w-full px-2.5 py-1 text-xs"
+                  return (
+                    <div
+                      key={img.id}
+                      className={`rounded-xl overflow-hidden border flex flex-col justify-between bg-white shadow-xs transition ${
+                        img.isPrimary ? "border-2 border-[#C68A12]" : "border-[#E8DFE0]"
+                      }`}
+                    >
+                      <div>
+                        <div className="relative h-52 overflow-hidden bg-[#FAF7F5]">
+                          {isVid ? (
+                            embedUrl ? (
+                              <iframe
+                                src={embedUrl}
+                                title={img.caption || "Santa Video"}
+                                className="w-full h-full border-0 bg-black"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
+                            ) : (
+                              <video
+                                src={img.publicUrl}
+                                controls
+                                preload="metadata"
+                                className="w-full h-full object-cover bg-black"
+                              />
+                            )
+                          ) : (
+                            <img
+                              src={img.publicUrl}
+                              alt={img.caption || talent.displayName}
+                              className="w-full h-full object-cover object-top"
                             />
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => handleSavePhotoCaption(img.id)}
-                                className="btn-primary px-2.5 py-1 rounded text-[10px] font-bold"
-                              >
-                                Save
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setEditingPhotoId(null)}
-                                className="px-2 py-1 rounded border border-[#D6C7C9] text-[10px] font-semibold"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="text-xs font-semibold text-[#1E1416] truncate">
-                              {img.caption || img.fileName}
-                            </div>
+                          )}
+                          {isVid ? (
+                            <span className="absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#9B1B30] text-white flex items-center gap-1 shadow-xs pointer-events-none">
+                              <span>🎬 Video Clip</span>
+                            </span>
+                          ) : img.isPrimary ? (
+                            <span className="absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#C68A12] text-white flex items-center gap-1 shadow-xs">
+                              <Star className="w-3 h-3 fill-white" />
+                              <span>Primary Portrait</span>
+                            </span>
+                          ) : (
                             <button
                               type="button"
-                              onClick={() => {
-                                setEditingPhotoId(img.id);
-                                setEditingCaptionText(img.caption || img.fileName || "");
-                              }}
-                              className="text-[#9B1B30] hover:underline text-[10px] font-bold shrink-0 flex items-center gap-0.5"
+                              onClick={() => handleSetPrimaryPhoto(img.id)}
+                              className="absolute top-2 left-2 px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/95 hover:bg-[#9B1B30] text-[#1E1416] hover:text-white border border-[#D6C7C9] shadow-xs transition"
                             >
-                              <Pencil className="w-2.5 h-2.5" />
-                              <span>Edit</span>
+                              ★ Set Primary
                             </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
+
+                        {/* Caption Display or Inline Editor */}
+                        <div className="p-3">
+                          {editingPhotoId === img.id ? (
+                            <div className="space-y-2">
+                              <input
+                                type="text"
+                                value={editingCaptionText}
+                                onChange={(e) => setEditingCaptionText(e.target.value)}
+                                className="w-full px-2.5 py-1 text-xs"
+                              />
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSavePhotoCaption(img.id)}
+                                  className="btn-primary px-2.5 py-1 rounded text-[10px] font-bold"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingPhotoId(null)}
+                                  className="px-2 py-1 rounded border border-[#D6C7C9] text-[10px] font-semibold"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="text-xs font-semibold text-[#1E1416] truncate">
+                                {img.caption || img.fileName}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingPhotoId(img.id);
+                                  setEditingCaptionText(img.caption || img.fileName || "");
+                                }}
+                                className="text-[#9B1B30] hover:underline text-[10px] font-bold shrink-0 flex items-center gap-0.5"
+                              >
+                                <Pencil className="w-2.5 h-2.5" />
+                                <span>Edit</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Card Bottom Actions */}
+                      <div className="px-3 py-2 border-t border-[#E8DFE0] bg-[#FAF7F5] flex items-center justify-between text-[10px]">
+                        <span className="font-mono text-[#6E5D5F] truncate max-w-[130px]">
+                          {img.fileName}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePhoto(img.id)}
+                          className="text-[#B91C1C] hover:underline font-bold flex items-center gap-0.5"
+                          title="Delete item from gallery"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Delete</span>
+                        </button>
                       </div>
                     </div>
-
-                    {/* Card Bottom Actions */}
-                    <div className="px-3 py-2 border-t border-[#E8DFE0] bg-[#FAF7F5] flex items-center justify-between text-[10px]">
-                      <span className="font-mono text-[#6E5D5F] truncate max-w-[130px]">
-                        {img.fileName}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleDeletePhoto(img.id)}
-                        className="text-[#B91C1C] hover:underline font-bold flex items-center gap-0.5"
-                        title="Delete photo from gallery"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        <span>Delete</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

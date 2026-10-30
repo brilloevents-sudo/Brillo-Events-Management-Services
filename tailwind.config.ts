@@ -10,7 +10,28 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Ultra-Premium Direct-Response Funnel Tokens
+        // Luxury Brillo Christmas Brand Palette
+        velvet: {
+          deep: "#780D22",
+          crimson: "#A61932",
+          ruby: "#B82038",
+          dark: "#4F0816",
+        },
+        champagne: {
+          DEFAULT: "#D6B36A",
+          light: "#EAD39C",
+          dark: "#B58E43",
+        },
+        ivory: {
+          DEFAULT: "#FFF8F0",
+          soft: "#F9EFE4",
+          border: "#E6D7C3",
+        },
+        midnight: {
+          DEFAULT: "#211619",
+          soft: "#36252A",
+        },
+        // Existing Operational & Funnel Tokens
         obsidian: {
           DEFAULT: "#09090B",
           950: "#09090B",
@@ -30,23 +51,23 @@ const config: Config = {
           600: "#3E443F",
         },
         crimson: {
-          DEFAULT: "#E11D48",
+          DEFAULT: "#A61932",
           950: "#36060F",
           900: "#4C0519",
-          800: "#881337",
-          700: "#9F1239",
-          600: "#BE123C",
+          800: "#780D22",
+          700: "#A61932",
+          600: "#B82038",
           500: "#E11D48",
           400: "#FB7185",
         },
         gold: {
-          DEFAULT: "#D4AF37",
+          DEFAULT: "#D6B36A",
           900: "#451A03",
           800: "#78350F",
           700: "#8C6207",
           600: "#9F8349",
           500: "#B99A5B",
-          400: "#D4AF37",
+          400: "#D6B36A",
           300: "#E7CE97",
           200: "#F3E3BC",
         },
@@ -61,7 +82,7 @@ const config: Config = {
         },
         warm: {
           50: "#FFFEFB",
-          100: "#FBF9F4",
+          100: "#FFF8F0",
           200: "#F6F3EC",
           300: "#EFEAE0",
           400: "#E2DED4",
@@ -69,15 +90,19 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "Inter", "system-ui", "-apple-system", "sans-serif"],
-        headline: ["'Space Grotesk'", "Montserrat", "sans-serif"],
-        serif: ["var(--font-serif)", "Playfair Display", "Georgia", "serif"],
+        sans: ["'Montserrat'", "var(--font-sans)", "Inter", "system-ui", "sans-serif"],
+        body: ["'Montserrat'", "system-ui", "sans-serif"],
+        headline: ["'Montserrat'", "'Space Grotesk'", "sans-serif"],
+        display: ["'Cormorant Garamond'", "Playfair Display", "Georgia", "serif"],
+        serif: ["'Cormorant Garamond'", "var(--font-serif)", "Playfair Display", "Georgia", "serif"],
+        brand: ["'Cinzel'", "'Cormorant Garamond'", "Georgia", "serif"],
         mono: ["var(--font-mono)", "JetBrains Mono", "ui-monospace", "monospace"],
       },
       boxShadow: {
         "electric-glow": "0 0 25px -5px rgba(34, 197, 94, 0.4)",
-        "crimson-glow": "0 0 25px -5px rgba(225, 29, 72, 0.4)",
-        "gold-glow": "0 0 25px -5px rgba(212, 175, 55, 0.3)",
+        "crimson-glow": "0 10px 30px -5px rgba(166, 25, 50, 0.45)",
+        "gold-glow": "0 8px 30px -5px rgba(214, 179, 106, 0.35)",
+        "luxury-card": "0 16px 40px -10px rgba(33, 22, 25, 0.12)",
       },
       animation: {
         marquee: "marquee 35s linear infinite",

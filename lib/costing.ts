@@ -1,4 +1,4 @@
-export type SantaBeardTier = "REAL_BEARD" | "FAKE_BEARD";
+export type SantaBeardTier = "REAL_BEARD" | "FAKE_BEARD" | "SANTA_AND_ELVES";
 export type SantaRateTerritory = "METRO_MANILA" | "HOLIDAY" | "OUT_OF_TOWN";
 export type SantaEventActivityTag =
   | "MEET_AND_GREET"
@@ -21,8 +21,8 @@ export interface SantaRateTierConfig {
 export const SANTA_RATE_CARD: Record<SantaBeardTier, SantaRateTierConfig> = {
   REAL_BEARD: {
     tier: "REAL_BEARD",
-    label: "Real Beard Santa Claus",
-    badgeText: "Limited Talents",
+    label: "Real-Beard Santa Claus",
+    badgeText: "Premium Experience • Limited Talents",
     metroManilaRate: 24000,
     holidayRate: 26000,
     outOfTownRate: 26000,
@@ -32,14 +32,25 @@ export const SANTA_RATE_CARD: Record<SantaBeardTier, SantaRateTierConfig> = {
   },
   FAKE_BEARD: {
     tier: "FAKE_BEARD",
-    label: "Fake Beard Santa Claus",
-    badgeText: "Standard Roster",
+    label: "Classic Santa Claus (Costume / Fake Beard)",
+    badgeText: "Classic Experience",
     metroManilaRate: 15000,
     holidayRate: 18000,
     outOfTownRate: 18000,
     minHours: 3,
     extraHourRate: 3000,
     defaultInternalTalentFee: 7000,
+  },
+  SANTA_AND_ELVES: {
+    tier: "SANTA_AND_ELVES",
+    label: "Santa + 2 Elves Package",
+    badgeText: "Complete Character Group Package",
+    metroManilaRate: 32000,
+    holidayRate: 32000,
+    outOfTownRate: 32000,
+    minHours: 3,
+    extraHourRate: 3000,
+    defaultInternalTalentFee: 16000,
   },
 };
 
@@ -53,25 +64,29 @@ export const SANTA_EVENT_ACTIVITIES: {
     id: "MEET_AND_GREET",
     label: "Meet and Greet",
     shortLabel: "Meet & Greet",
-    description: "Interactive holiday throne appearance, storytelling & family greetings (Min 3 Hrs)",
+    description:
+      "Interactive holiday throne appearance, storytelling & family greetings (Min 3 Hrs)",
   },
   {
     id: "CHRISTMAS_LAUNCH",
     label: "Christmas Launch",
     shortLabel: "Christmas Launch",
-    description: "Grand tree lighting ceremony, mall holiday launch & stage reveal (Min 3 Hrs)",
+    description:
+      "Grand tree lighting ceremony, mall holiday launch & stage reveal (Min 3 Hrs)",
   },
   {
     id: "PHOTO_SHOOT",
     label: "Photo Shoot",
     shortLabel: "Photo Shoot",
-    description: "Commercial studio shoot, PR campaign or family portrait session (Min 3 Hrs)",
+    description:
+      "Commercial studio shoot, PR campaign or family portrait session (Min 3 Hrs)",
   },
   {
     id: "PRIVATE_PARTY",
     label: "Private Party",
     shortLabel: "Private Party",
-    description: "Exclusive residence gathering, corporate gala or VIP gift-giving (Min 3 Hrs)",
+    description:
+      "Exclusive residence gathering, corporate gala or VIP gift-giving (Min 3 Hrs)",
   },
 ];
 
@@ -108,7 +123,11 @@ export function calculateSantaPackageQuote(
   input: SantaPackageQuoteInput
 ): SantaPackageQuoteResult {
   const tier: SantaBeardTier =
-    input.santaTier === "FAKE_BEARD" ? "FAKE_BEARD" : "REAL_BEARD";
+    input.santaTier === "FAKE_BEARD"
+      ? "FAKE_BEARD"
+      : input.santaTier === "SANTA_AND_ELVES"
+      ? "SANTA_AND_ELVES"
+      : "REAL_BEARD";
   const cfg = SANTA_RATE_CARD[tier];
 
   let territory: SantaRateTerritory = input.rateTerritory || "METRO_MANILA";
@@ -139,8 +158,15 @@ export function calculateSantaPackageQuote(
     SANTA_EVENT_ACTIVITIES.find((a) => a.id === input.eventActivityTag) ||
     SANTA_EVENT_ACTIVITIES[0];
 
+  const tierTag =
+    tier === "SANTA_AND_ELVES"
+      ? "Santa + 2 Elves"
+      : tier === "FAKE_BEARD"
+      ? "Classic Santa"
+      : "Real Beard • Limited";
+
   const tags: string[] = [
-    tier === "REAL_BEARD" ? "Real Beard • Limited" : "Fake Beard",
+    tierTag,
     rateTerritoryLabel,
     activityObj.shortLabel,
     extraHours > 0

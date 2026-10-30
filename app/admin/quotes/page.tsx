@@ -73,7 +73,11 @@ function QuotesBuilderInner() {
     }
 
     const tier: SantaBeardTier =
-      meta.santaTier === "FAKE_BEARD" ? "FAKE_BEARD" : "REAL_BEARD";
+      meta.santaTier === "SANTA_AND_ELVES"
+        ? "SANTA_AND_ELVES"
+        : meta.santaTier === "FAKE_BEARD"
+        ? "FAKE_BEARD"
+        : "REAL_BEARD";
     const territory: SantaRateTerritory =
       meta.rateTerritory ||
       (b.isHoliday ? "HOLIDAY" : b.isProvincial ? "OUT_OF_TOWN" : "METRO_MANILA");
@@ -281,8 +285,8 @@ function QuotesBuilderInner() {
               </select>
             </div>
 
-            {/* Santa Tier Selector: Real Beard vs Fake Beard */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#E8DFE0]">
+            {/* Santa Tier Selector: Real Beard, Classic, or Santa + 2 Elves */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-[#E8DFE0]">
               <button
                 type="button"
                 onClick={() =>
@@ -296,15 +300,12 @@ function QuotesBuilderInner() {
               >
                 <div className="flex items-center justify-between">
                   <strong className="text-xs text-[#9B1B30]">
-                    🎅 Real Beard Santa Claus
+                    🎅 Real-Beard Santa
                   </strong>
-                  <span className="badge-esign px-1.5 py-0.5 rounded text-[9px] font-mono">
-                    Limited Talents
-                  </span>
                 </div>
                 <div className="font-mono text-[10px] mt-1.5 space-y-0.5">
-                  <div>Metro Manila: PHP 24,000</div>
-                  <div>Holiday / Out of Town: PHP 26,000</div>
+                  <div>MM: PHP 24,000</div>
+                  <div>Hol / OOT: PHP 26,000</div>
                 </div>
               </button>
 
@@ -321,15 +322,34 @@ function QuotesBuilderInner() {
               >
                 <div className="flex items-center justify-between">
                   <strong className="text-xs text-[#1E1416]">
-                    🎭 Fake Beard Santa Claus
+                    🎭 Classic (Fake Beard)
                   </strong>
-                  <span className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-700 text-[9px] font-mono">
-                    Standard
-                  </span>
                 </div>
                 <div className="font-mono text-[10px] mt-1.5 space-y-0.5">
-                  <div>Metro Manila: PHP 15,000</div>
-                  <div>Holiday / Out of Town: PHP 18,000</div>
+                  <div>MM: PHP 15,000</div>
+                  <div>Hol / OOT: PHP 18,000</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  applyRateCardPreset("SANTA_AND_ELVES", rateTerritory, durationHours, eventActivityTag)
+                }
+                className={`p-3.5 rounded-xl border text-left transition ${
+                  santaTier === "SANTA_AND_ELVES"
+                    ? "bg-[#F9EBED] border-[#9B1B30] text-[#1E1416] shadow-sm"
+                    : "bg-[#FAF7F5] border-[#D6C7C9] text-[#6E5D5F]"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <strong className="text-xs text-[#9B1B30]">
+                    🎅🧝 Santa + 2 Elves
+                  </strong>
+                </div>
+                <div className="font-mono text-[10px] mt-1.5 space-y-0.5">
+                  <div>Package Rate: PHP 32,000</div>
+                  <div>1 Santa + 2 Elves (3h)</div>
                 </div>
               </button>
             </div>

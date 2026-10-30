@@ -44,8 +44,11 @@ function extractLeadTagsAndMeta(lead: any) {
   }
 
   const santaTier: SantaBeardTier =
-    meta.santaTier === "FAKE_BEARD" ||
-    (lead.specialRequests || "").toLowerCase().includes("fake beard")
+    meta.santaTier === "SANTA_AND_ELVES" ||
+    (lead.specialRequests || "").toLowerCase().includes("elves")
+      ? "SANTA_AND_ELVES"
+      : meta.santaTier === "FAKE_BEARD" ||
+        (lead.specialRequests || "").toLowerCase().includes("fake beard")
       ? "FAKE_BEARD"
       : "REAL_BEARD";
 
@@ -1170,7 +1173,7 @@ export default function UnifiedCrmPipelinePage() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <button
                     type="button"
                     onClick={() => {
@@ -1186,14 +1189,14 @@ export default function UnifiedCrmPipelinePage() {
                   >
                     <div className="flex items-center justify-between">
                       <strong className="text-xs text-[#9B1B30]">
-                        🎅 Real Beard Santa Claus
+                        🎅 Real-Beard Santa
                       </strong>
                       <span className="badge-esign px-1.5 py-0.5 rounded text-[9px] font-mono">
-                        Limited Talents
+                        Limited
                       </span>
                     </div>
                     <div className="font-mono text-[10px] mt-1">
-                      MM: ₱24,000 • Holiday: ₱26,000 • Out of Town: ₱26,000
+                      MM: ₱24k • Hol/OOT: ₱26k
                     </div>
                   </button>
 
@@ -1212,14 +1215,40 @@ export default function UnifiedCrmPipelinePage() {
                   >
                     <div className="flex items-center justify-between">
                       <strong className="text-xs text-[#1E1416]">
-                        🎭 Fake Beard Santa Claus
+                        🎭 Classic (Fake Beard)
                       </strong>
                       <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-700 text-[9px] font-mono">
                         Standard
                       </span>
                     </div>
                     <div className="font-mono text-[10px] mt-1">
-                      MM: ₱15,000 • Holiday: ₱18,000 • Out of Town: ₱18,000
+                      MM: ₱15k • Hol/OOT: ₱18k
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormSantaTier("SANTA_AND_ELVES");
+                      setFormAutoCalculatePrice(true);
+                      setFormAgreedTf(16000);
+                    }}
+                    className={`p-3 rounded-xl border text-left transition ${
+                      formSantaTier === "SANTA_AND_ELVES"
+                        ? "bg-[#F9EBED] border-[#9B1B30] text-[#1E1416]"
+                        : "bg-white border-[#D6C7C9] text-[#6E5D5F]"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <strong className="text-xs text-[#9B1B30]">
+                        🎅🧝 Santa + 2 Elves
+                      </strong>
+                      <span className="badge-esign px-1.5 py-0.5 rounded text-[9px] font-mono">
+                        Full Cast
+                      </span>
+                    </div>
+                    <div className="font-mono text-[10px] mt-1">
+                      Package Rate: ₱32,000
                     </div>
                   </button>
                 </div>
@@ -1237,15 +1266,30 @@ export default function UnifiedCrmPipelinePage() {
                     >
                       <option value="METRO_MANILA">
                         Metro Manila Rate (₱
-                        {formSantaTier === "REAL_BEARD" ? "24,000" : "15,000"})
+                        {formSantaTier === "SANTA_AND_ELVES"
+                          ? "32,000"
+                          : formSantaTier === "REAL_BEARD"
+                          ? "24,000"
+                          : "15,000"}
+                        )
                       </option>
                       <option value="HOLIDAY">
                         Holiday Rate (₱
-                        {formSantaTier === "REAL_BEARD" ? "26,000" : "18,000"})
+                        {formSantaTier === "SANTA_AND_ELVES"
+                          ? "32,000"
+                          : formSantaTier === "REAL_BEARD"
+                          ? "26,000"
+                          : "18,000"}
+                        )
                       </option>
                       <option value="OUT_OF_TOWN">
                         Out of Town Rate (₱
-                        {formSantaTier === "REAL_BEARD" ? "26,000" : "18,000"})
+                        {formSantaTier === "SANTA_AND_ELVES"
+                          ? "32,000"
+                          : formSantaTier === "REAL_BEARD"
+                          ? "26,000"
+                          : "18,000"}
+                        )
                       </option>
                     </select>
                   </div>

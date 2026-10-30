@@ -1,82 +1,76 @@
 import Link from "next/link";
-import { CheckCircle2, Clock, ShieldCheck, FileCheck2, Receipt, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
+
+const STEPS = [
+  {
+    num: "01",
+    title: "Submit Your Event Inquiry",
+    desc: "Share your preferred event date, venue location, celebration type, and chosen Santa experience through our online inquiry form or direct concierge line.",
+  },
+  {
+    num: "02",
+    title: "Availability Check & Package Recommendation",
+    desc: "Our coordination desk reviews live performer schedules and recommends the ideal Real-Beard Santa, Classic Santa, or Santa & Two Elves package for your program.",
+  },
+  {
+    num: "03",
+    title: "Formal Quotation & Temporary 24-Hour Hold",
+    desc: "You receive a transparent quotation detailing your 3-hour base rate, any extra hours (+₱3,000/hr), and out-of-town travel arrangements if applicable, alongside a temporary 24-hour calendar hold.",
+  },
+  {
+    num: "04",
+    title: "Service Agreement & 50% Reservation Downpayment",
+    desc: "To officially lock your date on our master calendar, we execute the Brillo Events Service Agreement and verify the standard 50% reservation downpayment.",
+  },
+  {
+    num: "05",
+    title: "Event Coordination & Magical Santa Arrival",
+    desc: "Before your event, our team finalizes call times, holding room needs, photo flow, and special cues so Santa's entrance feels seamless and unforgettable.",
+  },
+];
 
 export default function HowBookingWorksPage() {
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-16 space-y-12">
-      <div className="text-center space-y-3">
-        <span className="px-3 py-1 rounded-full bg-crimson-950 text-gold-400 border border-crimson-800 text-xs font-mono font-semibold">
-          OPERATIONAL INTEGRITY
-        </span>
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-          Transparent Santa Booking Process
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-300 max-w-xl mx-auto leading-relaxed">
-          At Brillo Events Management Service, we operate with strict contractual clarity. Learn exactly what is required to secure your holiday date.
-        </p>
-      </div>
-
-      <div className="space-y-6">
-        {/* Step 1 */}
-        <div className="p-6 rounded-2xl bg-obsidian-900 border border-slate-800 space-y-2">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-crimson-900/60 border border-crimson-700 text-gold-300 font-bold flex items-center justify-center text-sm">
-              1
-            </div>
-            <h2 className="text-base font-bold text-white">Initial Request &amp; Availability Review</h2>
-          </div>
-          <p className="text-xs text-slate-400 leading-relaxed pl-11">
-            You submit your event details through our structured intake funnel. Submitting a request creates an unconfirmed lead. We immediately check live schedule availability and talent travel feasibility.
+    <div className="font-body pb-20">
+      <section className="bg-gradient-to-b from-[#211619] via-[#590919] to-[#780D22] text-[#FFF8F0] py-16 sm:py-20 px-4 sm:px-6 border-b border-[#D6B36A]/30">
+        <div className="max-w-3xl mx-auto text-center space-y-4">
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#211619]/60 text-[#D6B36A] border border-[#D6B36A]/40 text-[11px] font-bold uppercase tracking-[0.18em]">
+            <Sparkles className="w-3.5 h-3.5" />
+            Simple, Clear &amp; Professionally Managed
+          </span>
+          <h1 className="font-display text-4xl sm:text-6xl font-semibold text-[#FFF8F0] leading-tight">
+            How Booking Your Santa Experience Works
+          </h1>
+          <p className="text-sm sm:text-base text-[#FFF8F0]/85 leading-relaxed">
+            From your initial date inquiry to Santa&apos;s grand entrance, Brillo Events handles every detail with clarity and care.
           </p>
         </div>
+      </section>
 
-        {/* Step 2 */}
-        <div className="p-6 rounded-2xl bg-obsidian-900 border border-slate-800 space-y-2">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-crimson-900/60 border border-crimson-700 text-gold-300 font-bold flex items-center justify-center text-sm">
-              2
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-16 space-y-6">
+        {STEPS.map((s) => (
+          <div
+            key={s.num}
+            className="p-6 sm:p-8 rounded-3xl bg-white border border-[#E8DCD0] shadow-md flex flex-col sm:flex-row gap-5 items-start"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-[#780D22] text-[#F3D899] font-display text-2xl font-bold flex items-center justify-center shrink-0 border border-[#D6B36A]/50">
+              {s.num}
             </div>
-            <h2 className="text-base font-bold text-white">Temporary 24-Hour Soft Hold</h2>
-          </div>
-          <p className="text-xs text-slate-400 leading-relaxed pl-11">
-            Upon verifying schedule viability, our desk places a 24-hour temporary hold on the master calendar. A soft hold reserves your time slot for 24 hours while you review the formal quotation. A soft hold is <strong className="text-slate-200">not a confirmed booking</strong> and automatically releases upon expiration unless secured.
-          </p>
-        </div>
-
-        {/* Step 3 */}
-        <div className="p-6 rounded-2xl bg-obsidian-900 border border-slate-800 space-y-2">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-crimson-900/60 border border-crimson-700 text-gold-300 font-bold flex items-center justify-center text-sm">
-              3
+            <div className="space-y-1.5">
+              <h2 className="font-display text-2xl font-bold text-[#211619]">{s.title}</h2>
+              <p className="text-xs sm:text-sm text-[#5C494E] leading-relaxed">{s.desc}</p>
             </div>
-            <h2 className="text-base font-bold text-white">Service Agreement Execution &amp; 50% Downpayment</h2>
           </div>
-          <p className="text-xs text-slate-400 leading-relaxed pl-11">
-            We issue the formal Brillo Events Booking Agreement specifying talent, venue, call time, and inclusions. Under standard terms, a <strong className="text-slate-200">50% reservation downpayment</strong> is required to lock the master calendar.
-          </p>
-        </div>
+        ))}
 
-        {/* Step 4 */}
-        <div className="p-6 rounded-2xl bg-obsidian-900 border border-slate-800 space-y-2">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-crimson-900/60 border border-crimson-700 text-gold-300 font-bold flex items-center justify-center text-sm">
-              4
-            </div>
-            <h2 className="text-base font-bold text-white">Staff Verification &amp; Secured Status</h2>
-          </div>
-          <p className="text-xs text-slate-400 leading-relaxed pl-11">
-            Our finance team verifies the bank or cash payment evidence. Once both the signed contract and verified payment are satisfied, staff authorizes the booking as <strong className="text-emerald-400 font-semibold">SECURED</strong>. You receive an official confirmation notice and operational run-of-show briefing.
-          </p>
+        <div className="text-center pt-6">
+          <Link
+            href="/request-quote"
+            className="inline-flex items-center px-9 py-4 rounded-full font-bold text-xs uppercase tracking-[0.15em] text-white bg-gradient-to-r from-[#780D22] to-[#B82038] hover:from-[#8C1028] hover:to-[#C92640] shadow-xl transition"
+          >
+            Book Your Santa Experience →
+          </Link>
         </div>
-      </div>
-
-      <div className="text-center pt-4">
-        <Link
-          href="/request-quote"
-          className="inline-flex items-center px-8 py-3.5 rounded-xl font-bold text-xs text-white bg-crimson-700 hover:bg-crimson-600 shadow-xl transition"
-        >
-          Begin by Requesting a Quote →
-        </Link>
       </div>
     </div>
   );

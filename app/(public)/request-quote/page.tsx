@@ -5,20 +5,15 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Sparkles,
-  Calendar,
-  Building2,
-  Clock,
   CheckCircle2,
   AlertTriangle,
-  User,
-  ShieldCheck,
   ArrowRight,
   Tag,
   MapPin,
   Calculator,
+  Phone,
 } from "lucide-react";
 import {
-  SANTA_RATE_CARD,
   SANTA_EVENT_ACTIVITIES,
   calculateSantaPackageQuote,
   SantaBeardTier,
@@ -30,8 +25,8 @@ export default function RequestQuotePage() {
   return (
     <Suspense
       fallback={
-        <div className="p-16 text-center text-xs text-slate-400">
-          Loading Official Quotation Calculator...
+        <div className="p-16 text-center text-sm text-[#5C494E] font-body">
+          Loading Official Brillo Events Quotation Calculator...
         </div>
       }
     >
@@ -72,7 +67,7 @@ function RequestQuoteForm() {
   const [audienceSize, setAudienceSize] = useState("");
   const [specialRequests, setSpecialRequests] = useState("");
   const [talentPreferenceId, setTalentPreferenceId] = useState("");
-  const [consentAgreed, setConsentAgreed] = useState(true);
+  const [consentAgreed] = useState(true);
 
   useEffect(() => {
     fetch("/api/talents?publicOnly=true")
@@ -87,8 +82,29 @@ function RequestQuoteForm() {
       .catch(() => {});
 
     const pkg = searchParams.get("package");
+    const tierParam = searchParams.get("tier");
+    const typeParam = searchParams.get("type");
+    const dateParam = searchParams.get("date");
+
     if (pkg === "provincial") setRateTerritory("OUT_OF_TOWN");
-    if (pkg === "fake") setSantaTier("FAKE_BEARD");
+    if (pkg === "holiday") setRateTerritory("HOLIDAY");
+    if (pkg === "fake" || tierParam === "FAKE_BEARD") setSantaTier("FAKE_BEARD");
+    if (pkg === "elves" || tierParam === "SANTA_AND_ELVES") setSantaTier("SANTA_AND_ELVES");
+    if (tierParam === "REAL_BEARD") setSantaTier("REAL_BEARD");
+
+    if (typeParam === "private") {
+      setBookingType("PRIVATE");
+      setEventActivityTag("PRIVATE_PARTY");
+    } else if (typeParam === "mall") {
+      setEventActivityTag("CHRISTMAS_LAUNCH");
+    }
+
+    if (dateParam) {
+      setEventDate(dateParam);
+      if (dateParam.includes("-12-24") || dateParam.includes("-12-25")) {
+        setRateTerritory("HOLIDAY");
+      }
+    }
   }, [searchParams]);
 
   // Automatically sync endTime when startTime or durationHours changes
@@ -190,25 +206,27 @@ function RequestQuoteForm() {
   if (submittedQuote) {
     const q: ReturnType<typeof calculateSantaPackageQuote> = submittedQuote.liveQuote;
     return (
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-12 space-y-6">
-        <div className="p-6 sm:p-8 rounded-2xl bg-obsidian-900 border border-emerald-500/40 shadow-2xl space-y-6 text-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-800">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-14 space-y-6 font-body">
+        <div className="p-6 sm:p-10 rounded-3xl bg-white border-2 border-[#D6B36A]/60 shadow-2xl space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-[#E8DCD0]">
+            <div className="flex items-center space-x-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0">
                 <CheckCircle2 className="w-7 h-7" />
               </div>
               <div>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700 font-mono text-[10px] font-bold uppercase">
-                  QUOTATION LOGGED • SYNCED TO DASHBOARD, CALENDAR &amp; CRM
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold uppercase tracking-wider">
+                  Quotation Logged • Synced to Brillo Desk
                 </span>
-                <h2 className="text-xl sm:text-2xl font-extrabold text-white mt-1">
+                <h2 className="font-display text-3xl font-bold text-[#211619] mt-1">
                   Official Quotation Generated!
                 </h2>
               </div>
             </div>
-            <div className="sm:text-right font-mono">
-              <span className="text-[10px] text-slate-400 uppercase block">Reference ID</span>
-              <span className="text-lg font-black text-gold-400">
+            <div className="sm:text-right">
+              <span className="text-[10px] text-[#7A666B] uppercase tracking-wider block font-semibold">
+                Reference ID
+              </span>
+              <span className="text-lg font-extrabold text-[#780D22] font-mono">
                 {submittedQuote.bookingNumber}
               </span>
             </div>
@@ -219,86 +237,85 @@ function RequestQuoteForm() {
             {q.tags.map((tag, idx) => (
               <span
                 key={idx}
-                className="px-3 py-1 rounded-full bg-crimson-950/90 border border-crimson-700 text-gold-300 font-mono text-[11px] font-bold"
+                className="px-3 py-1 rounded-full bg-[#FFF8F0] border border-[#D6B36A]/50 text-[#780D22] text-[11px] font-bold"
               >
                 {tag}
               </span>
             ))}
-            <span className="px-3 py-1 rounded-full bg-blue-950/80 border border-blue-700 text-blue-200 font-mono text-[11px] font-bold">
-              Status: 1. Inquiry Received (Confirming)
+            <span className="px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold">
+              Status: Inquiry Received • Availability Review
             </span>
           </div>
 
           {/* Breakdown Summary */}
-          <div className="p-5 rounded-xl bg-obsidian-950 border border-slate-800 space-y-3 font-mono">
-            <div className="flex justify-between text-slate-300">
+          <div className="p-6 rounded-2xl bg-[#FFF8F0] border border-[#E8DCD0] space-y-3 text-xs">
+            <div className="flex justify-between text-[#5C494E]">
               <span>Venue &amp; Event Date:</span>
-              <strong className="text-white">
+              <strong className="text-[#211619]">
                 {submittedQuote.venueName} • {submittedQuote.eventDate} ({startTime}–{endTime})
               </strong>
             </div>
-            <div className="flex justify-between text-slate-300">
-              <span>Santa Category &amp; Activity:</span>
-              <strong className="text-gold-400">
+            <div className="flex justify-between text-[#5C494E]">
+              <span>Santa Experience &amp; Activity:</span>
+              <strong className="text-[#780D22]">
                 {q.santaTierLabel} • {q.eventActivityLabel}
               </strong>
             </div>
-            <div className="flex justify-between text-slate-300">
-              <span>Base Rate ({q.rateTerritoryLabel} — Min 3 Hrs):</span>
-              <strong className="text-white">₱{q.baseRate.toLocaleString()}</strong>
+            <div className="flex justify-between text-[#5C494E]">
+              <span>Base Package ({q.rateTerritoryLabel} — Min 3 Hrs):</span>
+              <strong className="text-[#211619]">₱{q.baseRate.toLocaleString()}</strong>
             </div>
             {q.extraHours > 0 && (
-              <div className="flex justify-between text-amber-300">
-                <span>
-                  Additional Hours ({q.extraHours} hr × ₱3,000/hr):
-                </span>
+              <div className="flex justify-between text-[#A61932]">
+                <span>Additional Hours ({q.extraHours} hr × ₱3,000/hr):</span>
                 <strong>+₱{q.extraHourCharge.toLocaleString()}</strong>
               </div>
             )}
-            <div className="flex justify-between border-t border-slate-800 pt-3 text-base">
-              <span className="font-bold text-white">Total Quoted Package:</span>
-              <strong className="text-emerald-400 font-black">
+            <div className="flex justify-between border-t border-[#E8DCD0] pt-3 text-base">
+              <span className="font-bold text-[#211619]">Total Estimated Package:</span>
+              <strong className="text-[#780D22] font-black text-xl">
                 ₱{q.totalQuotedRate.toLocaleString()}
               </strong>
             </div>
-            <div className="flex justify-between text-[11px] text-slate-400">
-              <span>50% Reservation Downpayment:</span>
-              <span className="text-gold-300 font-bold">
+            <div className="flex justify-between text-[11px] text-[#7A666B]">
+              <span>50% Reservation Downpayment (upon confirmation):</span>
+              <span className="text-[#211619] font-bold">
                 ₱{q.depositRequired.toLocaleString()}
               </span>
             </div>
           </div>
 
-          {/* Action Buttons to View Live Sync */}
+          {/* Action Buttons */}
           <div className="space-y-3 pt-2">
-            <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400">
-              Next Step / Live Operations Links:
+            <div className="text-[11px] uppercase tracking-wider text-[#7A666B] font-semibold">
+              Next Steps &amp; Direct Links:
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <Link
                 href={submittedQuote.statusUrl}
-                className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-center flex items-center justify-center space-x-2 shadow-lg transition"
+                className="px-5 py-3.5 rounded-full bg-gradient-to-r from-[#780D22] to-[#B82038] hover:from-[#8C1028] hover:to-[#C92640] text-white font-bold text-center flex items-center justify-center space-x-2 shadow-lg transition uppercase tracking-wider"
               >
-                <span>Open Client Quote &amp; GCash Portal</span>
+                <span>Open Client Quote &amp; Payment Portal</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
+              <a
+                href="tel:09278872343"
+                className="px-5 py-3.5 rounded-full bg-[#FFF8F0] hover:bg-[#F5EBE0] border border-[#D6B36A] text-[#780D22] font-bold text-center flex items-center justify-center space-x-2 transition uppercase tracking-wider"
+              >
+                <Phone className="w-4 h-4" />
+                <span>Call Desk: 0927 887 2343</span>
+              </a>
               <Link
                 href="/admin/crm"
-                className="px-5 py-3 rounded-xl bg-crimson-700 hover:bg-crimson-600 text-white font-bold text-center flex items-center justify-center space-x-2 shadow-lg transition"
+                className="px-4 py-2.5 rounded-full bg-[#FAF3EB] hover:bg-[#F2E6D8] text-[#5C494E] font-semibold text-center transition"
               >
-                <span>View in Admin CRM Pipeline →</span>
+                Staff: View in CRM Pipeline →
               </Link>
               <Link
                 href="/admin/calendar"
-                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-center transition"
+                className="px-4 py-2.5 rounded-full bg-[#FAF3EB] hover:bg-[#F2E6D8] text-[#5C494E] font-semibold text-center transition"
               >
-                View on Master Calendar &amp; Excel Sheet →
-              </Link>
-              <Link
-                href="/admin"
-                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-center transition"
-              >
-                View on Executive Dashboard →
+                Staff: View on Master Calendar →
               </Link>
             </div>
           </div>
@@ -308,515 +325,645 @@ function RequestQuoteForm() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 space-y-8">
-      {/* Header */}
-      <div className="text-center space-y-2">
-        <span className="px-3 py-1 rounded-full bg-crimson-950 text-gold-400 border border-crimson-800 text-xs font-mono font-semibold">
-          OFFICIAL RATE CARD &amp; QUOTATION ENGINE
-        </span>
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-          Request a Corporate or Private Santa Quotation
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-400 max-w-2xl mx-auto">
-          Select your Santa tier (Real Beard vs. Fake Beard), event activity, territory rate, and hours. Every quotation request automatically syncs to the Executive Dashboard, Master Calendar, and CRM Pipeline.
-        </p>
-      </div>
-
-      {error && (
-        <div className="p-4 rounded-xl bg-red-950/80 border border-red-800 text-red-200 text-xs flex items-center space-x-2">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span>{error}</span>
+    <div className="font-body pb-16">
+      {/* Luxury Deep Velvet Hero Header */}
+      <section className="bg-gradient-to-b from-[#211619] via-[#590919] to-[#780D22] text-[#FFF8F0] py-14 sm:py-16 px-4 sm:px-6 border-b border-[#D6B36A]/30">
+        <div className="max-w-4xl mx-auto text-center space-y-3">
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#211619]/60 text-[#D6B36A] border border-[#D6B36A]/40 text-[11px] font-bold uppercase tracking-[0.18em]">
+            <Sparkles className="w-3.5 h-3.5" />
+            Official Santa Quotation &amp; Availability Request
+          </span>
+          <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-semibold text-[#FFF8F0] leading-tight">
+            Request Your Christmas Experience Quotation
+          </h1>
+          <p className="text-sm sm:text-base text-[#FFF8F0]/85 max-w-2xl mx-auto leading-relaxed">
+            Choose your preferred Santa experience — Authentic Real-Beard Santa, Classic Santa, or our complete Santa &amp; Two Elves package. Limited holiday dates are confirmed upon booking.
+          </p>
         </div>
-      )}
+      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* LEFT COLUMN (8 Cols): Structured Intake Form */}
-        <form
-          onSubmit={handleSubmit}
-          className="lg:col-span-8 p-6 sm:p-8 rounded-2xl bg-obsidian-900 border border-slate-800 shadow-xl space-y-6 text-xs"
-        >
-          {/* STEP 1: SANTA BEARD TIER SELECTOR (REAL BEARD VS FAKE BEARD) */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-slate-200 font-bold text-sm flex items-center space-x-2">
-                <Sparkles className="w-4 h-4 text-gold-400" />
-                <span>1. Select Santa Claus Tier *</span>
-              </label>
-              <span className="text-[11px] font-mono text-gold-400">
-                Minimum 3 HRS • +₱3,000 / extra hour
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {/* Real Beard Santa Card */}
-              <button
-                type="button"
-                onClick={() => setSantaTier("REAL_BEARD")}
-                className={`p-4 rounded-xl border-2 text-left transition relative overflow-hidden ${
-                  santaTier === "REAL_BEARD"
-                    ? "bg-crimson-950/90 border-gold-400 text-white shadow-lg"
-                    : "bg-obsidian-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-white"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-extrabold uppercase tracking-wide text-gold-400">
-                    🎅 Real Beard Santa Claus
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-amber-300 font-mono text-[10px] font-bold">
-                    Limited Talents
-                  </span>
-                </div>
-                <div className="space-y-1 font-mono text-[11px] text-slate-300 mt-2">
-                  <div className="flex justify-between">
-                    <span>Metro Manila Rate:</span>
-                    <strong className="text-white">PHP 24,000</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Holiday Rate:</span>
-                    <strong className="text-gold-300">PHP 26,000</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Out of Town Rate:</span>
-                    <strong className="text-gold-300">PHP 26,000.00</strong>
-                  </div>
-                </div>
-                <div className="mt-2.5 pt-2 border-t border-white/10 text-[10px] text-slate-400">
-                  Minimum 3 HRS • +PHP 3,000 each additional hour
-                </div>
-              </button>
-
-              {/* Fake Beard Santa Card */}
-              <button
-                type="button"
-                onClick={() => setSantaTier("FAKE_BEARD")}
-                className={`p-4 rounded-xl border-2 text-left transition relative overflow-hidden ${
-                  santaTier === "FAKE_BEARD"
-                    ? "bg-crimson-950/90 border-gold-400 text-white shadow-lg"
-                    : "bg-obsidian-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-white"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-extrabold uppercase tracking-wide text-white">
-                    🎭 Fake Beard Santa Claus
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono text-[10px] font-semibold">
-                    Standard Roster
-                  </span>
-                </div>
-                <div className="space-y-1 font-mono text-[11px] text-slate-300 mt-2">
-                  <div className="flex justify-between">
-                    <span>Metro Manila Rate:</span>
-                    <strong className="text-white">PHP 15,000</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Holiday Rate:</span>
-                    <strong className="text-gold-300">PHP 18,000</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Out of Town Rate:</span>
-                    <strong className="text-gold-300">PHP 18,000.00</strong>
-                  </div>
-                </div>
-                <div className="mt-2.5 pt-2 border-t border-white/10 text-[10px] text-slate-400">
-                  Minimum 3 HRS • +PHP 3,000 each additional hour
-                </div>
-              </button>
-            </div>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 -mt-6 space-y-8">
+        {error && (
+          <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-900 text-xs flex items-center space-x-2 shadow-md">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-red-700" />
+            <span>{error}</span>
           </div>
+        )}
 
-          {/* STEP 2: EVENT ACTIVITY PACKAGE TAGS */}
-          <div className="pt-4 border-t border-slate-800 space-y-3">
-            <label className="text-slate-200 font-bold text-sm flex items-center space-x-2">
-              <Tag className="w-4 h-4 text-gold-400" />
-              <span>2. Event Appearance Activity Tag (Minimum 3 Hours) *</span>
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              {SANTA_EVENT_ACTIVITIES.map((act) => {
-                const active = eventActivityTag === act.id;
-                return (
-                  <button
-                    key={act.id}
-                    type="button"
-                    onClick={() => handleActivityChange(act.id)}
-                    className={`p-3 rounded-xl border text-left transition ${
-                      active
-                        ? "bg-crimson-950 border-crimson-500 text-white shadow-md"
-                        : "bg-obsidian-950 border-slate-800 text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    <div className="font-bold text-xs">{act.label}</div>
-                    <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">
-                      {act.description}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* STEP 3: TERRITORY RATE & DURATION HOURS (MIN 3 HRS + 3K/HR) */}
-          <div className="pt-4 border-t border-slate-800 space-y-4">
-            <label className="text-slate-200 font-bold text-sm flex items-center space-x-2">
-              <MapPin className="w-4 h-4 text-gold-400" />
-              <span>3. Rate Territory &amp; Appearance Duration *</span>
-            </label>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              {[
-                {
-                  id: "METRO_MANILA" as SantaRateTerritory,
-                  title: "Metro Manila Rate",
-                  price:
-                    santaTier === "REAL_BEARD" ? "PHP 24,000" : "PHP 15,000",
-                  sub: "NCR malls, hotels & venues",
-                },
-                {
-                  id: "HOLIDAY" as SantaRateTerritory,
-                  title: "Holiday Rate",
-                  price:
-                    santaTier === "REAL_BEARD" ? "PHP 26,000" : "PHP 18,000",
-                  sub: "Peak Christmas / Holiday dates",
-                },
-                {
-                  id: "OUT_OF_TOWN" as SantaRateTerritory,
-                  title: "Out of Town Rate",
-                  price:
-                    santaTier === "REAL_BEARD" ? "PHP 26,000.00" : "PHP 18,000.00",
-                  sub: "Provincial malls & destinations",
-                },
-              ].map((rt) => (
-                <button
-                  key={rt.id}
-                  type="button"
-                  onClick={() => setRateTerritory(rt.id)}
-                  className={`p-3 rounded-xl border text-left transition ${
-                    rateTerritory === rt.id
-                      ? "bg-crimson-950 border-gold-400 text-white"
-                      : "bg-obsidian-950 border-slate-800 text-slate-400 hover:text-white"
-                  }`}
-                >
-                  <div className="text-xs font-bold">{rt.title}</div>
-                  <div className="text-sm font-mono font-extrabold text-gold-400 mt-0.5">
-                    {rt.price}
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">{rt.sub}</div>
-                </button>
-              ))}
-            </div>
-
-            {/* Duration Selector (Min 3 HRS + 3,000 each hour) */}
-            <div className="p-3.5 rounded-xl bg-obsidian-950 border border-slate-800 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-300">
-                  Booking Duration (Minimum 3 Hours — Additional ₱3,000 / hour)
-                </span>
-                <span className="font-mono text-xs text-gold-400 font-bold">
-                  {durationHours} Hours Selected
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 items-start">
+          {/* LEFT COLUMN (8 Cols): Structured Intake Form */}
+          <form
+            onSubmit={handleSubmit}
+            className="lg:col-span-8 p-6 sm:p-9 rounded-3xl bg-white border border-[#E8DCD0] shadow-xl space-y-7 text-xs"
+          >
+            {/* STEP 1: SANTA EXPERIENCE TIER SELECTOR */}
+            <div className="space-y-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <label className="text-[#211619] font-bold text-sm flex items-center space-x-2">
+                  <Sparkles className="w-4 h-4 text-[#A61932]" />
+                  <span>1. Choose Your Santa Experience *</span>
+                </label>
+                <span className="text-[11px] font-semibold text-[#780D22]">
+                  Minimum 3 Hours • +₱3,000 per additional hour
                 </span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                {[3, 4, 5, 6, 8].map((hrs) => {
-                  const extra = Math.max(0, hrs - 3) * 3000;
-                  return (
-                    <button
-                      key={hrs}
-                      type="button"
-                      onClick={() => setDurationHours(hrs)}
-                      className={`py-2 px-2.5 rounded-lg border font-mono text-xs transition ${
-                        durationHours === hrs
-                          ? "bg-crimson-700 border-gold-400 text-white font-bold"
-                          : "bg-obsidian-900 border-slate-800 text-slate-400 hover:text-white"
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                {/* Real-Beard Santa Card */}
+                <button
+                  type="button"
+                  onClick={() => setSantaTier("REAL_BEARD")}
+                  className={`p-4 rounded-2xl border-2 text-left transition flex flex-col justify-between ${
+                    santaTier === "REAL_BEARD"
+                      ? "bg-[#780D22] border-[#D6B36A] text-[#FFF8F0] shadow-lg"
+                      : "bg-[#FFF8F0] border-[#E8DCD0] text-[#211619] hover:border-[#D6B36A]"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-1.5">
+                      <span
+                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                          santaTier === "REAL_BEARD"
+                            ? "bg-[#D6B36A]/20 text-[#F3D899]"
+                            : "bg-[#780D22]/10 text-[#780D22]"
+                        }`}
+                      >
+                        Limited Talents
+                      </span>
+                    </div>
+                    <div className="font-display text-xl font-bold leading-snug">
+                      Real-Beard Santa
+                    </div>
+                    <div
+                      className={`space-y-1 text-[11px] mt-2.5 ${
+                        santaTier === "REAL_BEARD" ? "text-[#FFF8F0]/90" : "text-[#5C494E]"
                       }`}
                     >
-                      <div>{hrs} HRS</div>
-                      <div className="text-[10px] text-gold-300">
-                        {extra === 0 ? "Min Base" : `+₱${extra.toLocaleString()}`}
+                      <div className="flex justify-between">
+                        <span>Metro Manila:</span>
+                        <strong>₱24,000</strong>
                       </div>
+                      <div className="flex justify-between">
+                        <span>Holiday Rate:</span>
+                        <strong>₱26,000</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Out-of-Town:</span>
+                        <strong>₱26,000</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    className={`mt-3 pt-2 border-t text-[10px] ${
+                      santaTier === "REAL_BEARD"
+                        ? "border-white/15 text-[#F3D899]"
+                        : "border-[#E8DCD0] text-[#7A666B]"
+                    }`}
+                  >
+                    Natural real beard • Min 3 hrs
+                  </div>
+                </button>
+
+                {/* Classic Santa Card */}
+                <button
+                  type="button"
+                  onClick={() => setSantaTier("FAKE_BEARD")}
+                  className={`p-4 rounded-2xl border-2 text-left transition flex flex-col justify-between ${
+                    santaTier === "FAKE_BEARD"
+                      ? "bg-[#780D22] border-[#D6B36A] text-[#FFF8F0] shadow-lg"
+                      : "bg-[#FFF8F0] border-[#E8DCD0] text-[#211619] hover:border-[#D6B36A]"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-1.5">
+                      <span
+                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                          santaTier === "FAKE_BEARD"
+                            ? "bg-[#D6B36A]/20 text-[#F3D899]"
+                            : "bg-[#211619]/10 text-[#5C494E]"
+                        }`}
+                      >
+                        Festive Option
+                      </span>
+                    </div>
+                    <div className="font-display text-xl font-bold leading-snug">
+                      Classic Santa
+                    </div>
+                    <div
+                      className={`space-y-1 text-[11px] mt-2.5 ${
+                        santaTier === "FAKE_BEARD" ? "text-[#FFF8F0]/90" : "text-[#5C494E]"
+                      }`}
+                    >
+                      <div className="flex justify-between">
+                        <span>Metro Manila:</span>
+                        <strong>₱15,000</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Holiday Rate:</span>
+                        <strong>₱18,000</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Out-of-Town:</span>
+                        <strong>₱18,000</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    className={`mt-3 pt-2 border-t text-[10px] ${
+                      santaTier === "FAKE_BEARD"
+                        ? "border-white/15 text-[#F3D899]"
+                        : "border-[#E8DCD0] text-[#7A666B]"
+                    }`}
+                  >
+                    Traditional costume • Min 3 hrs
+                  </div>
+                </button>
+
+                {/* Santa & Two Elves Card */}
+                <button
+                  type="button"
+                  onClick={() => setSantaTier("SANTA_AND_ELVES")}
+                  className={`p-4 rounded-2xl border-2 text-left transition flex flex-col justify-between ${
+                    santaTier === "SANTA_AND_ELVES"
+                      ? "bg-[#780D22] border-[#D6B36A] text-[#FFF8F0] shadow-lg"
+                      : "bg-[#FFF8F0] border-[#E8DCD0] text-[#211619] hover:border-[#D6B36A]"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-1.5">
+                      <span
+                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                          santaTier === "SANTA_AND_ELVES"
+                            ? "bg-[#D6B36A]/20 text-[#F3D899]"
+                            : "bg-[#D6B36A]/25 text-[#780D22]"
+                        }`}
+                      >
+                        Full Cast
+                      </span>
+                    </div>
+                    <div className="font-display text-xl font-bold leading-snug">
+                      Santa &amp; Two Elves
+                    </div>
+                    <div
+                      className={`space-y-1 text-[11px] mt-2.5 ${
+                        santaTier === "SANTA_AND_ELVES" ? "text-[#FFF8F0]/90" : "text-[#5C494E]"
+                      }`}
+                    >
+                      <div className="flex justify-between">
+                        <span>Package Rate:</span>
+                        <strong>₱32,000</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Performers:</span>
+                        <strong>1 Santa + 2 Elves</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Extra Hours:</span>
+                        <strong>+₱3,000/hr</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    className={`mt-3 pt-2 border-t text-[10px] ${
+                      santaTier === "SANTA_AND_ELVES"
+                        ? "border-white/15 text-[#F3D899]"
+                        : "border-[#E8DCD0] text-[#7A666B]"
+                    }`}
+                  >
+                    1 Santa + 2 Elves • Min 3 hrs
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* STEP 2: EVENT ACTIVITY PACKAGE TAGS */}
+            <div className="pt-5 border-t border-[#EFE5DA] space-y-3">
+              <label className="text-[#211619] font-bold text-sm flex items-center space-x-2">
+                <Tag className="w-4 h-4 text-[#A61932]" />
+                <span>2. Event Format &amp; Occasion *</span>
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {SANTA_EVENT_ACTIVITIES.map((act) => {
+                  const active = eventActivityTag === act.id;
+                  return (
+                    <button
+                      key={act.id}
+                      type="button"
+                      onClick={() => handleActivityChange(act.id)}
+                      className={`p-3.5 rounded-xl border text-left transition ${
+                        active
+                          ? "bg-[#780D22] border-[#D6B36A] text-white shadow-md"
+                          : "bg-[#FFF8F0] border-[#E8DCD0] text-[#211619] hover:border-[#D6B36A]"
+                      }`}
+                    >
+                      <div className="font-bold text-xs">{act.label}</div>
+                      <p
+                        className={`text-[10px] mt-1 line-clamp-2 ${
+                          active ? "text-[#FFF8F0]/80" : "text-[#7A666B]"
+                        }`}
+                      >
+                        {act.description}
+                      </p>
                     </button>
                   );
                 })}
               </div>
             </div>
-          </div>
 
-          {/* STEP 4: CLIENT & CONTACT DETAILS */}
-          <div className="pt-4 border-t border-slate-800 space-y-4">
-            <label className="block text-slate-200 font-bold text-sm">
-              4. Client &amp; Organization Contact *
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-slate-400 mb-1">Contact Person Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  placeholder="e.g. Maria Clara Santos"
-                  className="w-full px-3 py-2.5 bg-obsidian-950 border border-slate-700 rounded-lg text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 mb-1">Company / Agency / Mall *</label>
-                <input
-                  type="text"
-                  required
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  placeholder="e.g. SM Supermalls / Ayala Malls / Private Host"
-                  className="w-full px-3 py-2.5 bg-obsidian-950 border border-slate-700 rounded-lg text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 mb-1">Email Address *</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. events@company.ph"
-                  className="w-full px-3 py-2.5 bg-obsidian-950 border border-slate-700 rounded-lg text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 mb-1">Mobile / Viber Number *</label>
-                <input
-                  type="tel"
-                  required
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="e.g. 0917 123 4567"
-                  className="w-full px-3 py-2.5 bg-obsidian-950 border border-slate-700 rounded-lg text-white"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* STEP 5: EVENT SCHEDULE & VENUE */}
-          <div className="pt-4 border-t border-slate-800 space-y-4">
-            <label className="block text-slate-200 font-bold text-sm">
-              5. Event Date, Time &amp; Venue *
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-slate-400 mb-1">Event Date *</label>
-                <input
-                  type="date"
-                  required
-                  value={eventDate}
-                  onChange={(e) => handleDateChange(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-obsidian-950 border border-slate-700 rounded-lg text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 mb-1">Start Time</label>
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-obsidian-950 border border-slate-700 rounded-lg text-white font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 mb-1">
-                  End Time ({durationHours} Hrs)
-                </label>
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-obsidian-950 border border-slate-700 rounded-lg text-white font-mono"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-slate-400 mb-1">Mall / Venue Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={venueName}
-                  onChange={(e) => setVenueName(e.target.value)}
-                  placeholder="e.g. SM Megamall Mega Fashion Hall"
-                  className="w-full px-3 py-2.5 bg-obsidian-950 border border-slate-700 rounded-lg text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 mb-1">City / Province *</label>
-                <input
-                  type="text"
-                  required
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="e.g. Mandaluyong / Clark, Pampanga / Cebu"
-                  className="w-full px-3 py-2.5 bg-obsidian-950 border border-slate-700 rounded-lg text-white"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* STEP 6: SANTA PREFERENCE & NOTES */}
-          <div className="pt-4 border-t border-slate-800 space-y-4">
-            <label className="block text-slate-200 font-bold text-sm">
-              6. Preferred Santa Performer &amp; Event Notes
-            </label>
-            <div>
-              <select
-                value={talentPreferenceId}
-                onChange={(e) => setTalentPreferenceId(e.target.value)}
-                className="w-full px-3 py-2.5 bg-obsidian-950 border border-slate-700 rounded-lg text-white"
-              >
-                <option value="">
-                  No preference — Assign best matched available {liveQuote.santaTierLabel}
-                </option>
-                {talents.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    Santa {t.displayName} ({t.nationality || "Real Beard"}, {t.height})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-slate-400 mb-1">
-                Event Details / Run-of-Show Notes
+            {/* STEP 3: TERRITORY RATE & DURATION HOURS */}
+            <div className="pt-5 border-t border-[#EFE5DA] space-y-4">
+              <label className="text-[#211619] font-bold text-sm flex items-center space-x-2">
+                <MapPin className="w-4 h-4 text-[#A61932]" />
+                <span>3. Location Rate &amp; Appearance Duration *</span>
               </label>
-              <textarea
-                rows={3}
-                value={specialRequests}
-                onChange={(e) => setSpecialRequests(e.target.value)}
-                placeholder="e.g. Meet & Greet throne setup, Christmas launch countdown, photo shoot call time..."
-                className="w-full px-3 py-2.5 bg-obsidian-950 border border-slate-700 rounded-lg text-white resize-none"
-              />
-            </div>
-          </div>
 
-          {/* Submit */}
-          <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="text-[11px] text-slate-400 font-mono">
-              Automatically logs to Executive Dashboard, Calendar &amp; CRM
-            </div>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-crimson-700 to-crimson-600 hover:from-crimson-600 hover:to-crimson-500 shadow-xl shadow-crimson-950 border border-crimson-500/50 transition transform hover:-translate-y-0.5 disabled:opacity-50"
-            >
-              {submitting
-                ? "Generating Official Quote..."
-                : `Submit Quotation (₱${liveQuote.totalQuotedRate.toLocaleString()}) →`}
-            </button>
-          </div>
-        </form>
-
-        {/* RIGHT COLUMN (4 Cols): Sticky Live Rate Card & Quotation Summary */}
-        <div className="lg:col-span-4 lg:sticky lg:top-24 space-y-4">
-          <div className="p-5 rounded-2xl bg-obsidian-900 border-2 border-crimson-800/80 shadow-2xl space-y-4 text-xs">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center space-x-2">
-                <Calculator className="w-4 h-4 text-gold-400" />
-                <h3 className="text-sm font-extrabold text-white">
-                  Live Quotation Summary
-                </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {[
+                  {
+                    id: "METRO_MANILA" as SantaRateTerritory,
+                    title: "Metro Manila Rate",
+                    price:
+                      santaTier === "SANTA_AND_ELVES"
+                        ? "₱32,000"
+                        : santaTier === "REAL_BEARD"
+                        ? "₱24,000"
+                        : "₱15,000",
+                    sub: "NCR malls, hotels & residences",
+                  },
+                  {
+                    id: "HOLIDAY" as SantaRateTerritory,
+                    title: "Holiday Rate",
+                    price:
+                      santaTier === "SANTA_AND_ELVES"
+                        ? "₱32,000"
+                        : santaTier === "REAL_BEARD"
+                        ? "₱26,000"
+                        : "₱18,000",
+                    sub: "Peak Christmas / Holiday dates",
+                  },
+                  {
+                    id: "OUT_OF_TOWN" as SantaRateTerritory,
+                    title: "Out-of-Town Rate",
+                    price:
+                      santaTier === "SANTA_AND_ELVES"
+                        ? "₱32,000*"
+                        : santaTier === "REAL_BEARD"
+                        ? "₱26,000"
+                        : "₱18,000",
+                    sub: "Provincial malls & resorts",
+                  },
+                ].map((rt) => (
+                  <button
+                    key={rt.id}
+                    type="button"
+                    onClick={() => setRateTerritory(rt.id)}
+                    className={`p-3.5 rounded-xl border text-left transition ${
+                      rateTerritory === rt.id
+                        ? "bg-[#780D22] border-[#D6B36A] text-white shadow-sm"
+                        : "bg-[#FFF8F0] border-[#E8DCD0] text-[#211619] hover:border-[#D6B36A]"
+                    }`}
+                  >
+                    <div className="text-xs font-bold">{rt.title}</div>
+                    <div
+                      className={`text-base font-extrabold mt-0.5 ${
+                        rateTerritory === rt.id ? "text-[#F3D899]" : "text-[#780D22]"
+                      }`}
+                    >
+                      {rt.price}
+                    </div>
+                    <div
+                      className={`text-[10px] mt-0.5 ${
+                        rateTerritory === rt.id ? "text-[#FFF8F0]/80" : "text-[#7A666B]"
+                      }`}
+                    >
+                      {rt.sub}
+                    </div>
+                  </button>
+                ))}
               </div>
-              <span className="px-2 py-0.5 rounded bg-crimson-950 border border-crimson-700 text-gold-400 font-mono text-[10px] font-bold">
-                {santaTier === "REAL_BEARD" ? "LIMITED TALENTS" : "STANDARD"}
-              </span>
+
+              {/* Duration Selector */}
+              <div className="p-4 rounded-2xl bg-[#FFF8F0] border border-[#E8DCD0] space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-[#211619]">
+                    Booking Duration (Minimum 3 Hours — +₱3,000 per extra hour)
+                  </span>
+                  <span className="text-xs text-[#780D22] font-bold">
+                    {durationHours} Hours Selected
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {[3, 4, 5, 6, 8].map((hrs) => {
+                    const extra = Math.max(0, hrs - 3) * 3000;
+                    const active = durationHours === hrs;
+                    return (
+                      <button
+                        key={hrs}
+                        type="button"
+                        onClick={() => setDurationHours(hrs)}
+                        className={`py-2.5 px-2.5 rounded-xl border text-xs transition ${
+                          active
+                            ? "bg-[#780D22] border-[#D6B36A] text-white font-bold shadow-sm"
+                            : "bg-white border-[#E8DCD0] text-[#5C494E] hover:border-[#D6B36A]"
+                        }`}
+                      >
+                        <div>{hrs} Hours</div>
+                        <div
+                          className={`text-[10px] ${
+                            active ? "text-[#F3D899]" : "text-[#A61932]"
+                          }`}
+                        >
+                          {extra === 0 ? "Base 3 Hrs" : `+₱${extra.toLocaleString()}`}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
-            {/* Active Tags */}
-            <div className="flex flex-wrap gap-1.5">
-              {liveQuote.tags.map((tag, i) => (
-                <span
-                  key={i}
-                  className="px-2.5 py-0.5 rounded-full bg-obsidian-950 border border-slate-700 text-gold-300 font-mono text-[10px] font-semibold"
+            {/* STEP 4: CLIENT & CONTACT DETAILS */}
+            <div className="pt-5 border-t border-[#EFE5DA] space-y-4">
+              <label className="block text-[#211619] font-bold text-sm">
+                4. Your Contact Details *
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[#5C494E] font-medium mb-1">Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    placeholder="e.g. Maria Clara Santos"
+                    className="w-full px-3.5 py-2.5 bg-[#FFF8F0] border border-[#D8C9BA] rounded-xl text-[#211619] focus:outline-none focus:border-[#780D22]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[#5C494E] font-medium mb-1">
+                    Company / Mall / Organization *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="e.g. SM Supermalls / Ayala Malls / Private Host"
+                    className="w-full px-3.5 py-2.5 bg-[#FFF8F0] border border-[#D8C9BA] rounded-xl text-[#211619] focus:outline-none focus:border-[#780D22]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[#5C494E] font-medium mb-1">Email Address *</label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="e.g. events@company.ph"
+                    className="w-full px-3.5 py-2.5 bg-[#FFF8F0] border border-[#D8C9BA] rounded-xl text-[#211619] focus:outline-none focus:border-[#780D22]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[#5C494E] font-medium mb-1">
+                    Mobile / Viber Number *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="e.g. 0917 123 4567"
+                    className="w-full px-3.5 py-2.5 bg-[#FFF8F0] border border-[#D8C9BA] rounded-xl text-[#211619] focus:outline-none focus:border-[#780D22]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* STEP 5: EVENT SCHEDULE & VENUE */}
+            <div className="pt-5 border-t border-[#EFE5DA] space-y-4">
+              <label className="block text-[#211619] font-bold text-sm">
+                5. Event Date, Time &amp; Venue *
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <div>
+                  <label className="block text-[#5C494E] font-medium mb-1">Event Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={eventDate}
+                    onChange={(e) => handleDateChange(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-[#FFF8F0] border border-[#D8C9BA] rounded-xl text-[#211619] focus:outline-none focus:border-[#780D22]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[#5C494E] font-medium mb-1">Start Time</label>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-[#FFF8F0] border border-[#D8C9BA] rounded-xl text-[#211619] focus:outline-none focus:border-[#780D22]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[#5C494E] font-medium mb-1">
+                    End Time ({durationHours} Hrs)
+                  </label>
+                  <input
+                    type="time"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-[#FFF8F0] border border-[#D8C9BA] rounded-xl text-[#211619] focus:outline-none focus:border-[#780D22]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[#5C494E] font-medium mb-1">
+                    Mall / Hotel / Venue Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={venueName}
+                    onChange={(e) => setVenueName(e.target.value)}
+                    placeholder="e.g. SM Megamall / Shangri-La / Private Residence"
+                    className="w-full px-3.5 py-2.5 bg-[#FFF8F0] border border-[#D8C9BA] rounded-xl text-[#211619] focus:outline-none focus:border-[#780D22]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[#5C494E] font-medium mb-1">
+                    City / Province *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="e.g. Makati / BGC / Clark, Pampanga / Cebu"
+                    className="w-full px-3.5 py-2.5 bg-[#FFF8F0] border border-[#D8C9BA] rounded-xl text-[#211619] focus:outline-none focus:border-[#780D22]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* STEP 6: SANTA PREFERENCE & NOTES */}
+            <div className="pt-5 border-t border-[#EFE5DA] space-y-4">
+              <label className="block text-[#211619] font-bold text-sm">
+                6. Preferred Santa Performer &amp; Event Notes
+              </label>
+              <div>
+                <select
+                  value={talentPreferenceId}
+                  onChange={(e) => setTalentPreferenceId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-[#FFF8F0] border border-[#D8C9BA] rounded-xl text-[#211619] focus:outline-none focus:border-[#780D22]"
                 >
-                  {tag}
-                </span>
-              ))}
-            </div>
-
-            {/* Line Items */}
-            <div className="p-4 rounded-xl bg-obsidian-950 border border-slate-800 space-y-2.5 font-mono">
-              <div className="flex justify-between text-slate-400">
-                <span>Santa Category:</span>
-                <strong className="text-white">{liveQuote.santaTierLabel}</strong>
-              </div>
-              <div className="flex justify-between text-slate-400">
-                <span>Event Activity:</span>
-                <strong className="text-gold-300">{liveQuote.eventActivityLabel}</strong>
-              </div>
-              <div className="flex justify-between text-slate-400">
-                <span>Territory Rate:</span>
-                <strong className="text-white">{liveQuote.rateTerritoryLabel}</strong>
-              </div>
-              <div className="flex justify-between text-slate-400">
-                <span>Base Package (Min 3 HRS):</span>
-                <strong className="text-white">
-                  ₱{liveQuote.baseRate.toLocaleString()}
-                </strong>
-              </div>
-              <div className="flex justify-between text-slate-400">
-                <span>Extra Hours ({liveQuote.extraHours} hr × ₱3,000):</span>
-                <strong className="text-amber-300">
-                  +₱{liveQuote.extraHourCharge.toLocaleString()}
-                </strong>
+                  <option value="">
+                    Recommend best available performer for {liveQuote.santaTierLabel}
+                  </option>
+                  {talents.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      Santa {t.displayName} ({t.nationality || "Real Beard"}, {t.height})
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <div className="pt-2.5 border-t border-slate-800 flex justify-between items-baseline">
-                <span className="text-xs font-bold text-white uppercase">
-                  Total Quotation:
-                </span>
-                <span className="text-2xl font-black text-emerald-400">
-                  ₱{liveQuote.totalQuotedRate.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex justify-between text-[11px] text-slate-400 pt-1">
-                <span>50% Downpayment to Lock:</span>
-                <span className="text-gold-400 font-bold">
-                  ₱{liveQuote.depositRequired.toLocaleString()}
-                </span>
+              <div>
+                <label className="block text-[#5C494E] font-medium mb-1">
+                  Event Program / Special Requests
+                </label>
+                <textarea
+                  rows={3}
+                  value={specialRequests}
+                  onChange={(e) => setSpecialRequests(e.target.value)}
+                  placeholder="Tell us about your Christmas tree lighting, meet-and-greet setup, gift distribution, or photo shoot schedule..."
+                  className="w-full px-3.5 py-2.5 bg-[#FFF8F0] border border-[#D8C9BA] rounded-xl text-[#211619] resize-none focus:outline-none focus:border-[#780D22]"
+                />
               </div>
             </div>
 
-            {/* Official Rate Card Reference Table */}
-            <div className="p-3.5 rounded-xl bg-obsidian-950/70 border border-slate-800/80 space-y-2 text-[11px]">
-              <div className="font-bold text-gold-400 uppercase tracking-wider font-mono text-[10px]">
-                Official Brillo Santa Rate Card
+            {/* Submit */}
+            <div className="pt-5 border-t border-[#EFE5DA] flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-[11px] text-[#7A666B]">
+                Availability is confirmed upon booking. Travel &amp; lodging billed separately for provincial events.
               </div>
-              <div className="space-y-1 text-slate-300">
-                <div className="font-semibold text-white">
-                  🎅 Real Beard Santa (Limited Talents)
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full sm:w-auto px-8 py-4 rounded-full font-bold text-xs uppercase tracking-[0.14em] text-white bg-gradient-to-r from-[#780D22] to-[#B82038] hover:from-[#8C1028] hover:to-[#C92640] shadow-xl transition transform hover:-translate-y-0.5 disabled:opacity-50"
+              >
+                {submitting
+                  ? "Submitting Inquiry..."
+                  : `Request Official Quotation (₱${liveQuote.totalQuotedRate.toLocaleString()}) →`}
+              </button>
+            </div>
+          </form>
+
+          {/* RIGHT COLUMN (4 Cols): Sticky Live Rate Card & Quotation Summary */}
+          <div className="lg:col-span-4 lg:sticky lg:top-24 space-y-5">
+            <div className="p-6 rounded-3xl bg-[#211619] text-[#FFF8F0] border-2 border-[#D6B36A]/50 shadow-2xl space-y-4 text-xs">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3.5">
+                <div className="flex items-center space-x-2">
+                  <Calculator className="w-4 h-4 text-[#D6B36A]" />
+                  <h3 className="font-display text-xl font-bold text-[#FFF8F0]">
+                    Live Quotation Estimate
+                  </h3>
                 </div>
-                <div className="flex justify-between font-mono text-[10px] text-slate-400">
-                  <span>Metro Manila (Min 3 Hrs):</span>
-                  <span className="text-white">PHP 24,000</span>
+                <span className="px-2.5 py-0.5 rounded-full bg-[#780D22] border border-[#D6B36A]/50 text-[#F3D899] text-[10px] font-bold uppercase tracking-wider">
+                  {santaTier === "REAL_BEARD"
+                    ? "Real Beard"
+                    : santaTier === "SANTA_AND_ELVES"
+                    ? "Santa + 2 Elves"
+                    : "Classic"}
+                </span>
+              </div>
+
+              {/* Active Tags */}
+              <div className="flex flex-wrap gap-1.5">
+                {liveQuote.tags.map((tag, i) => (
+                  <span
+                    key={i}
+                    className="px-2.5 py-0.5 rounded-full bg-white/5 border border-white/15 text-[#F3D899] text-[10px] font-semibold"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+
+              {/* Line Items */}
+              <div className="p-4 rounded-2xl bg-black/30 border border-white/10 space-y-2.5">
+                <div className="flex justify-between text-[#FFF8F0]/75">
+                  <span>Experience:</span>
+                  <strong className="text-white">{liveQuote.santaTierLabel}</strong>
                 </div>
-                <div className="flex justify-between font-mono text-[10px] text-slate-400">
-                  <span>Holiday / Out of Town (Min 3 Hrs):</span>
-                  <span className="text-white">PHP 26,000</span>
+                <div className="flex justify-between text-[#FFF8F0]/75">
+                  <span>Event Format:</span>
+                  <strong className="text-[#F3D899]">{liveQuote.eventActivityLabel}</strong>
+                </div>
+                <div className="flex justify-between text-[#FFF8F0]/75">
+                  <span>Location Tier:</span>
+                  <strong className="text-white">{liveQuote.rateTerritoryLabel}</strong>
+                </div>
+                <div className="flex justify-between text-[#FFF8F0]/75">
+                  <span>Base Package (3 Hrs):</span>
+                  <strong className="text-white">₱{liveQuote.baseRate.toLocaleString()}</strong>
+                </div>
+                <div className="flex justify-between text-[#FFF8F0]/75">
+                  <span>Extra Hours ({liveQuote.extraHours} hr × ₱3,000):</span>
+                  <strong className="text-[#F3D899]">
+                    +₱{liveQuote.extraHourCharge.toLocaleString()}
+                  </strong>
+                </div>
+
+                <div className="pt-3 border-t border-white/10 flex justify-between items-baseline">
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">
+                    Estimated Total:
+                  </span>
+                  <span className="font-display text-3xl font-bold text-[#D6B36A]">
+                    ₱{liveQuote.totalQuotedRate.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between text-[11px] text-[#FFF8F0]/70 pt-1">
+                  <span>50% Reservation Downpayment:</span>
+                  <span className="text-white font-bold">
+                    ₱{liveQuote.depositRequired.toLocaleString()}
+                  </span>
                 </div>
               </div>
-              <div className="space-y-1 text-slate-300 pt-1.5 border-t border-slate-800">
-                <div className="font-semibold text-white">🎭 Fake Beard Santa</div>
-                <div className="flex justify-between font-mono text-[10px] text-slate-400">
-                  <span>Metro Manila (Min 3 Hrs):</span>
-                  <span className="text-white">PHP 15,000</span>
+
+              {/* Official Rate Card Quick Reference */}
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2.5 text-[11px]">
+                <div className="font-bold text-[#D6B36A] uppercase tracking-[0.14em] text-[10px]">
+                  Official Starting Rates (Min 3 Hours)
                 </div>
-                <div className="flex justify-between font-mono text-[10px] text-slate-400">
-                  <span>Holiday / Out of Town (Min 3 Hrs):</span>
-                  <span className="text-white">PHP 18,000</span>
+                <div className="space-y-1 text-[#FFF8F0]/85">
+                  <div className="flex justify-between">
+                    <span>Real-Beard Santa (MM):</span>
+                    <strong>₱24,000</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Real-Beard (Holiday / Provincial):</span>
+                    <strong>₱26,000</strong>
+                  </div>
+                  <div className="flex justify-between pt-1 border-t border-white/10">
+                    <span>Classic Santa (MM / Holiday):</span>
+                    <strong>₱15,000 / ₱18,000</strong>
+                  </div>
+                  <div className="flex justify-between pt-1 border-t border-white/10">
+                    <span>Santa &amp; Two Elves Package:</span>
+                    <strong>₱32,000</strong>
+                  </div>
+                  <div className="text-[10px] text-[#F3D899] pt-1">
+                    Additional Hours: +₱3,000 per hour
+                  </div>
                 </div>
-              </div>
-              <div className="pt-1.5 border-t border-slate-800 text-[10px] text-amber-300 font-mono">
-                • Activities: Meet &amp; Greet, Christmas Launch, Photo Shoot, Private Party
-                <br />• Additional PHP 3,000 for each hour beyond 3 hours
               </div>
             </div>
           </div>

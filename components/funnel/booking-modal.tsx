@@ -635,8 +635,8 @@ export function BookingModal({
 
               {/* Official Rate Card Selector: Beard Tier, Territory, Activity & Duration */}
               <div className="p-4 rounded-xl bg-[#09090B] border border-[#27272A] space-y-3">
-                {/* 1. Real Beard vs Fake Beard */}
-                <div className="grid grid-cols-2 gap-2">
+                {/* 1. Real Beard vs Classic vs Santa & Elves */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setSantaTier("REAL_BEARD")}
@@ -648,14 +648,11 @@ export function BookingModal({
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-headline font-bold text-[#D4AF37]">
-                        🎅 Real Beard Santa
-                      </span>
-                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
-                        Limited Talents
+                        🎅 Real-Beard
                       </span>
                     </div>
                     <div className="text-[10px] font-mono text-zinc-400 mt-1">
-                      ₱24k MM • ₱26k Holiday / Out of Town
+                      ₱24k MM • ₱26k Hol/OOT
                     </div>
                   </button>
                   <button
@@ -669,14 +666,29 @@ export function BookingModal({
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-headline font-bold text-white">
-                        🎭 Fake Beard Santa
-                      </span>
-                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
-                        Standard
+                        🎭 Classic Santa
                       </span>
                     </div>
                     <div className="text-[10px] font-mono text-zinc-400 mt-1">
-                      ₱15k MM • ₱18k Holiday / Out of Town
+                      ₱15k MM • ₱18k Hol/OOT
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSantaTier("SANTA_AND_ELVES")}
+                    className={`p-2.5 rounded-xl border text-left transition ${
+                      santaTier === "SANTA_AND_ELVES"
+                        ? "bg-zinc-900 border-[#22C55E] text-white"
+                        : "bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-headline font-bold text-[#D4AF37]">
+                        🎅🧝 Santa + 2 Elves
+                      </span>
+                    </div>
+                    <div className="text-[10px] font-mono text-zinc-400 mt-1">
+                      ₱32,000 Package (3h)
                     </div>
                   </button>
                 </div>
@@ -687,17 +699,32 @@ export function BookingModal({
                     {
                       id: "METRO_MANILA" as SantaRateTerritory,
                       label: "Metro Manila",
-                      price: santaTier === "REAL_BEARD" ? "₱24,000" : "₱15,000",
+                      price:
+                        santaTier === "SANTA_AND_ELVES"
+                          ? "₱32,000"
+                          : santaTier === "REAL_BEARD"
+                          ? "₱24,000"
+                          : "₱15,000",
                     },
                     {
                       id: "HOLIDAY" as SantaRateTerritory,
                       label: "Holiday Rate",
-                      price: santaTier === "REAL_BEARD" ? "₱26,000" : "₱18,000",
+                      price:
+                        santaTier === "SANTA_AND_ELVES"
+                          ? "₱32,000"
+                          : santaTier === "REAL_BEARD"
+                          ? "₱26,000"
+                          : "₱18,000",
                     },
                     {
                       id: "OUT_OF_TOWN" as SantaRateTerritory,
                       label: "Out of Town",
-                      price: santaTier === "REAL_BEARD" ? "₱26,000" : "₱18,000",
+                      price:
+                        santaTier === "SANTA_AND_ELVES"
+                          ? "₱32,000"
+                          : santaTier === "REAL_BEARD"
+                          ? "₱26,000"
+                          : "₱18,000",
                     },
                   ].map((rt) => (
                     <button

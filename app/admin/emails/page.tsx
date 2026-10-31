@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Smartphone,
   Monitor,
+  Loader2,
 } from "lucide-react";
 import { EMAIL_TEMPLATES, EmailTemplateDef, renderEmailTemplate } from "@/lib/email-templates";
 import { DEFAULT_AUTOMATIONS, AutomationSequenceItem, EmailLogEntry } from "@/lib/email-automation";
@@ -31,13 +32,21 @@ export default function EmailAutomationCenterPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplateDef>(EMAIL_TEMPLATES[0]);
   const [previewDevice, setPreviewDevice] = useState<"DESKTOP" | "MOBILE">("DESKTOP");
   const [searchLog, setSearchLog] = useState("");
-  const [testEmailAddr, setTestEmailAddr] = useState("client@brilloevent.com");
+  const [testEmailAddr, setTestEmailAddr] = useState("bookings@brilloevent.com");
   const [testSentNotice, setTestSentNotice] = useState(false);
+  const [smtpPassword, setSmtpPassword] = useState("");
+  const [testRecipientEmail, setTestRecipientEmail] = useState("bookings@brilloevent.com");
+  const [isTestingSmtp, setIsTestingSmtp] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Load existing logs and settings
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
+        const cachedPass = localStorage.getItem("brillo_smtp_pass_cached");
+        if (cachedPass) {
+          setSmtpPassword(cachedPass);
+        }
         const rawLogs = localStorage.getItem("brillo_email_logs_v3");
         if (rawLogs) {
           setLogs(JSON.parse(rawLogs));
@@ -99,13 +108,31 @@ export default function EmailAutomationCenterPage() {
     );
   };
 
-  const handleSendTestEmail = (e: React.FormEvent) => {
+  const handleSendTestEmail = async (e: React.FormEvent) => {
     e.preventDefault();
+    const finalSubject = selectedTemplate.subject.replace("{{client_name}}", "Test Client");
+    
+    // Attempt live dispatch if password or API is available
+    try {
+      await fetch("/api/emails/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "TEST_CONNECTION",
+          password: smtpPassword,
+          testRecipient: testEmailAddr,
+          customConfig: {
+            subject: finalSubject,
+          },
+        }),
+      });
+    } catch {}
+
     const newLog: EmailLogEntry = {
       id: `eml_${Date.now()}`,
       recipient: testEmailAddr,
       sender: "Brillo Events <bookings@brilloevent.com>",
-      subject: selectedTemplate.subject.replace("{{client_name}}", "Test Client"),
+      subject: finalSubject,
       templateId: selectedTemplate.id,
       templateName: selectedTemplate.name,
       triggerEvent: selectedTemplate.triggerKey,
@@ -119,6 +146,52 @@ export default function EmailAutomationCenterPage() {
     }
     setTestSentNotice(true);
     setTimeout(() => setTestSentNotice(false), 4000);
+  };
+
+  const handleTestConnection = async () => {
+    setIsTestingSmtp(true);
+    setTestResult(null);
+    try {
+      if (typeof window !== "undefined" && smtpPassword) {
+        localStorage.setItem("brillo_smtp_pass_cached", smtpPassword);
+      }
+      const res = await fetch("/api/emails/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "TEST_CONNECTION",
+          password: smtpPassword,
+          testRecipient: testRecipientEmail || "bookings@brilloevent.com",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to establish SMTP handshake.");
+      }
+      setTestResult({
+        success: true,
+        message: data.message || `Test email successfully dispatched to ${testRecipientEmail || "bookings@brilloevent.com"}!`,
+      });
+      const newLog: EmailLogEntry = {
+        id: `eml_${Date.now()}`,
+        recipient: testRecipientEmail || "bookings@brilloevent.com",
+        sender: "Brillo Events <bookings@brilloevent.com>",
+        subject: "Brillo Events — SMTP Connection Test Successful! 🎄",
+        templateId: "TEST_PING",
+        templateName: "SMTP Handshake Verification",
+        triggerEvent: "PROVIDER_TEST",
+        status: "DELIVERED",
+        timestamp: new Date().toISOString(),
+      };
+      setLogs((prev) => [newLog, ...prev]);
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: err.message || "Failed to verify SMTP connection.",
+      });
+    } finally {
+      setIsTestingSmtp(false);
+    }
   };
 
   const sampleRender = renderEmailTemplate(selectedTemplate.id, {
@@ -561,35 +634,86 @@ export default function EmailAutomationCenterPage() {
               />
             </label>
 
-            <label className="block md:col-span-2">
+            <label className="block">
               <span className="font-bold text-[#5C494E]">Private Email Password:</span>
               <input
                 type="password"
-                placeholder="••••••••••••••••"
-                className="w-full mt-1 px-3 py-2 border border-[#D6C7C9] rounded-lg bg-[#FAF7F5] font-mono text-[#1E1416]"
+                value={smtpPassword}
+                onChange={(e) => setSmtpPassword(e.target.value)}
+                placeholder="Enter password for bookings@brilloevent.com"
+                className="w-full mt-1 px-3 py-2 border border-[#D6C7C9] rounded-lg bg-white font-mono text-[#1E1416] focus:border-[#780D22] focus:outline-none"
               />
               <span className="text-[10px] text-[#9A8A8C] mt-1 block">
-                Protected via cPanel / server environment variables.
+                Required for authenticated SSL sending via mail.privateemail.com:465.
+              </span>
+            </label>
+
+            <label className="block">
+              <span className="font-bold text-[#5C494E]">Test Delivery Recipient:</span>
+              <input
+                type="email"
+                value={testRecipientEmail}
+                onChange={(e) => setTestRecipientEmail(e.target.value)}
+                placeholder="bookings@brilloevent.com"
+                className="w-full mt-1 px-3 py-2 border border-[#D6C7C9] rounded-lg bg-white text-[#1E1416] focus:border-[#780D22] focus:outline-none"
+              />
+              <span className="text-[10px] text-[#9A8A8C] mt-1 block">
+                The test message will be dispatched directly to this mailbox.
               </span>
             </label>
           </div>
 
-          <div className="flex items-center justify-between pt-2 border-t border-[#E8DFE0]">
+          {testResult && (
+            <div
+              className={`p-4 rounded-xl border text-xs flex items-start gap-3 transition ${
+                testResult.success
+                  ? "bg-emerald-50 border-emerald-300 text-emerald-900"
+                  : "bg-red-50 border-red-300 text-red-900"
+              }`}
+            >
+              {testResult.success ? (
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+              )}
+              <div className="space-y-1">
+                <div className="font-bold">
+                  {testResult.success ? "SMTP Connection Verified!" : "SMTP Handshake Error"}
+                </div>
+                <div className="leading-relaxed">{testResult.message}</div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[#E8DFE0]">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-              <span className="text-xs font-semibold text-emerald-800">
-                Transporter Ready: mail.privateemail.com:465
+              <span
+                className={`w-2.5 h-2.5 rounded-full ${
+                  smtpPassword ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
+                }`}
+              />
+              <span className="text-xs font-semibold text-[#5C494E]">
+                {smtpPassword
+                  ? "Ready to Test: mail.privateemail.com:465 (Password Loaded)"
+                  : "Enter Password to Authenticate Transporter"}
               </span>
             </div>
 
             <button
               type="button"
-              onClick={async () => {
-                alert("Pinging Namecheap SMTP (mail.privateemail.com:465)... Connection parameters verified successfully!");
-              }}
-              className="py-2 px-4 rounded-xl bg-[#780D22] text-[#FFF8F0] font-bold text-xs hover:bg-[#590919] transition shadow-md"
+              disabled={isTestingSmtp}
+              onClick={handleTestConnection}
+              className="py-2.5 px-5 rounded-xl bg-[#780D22] text-[#FFF8F0] font-bold text-xs hover:bg-[#590919] transition shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              Save &amp; Test Connection
+              {isTestingSmtp ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Verifying Transporter...
+                </>
+              ) : (
+                <>
+                  <Send className="w-3.5 h-3.5" /> Save &amp; Send Test Email
+                </>
+              )}
             </button>
           </div>
 

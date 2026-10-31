@@ -7,6 +7,8 @@ import {
   SantaEventActivityTag,
 } from "@/lib/costing";
 import { sendEmail } from "@/lib/email-service";
+import { sendTransactionalEmail } from "@/lib/mailer";
+import { templateProposalInquiry } from "@/lib/email-templates-branded";
 
 export async function POST(req: NextRequest) {
   try {
@@ -229,13 +231,65 @@ export async function POST(req: NextRequest) {
       effectiveVenue
     )}`;
 
+    // Prepare Branded Responsive Proposal & Inquiry Acknowledgment Email
+    const appOrigin = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://brilloevent.com";
+    const fullProposalUrl = `${appOrigin}${statusPortalPath}`;
+
+    const { subject: brandedSubject, html: brandedHtml } = templateProposalInquiry({
+      clientName: effectiveContact,
+      eventType: eventName || `${effectiveVenue} — ${pkg.eventActivityLabel}`,
+      proposalNumber: bookingNumber,
+      proposalLink: fullProposalUrl,
+      eventDate: parsedDate.toDateString(),
+      venue: effectiveVenue,
+      packageName: `${pkg.santaTierLabel} (${pkg.eventActivityLabel} • ${pkg.durationHours} Hours)`,
+      totalAmount: finalContractAmount.toLocaleString(),
+      depositAmount: finalDepositRequired.toLocaleString(),
+    });
+
+    // 1. Send Branded Confirmation to Customer's Email Address
+    await sendTransactionalEmail({
+      to: email,
+      subject: brandedSubject,
+      html: brandedHtml,
+      text: `Dear ${effectiveContact},\n\nThank you for requesting a Santa Claus quotation from Brillo Events Management Services for ${effectiveVenue} on ${parsedDate.toDateString()}.\n\nReference Number: ${bookingNumber}\nTotal Amount: PHP ${finalContractAmount.toLocaleString()}\n50% Downpayment Required: PHP ${finalDepositRequired.toLocaleString()}\n\nView details: ${fullProposalUrl}`,
+    }).catch((err) => console.warn("[Quote Mailer Client Warning]:", err));
+
+    // 2. Send Inbound Booking Alert Copy to Operations Inbox (bookings@brilloevent.com)
+    await sendTransactionalEmail({
+      to: "bookings@brilloevent.com",
+      subject: `🎄 NEW INQUIRY ALERT: ${effectiveVenue} (${bookingNumber}) — PHP ${finalContractAmount.toLocaleString()}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 24px; background: #FAF7F5; border: 2px solid #780D22; border-radius: 12px;">
+          <h2 style="color: #780D22; margin-top: 0;">New Inbound Customer Inquiry</h2>
+          <p>A customer has submitted a new Santa booking inquiry through the public website.</p>
+          <div style="background: #FFF; padding: 16px; border: 1px solid #E8DFE0; border-radius: 8px; font-size: 13px; line-height: 1.6;">
+            <strong>Booking Ref:</strong> ${bookingNumber}<br>
+            <strong>Client Contact:</strong> ${effectiveContact}<br>
+            <strong>Company / Organization:</strong> ${effectiveCompany}<br>
+            <strong>Client Email:</strong> <a href="mailto:${email}">${email}</a><br>
+            <strong>Client Phone:</strong> ${phone}<br>
+            <strong>Venue / Mall:</strong> ${effectiveVenue}<br>
+            <strong>Event Date:</strong> ${parsedDate.toDateString()} (${startTime} - ${endTime})<br>
+            <strong>Package:</strong> ${pkg.santaTierLabel} • ${pkg.eventActivityLabel} (${pkg.durationHours} hrs)<br>
+            <strong>Quoted Total:</strong> PHP ${finalContractAmount.toLocaleString()} (50% DP: PHP ${finalDepositRequired.toLocaleString()})<br>
+            <strong>Special Requests:</strong> ${combinedRequests || "None specified"}<br>
+          </div>
+          <div style="margin-top: 20px;">
+            <a href="${appOrigin}/admin/bookings" style="display: inline-block; background: #780D22; color: #FFF; font-weight: bold; font-size: 13px; padding: 10px 20px; text-decoration: none; border-radius: 8px;">OPEN IN ADMIN COMMAND CENTER →</a>
+          </div>
+        </div>
+      `,
+    }).catch((err) => console.warn("[Quote Mailer Admin Alert Warning]:", err));
+
+    // 3. Log to SQLite Email Service for unified auditing
     await sendEmail({
       to: email,
-      subject: `We Received Your Santa Quotation Request — ${effectiveVenue} (${bookingNumber})`,
-      bodyText: `Dear ${effectiveContact},\n\nThank you for requesting a Santa Claus quotation from Brillo Events Management Services for ${effectiveVenue} on ${parsedDate.toDateString()}.\n\nPackage Selected: ${pkg.santaTierLabel} (${pkg.eventActivityLabel} • ${pkg.rateTerritoryLabel} • ${pkg.durationHours} Hours)\nEstimated Package Rate: PHP ${finalContractAmount.toLocaleString()} (50% Downpayment: PHP ${finalDepositRequired.toLocaleString()})\nReference Number: ${bookingNumber}\n\nWarm regards,\nBrillo Events Management Services`,
+      subject: brandedSubject,
+      bodyText: `Inquiry confirmation dispatched to ${email} (Booking: ${bookingNumber})`,
       bookingId: booking.id,
       clientId: client.id,
-    });
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,

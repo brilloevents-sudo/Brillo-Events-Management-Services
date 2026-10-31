@@ -35,7 +35,7 @@ export function getSmtpConfig(): SmtpConfig {
 
 export function createSmtpTransporter(customConfig?: Partial<SmtpConfig>) {
   const config = { ...getSmtpConfig(), ...customConfig };
-  
+
   return nodemailer.createTransport({
     host: config.host,
     port: config.port,
@@ -48,6 +48,31 @@ export function createSmtpTransporter(customConfig?: Partial<SmtpConfig>) {
       rejectUnauthorized: false, // Prevents self-signed cert issues on shared cPanel hosts
     },
   });
+}
+
+/**
+ * Test SMTP Transporter Handshake
+ */
+export async function verifySmtpConnection(
+  customConfig?: Partial<SmtpConfig>
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const config = { ...getSmtpConfig(), ...customConfig };
+    if (!config.pass) {
+      return {
+        success: false,
+        error: "SMTP password for bookings@brilloevent.com is not configured.",
+      };
+    }
+    const transporter = createSmtpTransporter(config);
+    await transporter.verify();
+    return { success: true };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err.message || "Failed to verify SMTP connection.",
+    };
+  }
 }
 
 /**
@@ -65,17 +90,26 @@ export async function sendTransactionalEmail(options: {
     path?: string;
   }>;
   customConfig?: Partial<SmtpConfig>;
-}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  requireLive?: boolean;
+}): Promise<{ success: boolean; messageId?: string; error?: string; isSimulated?: boolean }> {
   try {
     const config = { ...getSmtpConfig(), ...options.customConfig };
 
-    // If password is not configured yet, log safely to local outbox
+    // If password is not configured and requireLive is requested, return descriptive error
     if (!config.pass) {
+      if (options.requireLive) {
+        return {
+          success: false,
+          error:
+            "Cannot send live email: Private Email password is not set. Please provide the mailbox password.",
+        };
+      }
       console.warn(
         `[Mailer] SMTP_PASS not set. Simulating delivery to ${options.to} (Subject: ${options.subject})`
       );
       return {
         success: true,
+        isSimulated: true,
         messageId: `sim_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       };
     }
@@ -91,8 +125,10 @@ export async function sendTransactionalEmail(options: {
       attachments: options.attachments,
     });
 
+    console.log(`[Mailer] Live email sent to ${options.to}: Message ID ${info.messageId}`);
     return {
       success: true,
+      isSimulated: false,
       messageId: info.messageId,
     };
   } catch (error: any) {

@@ -88,6 +88,35 @@ export async function POST(req: NextRequest) {
             paymentChannel,
           },
         });
+
+        // Trigger Automated Official Receipt Email via Namecheap SMTP Transporter
+        const clientEmail = (booking as any).client?.email || (payload.payer_email || "");
+        const clientName = (booking as any).client?.primaryContact || (booking as any).client?.companyName || "Valued Client";
+
+        if (clientEmail) {
+          const { templateOfficialReceipt } = await import("@/lib/email-templates-branded");
+          const { sendTransactionalEmail } = await import("@/lib/mailer");
+          
+          const receiptTpl = templateOfficialReceipt({
+            payerName: clientName,
+            amountPaid: paidAmount.toLocaleString(),
+            paymentMethod: paymentChannel,
+            paymentDate: new Date().toLocaleDateString("en-PH", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            }),
+            transactionId: xenditId,
+            bookingNumber: booking.bookingNumber,
+            remainingBalance: newBalance.toLocaleString(),
+          });
+
+          await sendTransactionalEmail({
+            to: clientEmail,
+            subject: receiptTpl.subject,
+            html: receiptTpl.html,
+          });
+        }
       }
     }
 

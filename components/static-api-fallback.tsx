@@ -66,7 +66,22 @@ function getStaticUsersList(): any[] {
       return [...DEFAULT_STATIC_USERS];
     }
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      // Ensure seed users (creator, admin, client) are always present with valid hashes
+      const merged = [...parsed];
+      for (const def of DEFAULT_STATIC_USERS) {
+        const idx = merged.findIndex((u) => String(u.email).toLowerCase() === def.email.toLowerCase());
+        if (idx === -1) {
+          merged.push(def);
+        } else {
+          // If stored without passwordHash or mismatched, fix hash
+          if (!merged[idx].passwordHash || merged[idx].passwordHash.length !== 64) {
+            merged[idx].passwordHash = def.passwordHash;
+          }
+        }
+      }
+      return merged;
+    }
   } catch {}
   return [...DEFAULT_STATIC_USERS];
 }

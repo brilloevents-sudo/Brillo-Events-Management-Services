@@ -178,37 +178,6 @@ function DashboardLoginInner() {
                 </>
               )}
             </button>
-
-            {/* Quick Demo Credentials Autofill */}
-            <div className="pt-2 border-t border-[#E8DFE0]/80">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[#9A8A8C] block text-center mb-2">
-                Quick Fill Staff Login (Click to populate)
-              </span>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail("admin@brilloevent.com");
-                    setPassword("BrilloAdmin2026!");
-                    setError(null);
-                  }}
-                  className="py-1.5 px-2 rounded-lg bg-[#FAF3EB] hover:bg-[#F4ECEE] border border-[#D6C7C9] text-[11px] font-bold text-[#780D22] text-center transition"
-                >
-                  🛡️ Admin Account
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail("creator@brilloevent.com");
-                    setPassword("BrilloCreator2026!");
-                    setError(null);
-                  }}
-                  className="py-1.5 px-2 rounded-lg bg-[#FAF3EB] hover:bg-[#F4ECEE] border border-[#D6C7C9] text-[11px] font-bold text-[#780D22] text-center transition"
-                >
-                  👑 Master Creator
-                </button>
-              </div>
-            </div>
           </form>
 
           <div className="px-8 py-4 bg-[#FAF3EB] border-t border-[#E8DCD0] text-center text-[12px] text-[#5C494E]">

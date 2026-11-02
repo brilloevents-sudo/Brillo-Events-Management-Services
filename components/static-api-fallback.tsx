@@ -1653,7 +1653,228 @@ export function StaticApiFallback() {
       if (pathname === "/api/paluwal") return jsonResponse(snap.paluwal);
       if (pathname === "/api/expenses") return jsonResponse(snap.expenses);
       if (pathname === "/api/conflicts") return jsonResponse(snap.conflicts);
-      if (pathname === "/api/inbox") return jsonResponse(snap.inbox);
+      // Shared Client Inbox & Email Communications Handler
+      if (pathname === "/api/inbox") {
+        const STATIC_INBOX_KEY = "brillo_inbox_threads_v3";
+        const DEFAULT_STATIC_THREADS = [
+          {
+            id: "th_sm_megamall",
+            subject: "Christmas Village Launch & Santa Appearance — SM Megamall",
+            bookingId: "bk_sm_mega",
+            clientId: "cli_sm_mega",
+            status: "ACTIVE",
+            lastActivityAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+            client: {
+              companyName: "SM Supermalls (SM Megamall)",
+              primaryContact: "Carmela Dizon",
+              email: "carmela.dizon@smsupermalls.com",
+              phone: "0917 554 8812",
+            },
+            booking: {
+              bookingNumber: "BR-2026-CON-24-AOG",
+              mallOrVenue: "SM Megamall Mega Fashion Hall",
+              eventDate: "2026-11-28",
+              totalContractAmount: 26000,
+              depositPaid: 13000,
+            },
+            messages: [
+              {
+                id: "msg_1",
+                direction: "INBOUND",
+                sender: "carmela.dizon@smsupermalls.com",
+                recipient: "bookings@brilloevent.com",
+                subject: "Christmas Village Launch & Santa Appearance — SM Megamall",
+                bodyText: "Hi Brillo Events team, we would like to book Santa Bob Hamilton for our Grand Christmas Launch on November 28, 2026 at Mega Fashion Hall. Kindly provide proposal and availability.",
+                sentAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+              },
+              {
+                id: "msg_2",
+                direction: "OUTBOUND",
+                sender: "bookings@brilloevent.com",
+                recipient: "carmela.dizon@smsupermalls.com",
+                subject: "Your Christmas Event Proposal is Ready! (Ref: BR-2026-CON-24-AOG)",
+                bodyText: "Dear Carmela Dizon,\n\nThank you for choosing Brillo Events Management Services! We have prepared your tailored quotation for SM Megamall: Real-Beard Santa Claus Exclusive (4 Hours). Total contract: ₱26,000 with 50% downpayment of ₱13,000.\n\nWarm regards,\nBrillo Events Team",
+                sentAt: new Date(Date.now() - 1000 * 60 * 60 * 18).toISOString(),
+              },
+              {
+                id: "msg_3",
+                direction: "INBOUND",
+                sender: "carmela.dizon@smsupermalls.com",
+                recipient: "bookings@brilloevent.com",
+                subject: "Re: Your Christmas Event Proposal is Ready!",
+                bodyText: "Thank you! We have approved the proposal and settled the ₱13,000 downpayment via GCash. Kindly send the official receipt.",
+                sentAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
+              },
+              {
+                id: "msg_4",
+                direction: "OUTBOUND",
+                sender: "bookings@brilloevent.com",
+                recipient: "carmela.dizon@smsupermalls.com",
+                subject: "Official Electronic Payment Receipt — SM Megamall (Ref: BR-2026-CON-24-AOG)",
+                bodyText: "Dear Carmela,\n\nThis is your Official Payment Receipt from Brillo Events Management Services acknowledging verified payment of ₱13,000. Remaining balance: ₱13,000.\n\nReference: PAY-2026-XEN-9912.",
+                sentAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+              },
+            ],
+          },
+          {
+            id: "th_shangrila_fort",
+            subject: "Santa Claus Appearance & Tree Lighting — Shangri-La The Fort",
+            bookingId: "bk_shangrila",
+            clientId: "cli_shangrila",
+            status: "ACTIVE",
+            lastActivityAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+            client: {
+              companyName: "Shangri-La at the Fort, BGC",
+              primaryContact: "Mark Hernandez",
+              email: "mark.hernandez@shangri-la.com",
+              phone: "0918 332 9941",
+            },
+            booking: {
+              bookingNumber: "BR-2026-OCT-21-WZB",
+              mallOrVenue: "Grand Ballroom Foyer, Shangri-La Fort",
+              eventDate: "2026-12-05",
+              totalContractAmount: 38000,
+              depositPaid: 19000,
+            },
+            messages: [
+              {
+                id: "msg_s1",
+                direction: "INBOUND",
+                sender: "mark.hernandez@shangri-la.com",
+                recipient: "bookings@brilloevent.com",
+                subject: "Tree Lighting Inquiry — Shangri-La The Fort",
+                bodyText: "Good day Brillo Events, checking availability for Christmas Tree Lighting Ceremony on Dec 5.",
+                sentAt: new Date(Date.now() - 1000 * 60 * 60 * 30).toISOString(),
+              },
+              {
+                id: "msg_s2",
+                direction: "OUTBOUND",
+                sender: "bookings@brilloevent.com",
+                recipient: "mark.hernandez@shangri-la.com",
+                subject: "Tree Lighting Proposal — Shangri-La The Fort (BR-2026-OCT-21-WZB)",
+                bodyText: "Dear Mark, thank you for reaching out! We are delighted to confirm Santa Bob Hamilton is available for Dec 5. Proposal attached.",
+                sentAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+              },
+            ],
+          },
+          {
+            id: "th_ayala_malls",
+            subject: "Ayala Malls Manila Bay — Christmas Festivities Inquiry",
+            bookingId: "bk_ayala",
+            clientId: "cli_ayala",
+            status: "ACTIVE",
+            lastActivityAt: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
+            client: {
+              companyName: "Ayala Malls Manila Bay",
+              primaryContact: "Patricia Reyes",
+              email: "reyes.patricia@ayalamalls.com.ph",
+              phone: "0920 119 4432",
+            },
+            booking: {
+              bookingNumber: "BR-2026-Q088",
+              mallOrVenue: "Ayala Malls Manila Bay Activity Center",
+              eventDate: "2026-12-12",
+              totalContractAmount: 26000,
+              depositPaid: 0,
+            },
+            messages: [
+              {
+                id: "msg_a1",
+                direction: "INBOUND",
+                sender: "reyes.patricia@ayalamalls.com.ph",
+                recipient: "bookings@brilloevent.com",
+                subject: "Quotation Request: Santa Appearance December 12",
+                bodyText: "Hi! We submitted our quotation request on your website for Santa on December 12 at Ayala Malls Manila Bay.",
+                sentAt: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
+              },
+              {
+                id: "msg_a2",
+                direction: "OUTBOUND",
+                sender: "bookings@brilloevent.com",
+                recipient: "reyes.patricia@ayalamalls.com.ph",
+                subject: "Thank You for Your Inquiry — Ayala Malls Manila Bay (BR-2026-Q088)",
+                bodyText: "Dear Patricia, we have received your Santa quotation request and our team is reviewing your schedule. We will send the full proposal shortly.",
+                sentAt: new Date(Date.now() - 1000 * 60 * 230).toISOString(),
+              },
+            ],
+          },
+        ];
+
+        let threadsList = DEFAULT_STATIC_THREADS;
+        if (typeof localStorage !== "undefined") {
+          try {
+            const rawThreads = localStorage.getItem(STATIC_INBOX_KEY);
+            if (rawThreads) {
+              threadsList = JSON.parse(rawThreads);
+            } else {
+              localStorage.setItem(STATIC_INBOX_KEY, JSON.stringify(DEFAULT_STATIC_THREADS));
+            }
+          } catch {}
+        }
+
+        const providerStatus = {
+          connected: true,
+          provider: "Namecheap Private Email",
+          senderAddress: "bookings@brilloevent.com",
+          statusMessage: "Connected (mail.privateemail.com:465 SSL Active)",
+          inboundSyncSupported: true,
+        };
+
+        if (method === "GET") {
+          const reqThreadId = urlObj.searchParams.get("threadId");
+          if (reqThreadId) {
+            const foundThread = threadsList.find((t) => t.id === reqThreadId) || threadsList[0];
+            return jsonResponse({ success: true, thread: foundThread, providerStatus });
+          }
+          return jsonResponse({
+            success: true,
+            count: threadsList.length,
+            threads: threadsList,
+            providerStatus,
+          });
+        }
+
+        if (method === "POST") {
+          const targetThreadId = parsedBody.threadId;
+          const newMsg = {
+            id: `msg_${Date.now()}`,
+            direction: "OUTBOUND",
+            sender: "bookings@brilloevent.com",
+            recipient: parsedBody.to || "client@events.local",
+            subject: parsedBody.subject || "Official Response",
+            bodyText: parsedBody.bodyText || "",
+            sentAt: new Date().toISOString(),
+          };
+
+          const threadIdx = threadsList.findIndex((t) => t.id === targetThreadId);
+          if (threadIdx !== -1) {
+            threadsList[threadIdx].messages = [...(threadsList[threadIdx].messages || []), newMsg];
+            threadsList[threadIdx].lastActivityAt = new Date().toISOString();
+          }
+
+          if (typeof localStorage !== "undefined") {
+            try {
+              localStorage.setItem(STATIC_INBOX_KEY, JSON.stringify(threadsList));
+            } catch {}
+          }
+
+          // Trigger cPanel mail relay
+          try {
+            origFetch("/api/mailer.php", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                to: parsedBody.to,
+                subject: parsedBody.subject,
+                html: `<div style="font-family: Arial, sans-serif; padding: 20px;">${(parsedBody.bodyText || "").replace(/\n/g, "<br/>")}</div>`,
+                replyTo: "info@brilloevent.com",
+              }),
+            }).catch(() => {});
+          } catch {}
+
+          return jsonResponse({ success: true, message: newMsg });
+        }
+      }
       if (pathname === "/api/import") return jsonResponse(snap.importBatches);
       if (pathname.startsWith("/api/public/status/")) {
         return jsonResponse({

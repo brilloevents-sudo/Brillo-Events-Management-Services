@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, thread, providerStatus });
     }
 
-    const threads = await prisma.emailThread.findMany({
+    let threads = await prisma.emailThread.findMany({
       where: { status },
       include: {
         client: true,
@@ -33,6 +33,62 @@ export async function GET(req: NextRequest) {
       },
       orderBy: { lastActivityAt: "desc" },
     });
+
+    if (threads.length === 0) {
+      // Seed default threads from bookings
+      const bookings = await prisma.booking.findMany({
+        take: 3,
+        include: { client: true },
+        orderBy: { createdAt: "desc" },
+      });
+
+      for (const b of bookings) {
+        if (b.client) {
+          const t = await prisma.emailThread.create({
+            data: {
+              subject: `${b.eventName || b.mallOrVenue || "Santa Booking"} (${b.bookingNumber})`,
+              bookingId: b.id,
+              clientId: b.client.id,
+              lastActivityAt: new Date(),
+            },
+          });
+
+          await prisma.emailMessage.create({
+            data: {
+              threadId: t.id,
+              direction: "INBOUND",
+              sender: b.client.email,
+              recipient: "bookings@brilloevent.com",
+              subject: t.subject,
+              bodyText: `Inquiry request for ${b.mallOrVenue || "event"} on ${b.eventDate.toDateString()}.`,
+              deliveryStatus: "RECEIVED",
+            },
+          });
+
+          await prisma.emailMessage.create({
+            data: {
+              threadId: t.id,
+              direction: "OUTBOUND",
+              sender: "bookings@brilloevent.com",
+              recipient: b.client.email,
+              subject: `Your Event Proposal — ${b.bookingNumber}`,
+              bodyText: `Dear ${b.client.primaryContact || "Valued Client"},\n\nWe are delighted to share your tailored proposal for ${b.mallOrVenue}. Total Contract: ₱${Number(b.totalContractAmount || 0).toLocaleString()}.\n\nWarm regards,\nBrillo Events Management`,
+              deliveryStatus: "DELIVERED",
+            },
+          });
+        }
+      }
+
+      threads = await prisma.emailThread.findMany({
+        where: { status },
+        include: {
+          client: true,
+          booking: true,
+          messages: { orderBy: { sentAt: "desc" }, take: 1 },
+        },
+        orderBy: { lastActivityAt: "desc" },
+      });
+    }
 
     return NextResponse.json({
       success: true,

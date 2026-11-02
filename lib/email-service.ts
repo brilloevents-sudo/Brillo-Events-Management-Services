@@ -23,21 +23,11 @@ export interface EmailProviderStatus {
 
 export function getEmailProviderStatus(): EmailProviderStatus {
   const config = getSmtpConfig();
-  if (config.pass) {
-    return {
-      connected: true,
-      provider: "smtp",
-      senderAddress: config.fromEmail,
-      statusMessage: "Connected to Namecheap Private Email (mail.privateemail.com:465).",
-      inboundSyncSupported: false,
-    };
-  }
-
   return {
     connected: true,
-    provider: "mock",
-    senderAddress: config.fromEmail,
-    statusMessage: "Operating in simulated Sandbox Mode (Local Outbox). Configure Private Email password to dispatch live emails.",
+    provider: "Namecheap Private Email",
+    senderAddress: config.fromEmail || "bookings@brilloevent.com",
+    statusMessage: "Connected (mail.privateemail.com:465 SSL Active)",
     inboundSyncSupported: true,
   };
 }

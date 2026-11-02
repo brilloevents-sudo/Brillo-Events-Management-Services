@@ -308,6 +308,10 @@ export default function BrilloLuxuryLandingPage() {
     setSubmittingForm(true);
 
     try {
+      const cleanEmail = email.trim().replace(/@gmial\.com$/i, "@gmail.com");
+      if (cleanEmail !== email) {
+        setEmail(cleanEmail);
+      }
       const endHour = (14 + numericHours) % 24;
       const res = await fetch("/api/public/request-quote", {
         method: "POST",
@@ -315,7 +319,7 @@ export default function BrilloLuxuryLandingPage() {
         body: JSON.stringify({
           clientName: fullName,
           companyName: companyOrg || venueLocation || fullName,
-          email,
+          email: cleanEmail,
           phone: mobile,
           bookingType:
             inferredActivityTag === "PRIVATE_PARTY" ? "PRIVATE" : "CORPORATE",
@@ -1658,6 +1662,18 @@ export default function BrilloLuxuryLandingPage() {
                       placeholder="you@company.com"
                       className="w-full px-3.5 py-2.5 rounded-xl bg-[#FFF8F0] border border-[#D6B36A]/60 text-[#211619]"
                     />
+                    {email.toLowerCase().includes("@gmial.com") && (
+                      <div className="mt-1.5 text-[11px] text-amber-900 bg-amber-50 border border-amber-300 px-3 py-1.5 rounded-lg flex items-center justify-between">
+                        <span>Typo detected: Did you mean <strong>@gmail.com</strong>?</span>
+                        <button
+                          type="button"
+                          onClick={() => setEmail(email.replace(/@gmial\.com/i, "@gmail.com"))}
+                          className="font-bold underline text-[#780D22] ml-2"
+                        >
+                          Fix Email
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div>

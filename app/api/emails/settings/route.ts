@@ -88,6 +88,27 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    if (action === "DISPATCH_TEMPLATE" || action === "SEND_EMAIL") {
+      const recipient = (body.to || testRecipient || "bookings@brilloevent.com").replace(/@gmial\.com$/i, "@gmail.com");
+      const result = await sendTransactionalEmail({
+        to: recipient,
+        subject: body.subject || "Brillo Events Notification",
+        html: body.html || "<p>Brillo Events Official Notification</p>",
+        customConfig: effectiveConfig,
+        requireLive: false,
+      });
+
+      if (!result.success) {
+        return NextResponse.json({ success: false, error: result.error }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Email successfully delivered to ${recipient}!`,
+        messageId: result.messageId,
+      });
+    }
+
     return NextResponse.json({ success: true, message: "Settings saved successfully." });
   } catch (error: any) {
     return NextResponse.json(

@@ -1,0 +1,5 @@
+# Deny direct browser access to sensitive config & logs
+<FilesMatch "^(mail_config\.(json|php)|mail_relay\.log)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>

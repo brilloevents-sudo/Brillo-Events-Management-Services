@@ -59,10 +59,11 @@ function copyAppHtml(dir: string, relParts: string[] = []) {
 console.log("1. Copying _next/static assets...");
 copyRecursive(nextStaticDir, path.join(rootDir, "_next", "static"));
 
-console.log("2. Copying public assets (talents, brand, proofs, static-db-snapshot.json)...");
+console.log("2. Copying public assets (talents, brand, proofs, api, static-db-snapshot.json)...");
 copyRecursive(path.join(publicDir, "talents"), path.join(rootDir, "talents"));
 copyRecursive(path.join(publicDir, "brand"), path.join(rootDir, "brand"));
 copyRecursive(path.join(publicDir, "proofs"), path.join(rootDir, "proofs"));
+copyRecursive(path.join(publicDir, "api"), path.join(rootDir, "api"));
 if (fs.existsSync(path.join(publicDir, "static-db-snapshot.json"))) {
   fs.copyFileSync(
     path.join(publicDir, "static-db-snapshot.json"),

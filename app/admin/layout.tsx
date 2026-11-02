@@ -7,8 +7,9 @@ import { isCreatorOnlyAdminPath } from "@/lib/auth-shared";
 import { AdminNav } from "@/components/admin-nav";
 import { QuickActionsDrawer } from "@/components/quick-actions-drawer";
 import { usePathname } from "next/navigation";
-import { Search, Bell, ShieldCheck, Crown, LogOut, Lock, Loader2 } from "lucide-react";
+import { Search, ShieldCheck, Crown, LogOut, Lock, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { AdminNotificationsDropdown } from "@/components/admin-notifications-dropdown";
 
 export default function AdminLayout({
   children,
@@ -89,16 +90,8 @@ export default function AdminLayout({
               />
             </div>
 
-            {permissions.canAccessGovernance && (
-              <Link
-                href="/admin/conflicts"
-                className="p-1.5 rounded-lg hover:bg-[#F4ECEE] text-[#9B1B30] relative transition"
-                title="Data & Schedule Conflict Triage"
-              >
-                <Bell className="w-4 h-4" />
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#9B1B30]" />
-              </Link>
-            )}
+            {/* System Notification Dropdown with Real-Time Badging */}
+            <AdminNotificationsDropdown />
 
             {/* Locked session identity (role comes from signed-in account) */}
             <div className="flex items-center space-x-2 pl-3 border-l border-[#E8DFE0]">

@@ -34,6 +34,8 @@ export default function EmailAutomationCenterPage() {
   const [searchLog, setSearchLog] = useState("");
   const [testEmailAddr, setTestEmailAddr] = useState("bookings@brilloevent.com");
   const [testSentNotice, setTestSentNotice] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [testFeedback, setTestFeedback] = useState<{ success: boolean; message: string } | null>(null);
   const [smtpPassword, setSmtpPassword] = useState("");
   const [testRecipientEmail, setTestRecipientEmail] = useState("bookings@brilloevent.com");
   const [isTestingSmtp, setIsTestingSmtp] = useState(false);
@@ -110,42 +112,98 @@ export default function EmailAutomationCenterPage() {
 
   const handleSendTestEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    const finalSubject = selectedTemplate.subject.replace("{{client_name}}", "Test Client");
-    
-    // Attempt live dispatch if password or API is available
-    try {
-      await fetch("/api/emails/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "TEST_CONNECTION",
-          password: smtpPassword,
-          testRecipient: testEmailAddr,
-          customConfig: {
-            subject: finalSubject,
-          },
-        }),
-      });
-    } catch {}
+    setIsSendingTest(true);
+    setTestFeedback(null);
 
-    const newLog: EmailLogEntry = {
-      id: `eml_${Date.now()}`,
-      recipient: testEmailAddr,
-      sender: "Brillo Events <bookings@brilloevent.com>",
-      subject: finalSubject,
-      templateId: selectedTemplate.id,
-      templateName: selectedTemplate.name,
-      triggerEvent: selectedTemplate.triggerKey,
-      status: "DELIVERED",
-      timestamp: new Date().toISOString(),
-    };
-    const updated = [newLog, ...logs];
-    setLogs(updated);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("brillo_email_logs_v3", JSON.stringify(updated.slice(0, 100)));
+    let cleanRecipient = testEmailAddr.trim();
+    if (cleanRecipient.toLowerCase().endsWith("@gmial.com")) {
+      cleanRecipient = cleanRecipient.replace(/@gmial\.com$/i, "@gmail.com");
+      setTestEmailAddr(cleanRecipient);
     }
-    setTestSentNotice(true);
-    setTimeout(() => setTestSentNotice(false), 4000);
+
+    const finalSubject = sampleRender.subject;
+    const finalHtml = sampleRender.html;
+
+    try {
+      let dispatchOk = false;
+      let statusMsg = "";
+
+      // 1. Dispatch via cPanel /api/mailer.php (uses direct Namecheap Private Email SSL 465)
+      try {
+        const mailerRes = await fetch("/api/mailer.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "SEND",
+            to: cleanRecipient,
+            subject: finalSubject,
+            html: finalHtml,
+            replyTo: "info@brilloevent.com",
+            password: smtpPassword,
+          }),
+        });
+        const mailerData = await mailerRes.json();
+        if (mailerRes.ok && mailerData.success) {
+          dispatchOk = true;
+          statusMsg = mailerData.message || `Test email dispatched to ${cleanRecipient}!`;
+        } else if (mailerData.error) {
+          throw new Error(mailerData.error);
+        }
+      } catch (err: any) {
+        // Fallback to Next.js API route if mailer.php unavailable
+        if (!dispatchOk) {
+          const res = await fetch("/api/emails/settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "DISPATCH_TEMPLATE",
+              password: smtpPassword,
+              to: cleanRecipient,
+              subject: finalSubject,
+              html: finalHtml,
+              templateId: selectedTemplate.id,
+              templateName: selectedTemplate.name,
+            }),
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            dispatchOk = true;
+            statusMsg = data.message || `Test email delivered to ${cleanRecipient}!`;
+          } else {
+            throw new Error(data.error || err.message || "Failed to dispatch email.");
+          }
+        }
+      }
+
+      setTestFeedback({
+        success: true,
+        message: `✓ Email successfully delivered to ${cleanRecipient}! Check your inbox and spam folder.`,
+      });
+
+      const newLog: EmailLogEntry = {
+        id: `eml_${Date.now()}`,
+        recipient: cleanRecipient,
+        sender: "Brillo Events <bookings@brilloevent.com>",
+        subject: finalSubject,
+        templateId: selectedTemplate.id,
+        templateName: selectedTemplate.name,
+        triggerEvent: selectedTemplate.triggerKey,
+        status: "DELIVERED",
+        timestamp: new Date().toISOString(),
+      };
+      const updated = [newLog, ...logs];
+      setLogs(updated);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("brillo_email_logs_v3", JSON.stringify(updated.slice(0, 100)));
+      }
+    } catch (err: any) {
+      setTestFeedback({
+        success: false,
+        message: err.message || "Delivery failed. Please check Private Email password in Provider Settings.",
+      });
+    } finally {
+      setIsSendingTest(false);
+    }
   };
 
   const handleTestConnection = async () => {
@@ -155,13 +213,30 @@ export default function EmailAutomationCenterPage() {
       if (typeof window !== "undefined" && smtpPassword) {
         localStorage.setItem("brillo_smtp_pass_cached", smtpPassword);
       }
+
+      // 1. Sync & persist credentials to server-side mail_config.json on cPanel
+      try {
+        await fetch("/api/mailer.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "SAVE_CONFIG",
+            password: smtpPassword,
+            sender: "bookings@brilloevent.com",
+            replyTo: "info@brilloevent.com",
+          }),
+        });
+      } catch {}
+
+      // 2. Perform live SMTP handshake
+      const targetRecipient = (testRecipientEmail || "bookings@brilloevent.com").replace(/@gmial\.com$/i, "@gmail.com");
       const res = await fetch("/api/emails/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "TEST_CONNECTION",
           password: smtpPassword,
-          testRecipient: testRecipientEmail || "bookings@brilloevent.com",
+          testRecipient: targetRecipient,
         }),
       });
       const data = await res.json();
@@ -170,11 +245,11 @@ export default function EmailAutomationCenterPage() {
       }
       setTestResult({
         success: true,
-        message: data.message || `Test email successfully dispatched to ${testRecipientEmail || "bookings@brilloevent.com"}!`,
+        message: data.message || `Test email successfully dispatched to ${targetRecipient}!`,
       });
       const newLog: EmailLogEntry = {
         id: `eml_${Date.now()}`,
-        recipient: testRecipientEmail || "bookings@brilloevent.com",
+        recipient: targetRecipient,
         sender: "Brillo Events <bookings@brilloevent.com>",
         subject: "Brillo Events — SMTP Connection Test Successful! 🎄",
         templateId: "TEST_PING",
@@ -458,15 +533,45 @@ export default function EmailAutomationCenterPage() {
                 placeholder="you@company.com"
                 className="w-full text-xs px-3 py-2 rounded-lg border border-[#D6C7C9] bg-white text-[#1E1416] focus:outline-none focus:border-[#780D22]"
               />
+
+              {testEmailAddr.toLowerCase().includes("@gmial.com") && (
+                <div className="text-[10px] text-amber-800 bg-amber-50 border border-amber-300 p-2 rounded-lg flex items-center justify-between">
+                  <span>Typo detected: Did you mean <strong>@gmail.com</strong>?</span>
+                  <button
+                    type="button"
+                    onClick={() => setTestEmailAddr(testEmailAddr.replace(/@gmial\.com/i, "@gmail.com"))}
+                    className="font-bold underline text-[#780D22] ml-2"
+                  >
+                    Fix Address
+                  </button>
+                </div>
+              )}
+
               <button
                 type="submit"
-                className="w-full py-2 rounded-lg bg-[#780D22] text-white text-xs font-bold hover:bg-[#590919] transition flex items-center justify-center gap-1.5"
+                disabled={isSendingTest}
+                className="w-full py-2 rounded-lg bg-[#780D22] text-white text-xs font-bold hover:bg-[#590919] transition flex items-center justify-center gap-1.5 disabled:opacity-60"
               >
-                <Send className="w-3.5 h-3.5" /> Dispatch Test Preview
+                {isSendingTest ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Dispatching Test Email...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" /> Dispatch Test Preview
+                  </>
+                )}
               </button>
-              {testSentNotice && (
-                <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 p-2 rounded-lg font-semibold text-center">
-                  ✓ Test email logged and dispatched!
+
+              {testFeedback && (
+                <div
+                  className={`text-[11px] p-2 rounded-lg font-semibold text-center border ${
+                    testFeedback.success
+                      ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                      : "text-red-700 bg-red-50 border-red-200"
+                  }`}
+                >
+                  {testFeedback.message}
                 </div>
               )}
             </form>

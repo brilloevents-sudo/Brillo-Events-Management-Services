@@ -291,31 +291,97 @@ export default function BrilloLuxuryLandingPage() {
     setTileEditorOpen(true);
   };
 
-  const handleTileImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setTileFormImage(event.target.result as string);
+  const compressTileImage = (srcOrFile: File | string, maxDim = 1200, quality = 0.82): Promise<string> => {
+    return new Promise((resolve) => {
+      if (typeof window === "undefined") {
+        resolve(typeof srcOrFile === "string" ? srcOrFile : "");
+        return;
       }
-    };
-    reader.readAsDataURL(file);
+      const img = new Image();
+      let objectUrl = "";
+
+      img.onload = () => {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        } else {
+          resolve(typeof srcOrFile === "string" ? srcOrFile : "");
+        }
+      };
+
+      img.onerror = () => {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        resolve(typeof srcOrFile === "string" ? srcOrFile : "");
+      };
+
+      if (srcOrFile instanceof File) {
+        objectUrl = URL.createObjectURL(srcOrFile);
+        img.src = objectUrl;
+      } else if (typeof srcOrFile === "string") {
+        img.src = srcOrFile;
+      } else {
+        resolve("");
+      }
+    });
   };
 
-  const handleSaveTile = () => {
+  const handleTileImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressTileImage(file, 1200, 0.82);
+      setTileFormImage(compressed);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setTileFormImage(event.target.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveTile = async () => {
+    let finalImage = tileFormImage;
+    // If a massive raw base64 data URL was uploaded or pasted, auto-compress it so localStorage quota is protected
+    if (finalImage && finalImage.startsWith("data:image/") && finalImage.length > 200000) {
+      try {
+        finalImage = await compressTileImage(finalImage, 1200, 0.82);
+      } catch {}
+    }
+
     if (tileEditorType === "EVENT") {
       const updated = [...eventTiles];
       updated[tileEditorIndex] = {
         ...updated[tileEditorIndex],
         title: tileFormTitle,
         desc: tileFormDesc,
-        image: tileFormImage,
+        image: finalImage,
         link: tileFormLink || updated[tileEditorIndex].link,
       };
       setEventTiles(updated);
       if (typeof window !== "undefined") {
-        localStorage.setItem("brillo_custom_tiles_v1", JSON.stringify(updated));
+        try {
+          localStorage.setItem("brillo_custom_tiles_v1", JSON.stringify(updated));
+        } catch (err) {
+          console.warn("Could not save to localStorage (quota or private mode):", err);
+        }
       }
     } else {
       const updated = [...packageTiles];
@@ -323,11 +389,15 @@ export default function BrilloLuxuryLandingPage() {
         ...updated[tileEditorIndex],
         title: tileFormTitle,
         desc: tileFormDesc,
-        image: tileFormImage,
+        image: finalImage,
       };
       setPackageTiles(updated);
       if (typeof window !== "undefined") {
-        localStorage.setItem("brillo_package_tiles_v1", JSON.stringify(updated));
+        try {
+          localStorage.setItem("brillo_package_tiles_v1", JSON.stringify(updated));
+        } catch (err) {
+          console.warn("Could not save to localStorage (quota or private mode):", err);
+        }
       }
     }
     setTileSavedToast(true);

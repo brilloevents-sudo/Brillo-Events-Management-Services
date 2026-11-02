@@ -21,7 +21,19 @@ export async function GET(req: NextRequest) {
         },
       });
 
-      return NextResponse.json({ success: true, thread, providerStatus });
+      const isBooked = (status?: string) =>
+        ["BOOKED", "SECURED", "CONFIRMED", "SECURED_CONFIRMED", "CONTRACT_SIGNED", "CONTRACT_SIGNED_PAID", "READY_FOR_DEPLOYMENT"].includes(
+          (status || "").toUpperCase()
+        );
+
+      const enrichedThread = thread
+        ? {
+            ...thread,
+            bookingStatus: isBooked(thread.booking?.status) ? "BOOKED" : "QUOTATION_REQUEST",
+          }
+        : null;
+
+      return NextResponse.json({ success: true, thread: enrichedThread, providerStatus });
     }
 
     let threads = await prisma.emailThread.findMany({
@@ -90,10 +102,20 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    const isBooked = (bStatus?: string) =>
+      ["BOOKED", "SECURED", "CONFIRMED", "SECURED_CONFIRMED", "CONTRACT_SIGNED", "CONTRACT_SIGNED_PAID", "READY_FOR_DEPLOYMENT"].includes(
+        (bStatus || "").toUpperCase()
+      );
+
+    const enrichedThreads = threads.map((t) => ({
+      ...t,
+      bookingStatus: isBooked(t.booking?.status) ? "BOOKED" : "QUOTATION_REQUEST",
+    }));
+
     return NextResponse.json({
       success: true,
-      count: threads.length,
-      threads,
+      count: enrichedThreads.length,
+      threads: enrichedThreads,
       providerStatus,
     });
   } catch (error: any) {

@@ -1032,7 +1032,7 @@ export function StaticApiFallback() {
               type: "QUOTATION",
               title: `New Quotation: ${effectiveVenue}`,
               message: `${effectiveContact} requested quotation for ${pkg.santaTierLabel} (${refNum}) • ₱${contractAmt.toLocaleString()}`,
-              link: "/admin/crm",
+              link: "/admin/inbox",
               ref: refNum,
               read: false,
               timestamp: new Date().toISOString(),
@@ -1040,6 +1040,69 @@ export function StaticApiFallback() {
             const updatedNotifs = [newNotif, ...currentNotifs].slice(0, 50);
             localStorage.setItem("brillo_system_notifications_v3", JSON.stringify(updatedNotifs));
             window.dispatchEvent(new CustomEvent("brillo-notification-update", { detail: updatedNotifs }));
+          } catch {}
+        }
+
+        // 4. Automatically Sync into Shared Client Inbox (brillo_inbox_threads_v3)
+        if (typeof localStorage !== "undefined") {
+          try {
+            const STATIC_INBOX_KEY = "brillo_inbox_threads_v3";
+            const rawThreads = localStorage.getItem(STATIC_INBOX_KEY);
+            const currentThreads: any[] = rawThreads ? JSON.parse(rawThreads) : [];
+            const newThreadId = `th_${refNum.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+
+            const newInboxThread = {
+              id: newThreadId,
+              subject: `${effectiveVenue} — Santa Quotation Request (${refNum})`,
+              bookingId: newBooking.id,
+              clientId: newBooking.client.id,
+              status: "ACTIVE",
+              bookingStatus: "QUOTATION_REQUEST",
+              lastActivityAt: new Date().toISOString(),
+              client: {
+                companyName: effectiveCompany,
+                primaryContact: effectiveContact,
+                contactPerson: effectiveContact,
+                email: clientEmail,
+                phone: parsedBody.phone || "N/A",
+              },
+              booking: {
+                bookingNumber: refNum,
+                mallOrVenue: effectiveVenue,
+                eventDate: isoDate,
+                totalContractAmount: contractAmt,
+                depositPaid: 0,
+                status: "INQUIRY_RECEIVED",
+              },
+              messages: [
+                {
+                  id: `msg_in_${Date.now()}`,
+                  direction: "INBOUND",
+                  sender: clientEmail || "client@inbound.local",
+                  recipient: "bookings@brilloevent.com",
+                  subject: `Quotation Request: ${effectiveVenue} (${refNum})`,
+                  bodyText: `Inquiry submitted for ${effectiveVenue} on ${formattedEventDate}.\nPackage: ${pkg.santaTierLabel} (${pkg.durationHours} Hours) • Rate: ₱${contractAmt.toLocaleString()}\nPrimary Contact (Kausap): ${effectiveContact} | Mobile: ${parsedBody.phone || "N/A"}\nSpecial Requests: ${combinedRequests || "None"}`,
+                  sentAt: new Date().toISOString(),
+                },
+                {
+                  id: `msg_out_${Date.now() + 1}`,
+                  direction: "OUTBOUND",
+                  sender: "bookings@brilloevent.com",
+                  recipient: clientEmail || "client@inbound.local",
+                  subject: clientMailRender.subject || `We've Received Your Santa Booking Inquiry! (${refNum}) | Brillo Events`,
+                  bodyText: `Dear ${effectiveContact},\n\nThank you for considering Brillo Events Management Services for your upcoming Christmas celebration at ${effectiveVenue} on ${formattedEventDate}!\n\nWe have successfully received your quotation request (${refNum}) for ${pkg.santaTierLabel} (${pkg.durationHours} Hours) with an indicative package rate of ₱${contractAmt.toLocaleString()}.\n\nOur operations desk is currently reviewing your event requirements and checking live calendar availability for your preferred Santa talent.\n\nWarm regards,\nBrillo Events Operations Desk`,
+                  sentAt: new Date(Date.now() + 1000).toISOString(),
+                },
+              ],
+            };
+
+            const filteredThreads = currentThreads.filter(
+              (t: any) => t.id !== newThreadId && t.booking?.bookingNumber !== refNum
+            );
+            localStorage.setItem(
+              STATIC_INBOX_KEY,
+              JSON.stringify([newInboxThread, ...filteredThreads])
+            );
           } catch {}
         }
         if (snap.bookings?.bookings) {
@@ -1770,15 +1833,105 @@ export function StaticApiFallback() {
         const STATIC_INBOX_KEY = "brillo_inbox_threads_v3";
         const DEFAULT_STATIC_THREADS = [
           {
+            id: "th_shangilar_q443",
+            subject: "shangilar — Santa Quotation Request (BR-2026-Q443)",
+            bookingId: "bk_shangilar_q443",
+            clientId: "cli_cloyd_shangilar",
+            status: "ACTIVE",
+            bookingStatus: "QUOTATION_REQUEST",
+            lastActivityAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+            client: {
+              companyName: "shangilar (rWEW)",
+              primaryContact: "Clyde Jose Llora",
+              contactPerson: "Clyde Jose Llora",
+              email: "cloydllora01@gmail.com",
+              phone: "09278872324",
+            },
+            booking: {
+              bookingNumber: "BR-2026-Q443",
+              mallOrVenue: "shangilar (Metro Manila)",
+              eventDate: "2026-11-01",
+              totalContractAmount: 24000,
+              depositPaid: 0,
+              status: "INQUIRY_RECEIVED",
+            },
+            messages: [
+              {
+                id: "msg_shangilar_1",
+                direction: "INBOUND",
+                sender: "cloydllora01@gmail.com",
+                recipient: "bookings@brilloevent.com",
+                subject: "Quotation Request: shangilar (BR-2026-Q443)",
+                bodyText: "Inquiry submitted for shangilar on Nov 1, 2026.\nPackage: Real-Beard Santa Claus (3 Hours) • Rate: ₱24,000\nPrimary Contact (Kausap): Clyde Jose Llora | Mobile: 09278872324\nSpecial Requests: Real-Beard Santa Claus • Meet and Greet • Metro Manila Rate • Shopping Mall / Corporate Event",
+                sentAt: new Date(Date.now() - 1000 * 60 * 20).toISOString(),
+              },
+              {
+                id: "msg_shangilar_2",
+                direction: "OUTBOUND",
+                sender: "bookings@brilloevent.com",
+                recipient: "cloydllora01@gmail.com",
+                subject: "We've Received Your Santa Booking Inquiry! (BR-2026-Q443) | Brillo Events",
+                bodyText: "Dear Clyde Jose Llora,\n\nThank you for choosing Brillo Events Management Services for shangilar!\n\nWe have received your quotation request for Real-Beard Santa Claus (3 Hours) on Nov 1, 2026 with an indicative rate of ₱24,000.\n\nOur operations desk is actively reviewing schedule availability. You may access your quote portal anytime at https://brilloevent.com/portal.\n\nWarm regards,\nBrillo Events Management Team",
+                sentAt: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
+              },
+            ],
+          },
+          {
+            id: "th_saay_q122",
+            subject: "saay — Santa Quotation Request (BR-2026-Q122)",
+            bookingId: "bk_saay_q122",
+            clientId: "cli_saay_cloyd",
+            status: "ACTIVE",
+            bookingStatus: "QUOTATION_REQUEST",
+            lastActivityAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+            client: {
+              companyName: "saay",
+              primaryContact: "Cloyd Llora",
+              contactPerson: "Cloyd Llora",
+              email: "cloydllora01@gmail.com",
+              phone: "09278872324",
+            },
+            booking: {
+              bookingNumber: "BR-2026-Q122",
+              mallOrVenue: "saay",
+              eventDate: "2026-11-03",
+              totalContractAmount: 24000,
+              depositPaid: 0,
+              status: "INQUIRY_RECEIVED",
+            },
+            messages: [
+              {
+                id: "msg_saay_1",
+                direction: "INBOUND",
+                sender: "cloydllora01@gmail.com",
+                recipient: "bookings@brilloevent.com",
+                subject: "Quotation Request: saay (BR-2026-Q122)",
+                bodyText: "Inquiry submitted for saay on Nov 3, 2026.\nPackage: Real-Beard Santa Claus • Rate: ₱24,000\nPrimary Contact (Kausap): Cloyd Llora | Mobile: 09278872324",
+                sentAt: new Date(Date.now() - 1000 * 60 * 65).toISOString(),
+              },
+              {
+                id: "msg_saay_2",
+                direction: "OUTBOUND",
+                sender: "bookings@brilloevent.com",
+                recipient: "cloydllora01@gmail.com",
+                subject: "We've Received Your Santa Quotation Request — saay (BR-2026-Q122)",
+                bodyText: "Dear Cloyd Llora,\n\nWe have received your event inquiry for saay. Our talent desk is preparing your proposal.\n\nWarm regards,\nBrillo Events",
+                sentAt: new Date(Date.now() - 1000 * 60 * 62).toISOString(),
+              },
+            ],
+          },
+          {
             id: "th_sm_megamall",
             subject: "Christmas Village Launch & Santa Appearance — SM Megamall",
             bookingId: "bk_sm_mega",
             clientId: "cli_sm_mega",
             status: "ACTIVE",
+            bookingStatus: "BOOKED",
             lastActivityAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
             client: {
               companyName: "SM Supermalls (SM Megamall)",
               primaryContact: "Carmela Dizon",
+              contactPerson: "Carmela Dizon",
               email: "carmela.dizon@smsupermalls.com",
               phone: "0917 554 8812",
             },
@@ -1788,6 +1941,7 @@ export function StaticApiFallback() {
               eventDate: "2026-11-28",
               totalContractAmount: 26000,
               depositPaid: 13000,
+              status: "SECURED_CONFIRMED",
             },
             messages: [
               {
@@ -1834,10 +1988,12 @@ export function StaticApiFallback() {
             bookingId: "bk_shangrila",
             clientId: "cli_shangrila",
             status: "ACTIVE",
+            bookingStatus: "BOOKED",
             lastActivityAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
             client: {
               companyName: "Shangri-La at the Fort, BGC",
               primaryContact: "Mark Hernandez",
+              contactPerson: "Mark Hernandez",
               email: "mark.hernandez@shangri-la.com",
               phone: "0918 332 9941",
             },
@@ -1847,6 +2003,7 @@ export function StaticApiFallback() {
               eventDate: "2026-12-05",
               totalContractAmount: 38000,
               depositPaid: 19000,
+              status: "SECURED_CONFIRMED",
             },
             messages: [
               {
@@ -1875,10 +2032,12 @@ export function StaticApiFallback() {
             bookingId: "bk_ayala",
             clientId: "cli_ayala",
             status: "ACTIVE",
+            bookingStatus: "QUOTATION_REQUEST",
             lastActivityAt: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
             client: {
               companyName: "Ayala Malls Manila Bay",
               primaryContact: "Patricia Reyes",
+              contactPerson: "Patricia Reyes",
               email: "reyes.patricia@ayalamalls.com.ph",
               phone: "0920 119 4432",
             },
@@ -1888,6 +2047,7 @@ export function StaticApiFallback() {
               eventDate: "2026-12-12",
               totalContractAmount: 26000,
               depositPaid: 0,
+              status: "INQUIRY_RECEIVED",
             },
             messages: [
               {
@@ -1916,11 +2076,84 @@ export function StaticApiFallback() {
         if (typeof localStorage !== "undefined") {
           try {
             const rawThreads = localStorage.getItem(STATIC_INBOX_KEY);
-            if (rawThreads) {
-              threadsList = JSON.parse(rawThreads);
-            } else {
-              localStorage.setItem(STATIC_INBOX_KEY, JSON.stringify(DEFAULT_STATIC_THREADS));
+            let savedThreads: any[] = rawThreads ? JSON.parse(rawThreads) : [];
+
+            // Merge any missing default threads (e.g. shangilar, saay)
+            for (const dt of DEFAULT_STATIC_THREADS) {
+              if (!savedThreads.some((st: any) => st.id === dt.id || st.booking?.bookingNumber === dt.booking.bookingNumber)) {
+                savedThreads.unshift(dt);
+              }
             }
+
+            // Dynamically scan all custom bookings in brillo_calendar_custom_bookings_v3
+            const customBookingsRaw = localStorage.getItem("brillo_calendar_custom_bookings_v3");
+            const customBookings: any[] = customBookingsRaw ? JSON.parse(customBookingsRaw) : [];
+
+            for (const cb of customBookings) {
+              const bRef = cb.bookingNumber || `BR-${cb.id}`;
+              const alreadyHasThread = savedThreads.some(
+                (st: any) => st.booking?.bookingNumber === bRef || st.id === `th_${bRef.toLowerCase().replace(/[^a-z0-9]/g, "_")}`
+              );
+
+              if (!alreadyHasThread) {
+                const isBooked = ["SECURED_CONFIRMED", "BOOKED", "CONTRACT_SIGNED_PAID", "CONTRACT_SIGNED", "READY_FOR_DEPLOYMENT"].includes((cb.status || "").toUpperCase());
+                const contactPerson = cb.client?.primaryContact || cb.client?.contactPerson || cb.client?.companyName || "Valued Client";
+                const venueName = cb.mallOrVenue || cb.eventName || "Corporate Venue";
+                const companyName = cb.client?.companyName || venueName;
+                const totalAmt = Number(cb.totalContractAmount || cb.clientQuotedAmount || 24000);
+                const evDate = cb.eventDate ? new Date(cb.eventDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Nov 2026";
+
+                const dynamicThread = {
+                  id: `th_${bRef.toLowerCase().replace(/[^a-z0-9]/g, "_")}`,
+                  subject: `${venueName} — ${isBooked ? "Confirmed Booking" : "Quotation Request"} (${bRef})`,
+                  bookingId: cb.id,
+                  clientId: cb.client?.id || `cli_${bRef}`,
+                  status: "ACTIVE",
+                  bookingStatus: isBooked ? "BOOKED" : "QUOTATION_REQUEST",
+                  lastActivityAt: cb.createdAt || new Date().toISOString(),
+                  client: {
+                    companyName,
+                    primaryContact: contactPerson,
+                    contactPerson: contactPerson,
+                    email: cb.client?.email || "cloydllora01@gmail.com",
+                    phone: cb.client?.phone || "09278872324",
+                  },
+                  booking: {
+                    bookingNumber: bRef,
+                    mallOrVenue: venueName,
+                    eventDate: cb.eventDate || "2026-11-20",
+                    totalContractAmount: totalAmt,
+                    depositPaid: Number(cb.depositPaid || 0),
+                    status: cb.status || (isBooked ? "BOOKED" : "INQUIRY_RECEIVED"),
+                  },
+                  messages: [
+                    {
+                      id: `msg_in_${bRef}`,
+                      direction: "INBOUND",
+                      sender: cb.client?.email || "cloydllora01@gmail.com",
+                      recipient: "bookings@brilloevent.com",
+                      subject: `${venueName} — Quotation Request (${bRef})`,
+                      bodyText: `Inquiry submitted for ${venueName} on ${evDate}.\nPackage Rate: ₱${totalAmt.toLocaleString()}\nPrimary Contact (Kausap): ${contactPerson} | Mobile: ${cb.client?.phone || "09278872324"}\nSpecial Requests: ${cb.specialRequests || cb.internalNotes || "Direct Santa Booking"}`,
+                      sentAt: cb.createdAt || new Date().toISOString(),
+                    },
+                    {
+                      id: `msg_out_${bRef}`,
+                      direction: "OUTBOUND",
+                      sender: "bookings@brilloevent.com",
+                      recipient: cb.client?.email || "cloydllora01@gmail.com",
+                      subject: `We've Received Your Santa Quotation Request — ${venueName} (${bRef})`,
+                      bodyText: `Dear ${contactPerson},\n\nThank you for choosing Brillo Events Management Services for ${venueName}!\n\nWe have received your event requirements for ${evDate} with an indicative package rate of ₱${totalAmt.toLocaleString()}.\n\nOur operations desk is actively reviewing talent availability and scheduling.\n\nWarm regards,\nBrillo Events Management Team`,
+                      sentAt: cb.createdAt || new Date().toISOString(),
+                    },
+                  ],
+                };
+
+                savedThreads.unshift(dynamicThread);
+              }
+            }
+
+            threadsList = savedThreads;
+            localStorage.setItem(STATIC_INBOX_KEY, JSON.stringify(threadsList));
           } catch {}
         }
 

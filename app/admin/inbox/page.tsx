@@ -16,11 +16,14 @@ import {
   ArrowRight,
   ShieldCheck,
   Paperclip,
+  Phone,
+  BadgeDollarSign,
+  ExternalLink,
 } from "lucide-react";
 
 export default function SharedInboxPage() {
   const [threads, setThreads] = useState<any[]>([]);
-  const [filterType, setFilterType] = useState<"ALL" | "INBOUND" | "OUTBOUND">("ALL");
+  const [filterType, setFilterType] = useState<"ALL" | "QUOTES" | "BOOKED" | "INBOUND" | "OUTBOUND">("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [providerStatus, setProviderStatus] = useState<any>({
     connected: true,
@@ -65,7 +68,6 @@ export default function SharedInboxPage() {
           if (data.thread) {
             setActiveThread(data.thread);
           } else {
-            // Fallback find in local list
             const found = threads.find((t) => t.id === selectedThreadId);
             if (found) setActiveThread(found);
           }
@@ -115,15 +117,41 @@ export default function SharedInboxPage() {
     }
   }
 
+  function isThreadBooked(t: any) {
+    if (t.bookingStatus === "BOOKED") return true;
+    const status = (t.booking?.status || "").toUpperCase();
+    return ["BOOKED", "SECURED", "CONFIRMED", "SECURED_CONFIRMED", "CONTRACT_SIGNED", "CONTRACT_SIGNED_PAID", "READY_FOR_DEPLOYMENT"].includes(status);
+  }
+
+  function isThreadQuote(t: any) {
+    if (t.bookingStatus === "QUOTATION_REQUEST") return true;
+    const status = (t.booking?.status || "").toUpperCase();
+    return (
+      ["QUOTATION_REQUEST", "INQUIRY_RECEIVED", "NEW_INQUIRY", "HOLD_24H_ACTIVE", "TEMPORARY_HOLD", "QUOTE_ISSUED", "QUOTED"].includes(status) ||
+      !isThreadBooked(t)
+    );
+  }
+
+  const quotesCount = threads.filter(isThreadQuote).length;
+  const bookedCount = threads.filter(isThreadBooked).length;
+
   const filteredThreads = threads.filter((t) => {
     const matchesSearch =
       (t.subject || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (t.client?.companyName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (t.client?.primaryContact || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (t.booking?.bookingNumber || "").toLowerCase().includes(searchQuery.toLowerCase());
+      (t.client?.contactPerson || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (t.booking?.bookingNumber || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (t.booking?.mallOrVenue || "").toLowerCase().includes(searchQuery.toLowerCase());
 
     if (!matchesSearch) return false;
 
+    if (filterType === "QUOTES") {
+      return isThreadQuote(t);
+    }
+    if (filterType === "BOOKED") {
+      return isThreadBooked(t);
+    }
     if (filterType === "INBOUND") {
       const last = t.messages?.[t.messages.length - 1];
       return last?.direction === "INBOUND";
@@ -150,7 +178,7 @@ export default function SharedInboxPage() {
             </h1>
           </div>
           <p className="text-xs text-[#5C494E] mt-1">
-            Sender: <strong className="text-[#780D22]">bookings@brilloevent.com</strong> (Replies to: info@brilloevent.com) • Synced with Client CRM
+            Sender: <strong className="text-[#780D22]">bookings@brilloevent.com</strong> (Replies to: info@brilloevent.com) • Live Synced with Quotations &amp; CRM Bookings
           </p>
         </div>
 
@@ -178,7 +206,7 @@ export default function SharedInboxPage() {
               <Search className="w-3.5 h-3.5 text-[#756568] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search conversations, clients..."
+                placeholder="Search clients, contact person, ref..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-white border border-[#D6C7C9] text-xs text-[#1E1416] placeholder-[#9A8A8C] rounded-lg pl-8 pr-3 py-1.5 focus:outline-none focus:border-[#780D22]"
@@ -186,10 +214,10 @@ export default function SharedInboxPage() {
             </div>
 
             <div className="flex items-center justify-between text-[11px]">
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
                 <button
                   onClick={() => setFilterType("ALL")}
-                  className={`px-2 py-0.5 rounded-md font-semibold transition ${
+                  className={`px-2 py-0.5 rounded-md font-semibold transition shrink-0 ${
                     filterType === "ALL"
                       ? "bg-[#780D22] text-white"
                       : "text-[#5C494E] hover:bg-[#E8DFE0]"
@@ -198,8 +226,28 @@ export default function SharedInboxPage() {
                   All ({threads.length})
                 </button>
                 <button
+                  onClick={() => setFilterType("QUOTES")}
+                  className={`px-2 py-0.5 rounded-md font-semibold transition shrink-0 ${
+                    filterType === "QUOTES"
+                      ? "bg-amber-700 text-white"
+                      : "text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200"
+                  }`}
+                >
+                  Quotes ({quotesCount})
+                </button>
+                <button
+                  onClick={() => setFilterType("BOOKED")}
+                  className={`px-2 py-0.5 rounded-md font-semibold transition shrink-0 ${
+                    filterType === "BOOKED"
+                      ? "bg-emerald-700 text-white"
+                      : "text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200"
+                  }`}
+                >
+                  Booked ({bookedCount})
+                </button>
+                <button
                   onClick={() => setFilterType("INBOUND")}
-                  className={`px-2 py-0.5 rounded-md font-semibold transition ${
+                  className={`px-2 py-0.5 rounded-md font-semibold transition shrink-0 ${
                     filterType === "INBOUND"
                       ? "bg-[#780D22] text-white"
                       : "text-[#5C494E] hover:bg-[#E8DFE0]"
@@ -209,7 +257,7 @@ export default function SharedInboxPage() {
                 </button>
                 <button
                   onClick={() => setFilterType("OUTBOUND")}
-                  className={`px-2 py-0.5 rounded-md font-semibold transition ${
+                  className={`px-2 py-0.5 rounded-md font-semibold transition shrink-0 ${
                     filterType === "OUTBOUND"
                       ? "bg-[#780D22] text-white"
                       : "text-[#5C494E] hover:bg-[#E8DFE0]"
@@ -221,7 +269,7 @@ export default function SharedInboxPage() {
 
               <button
                 onClick={loadThreads}
-                className="text-[#780D22] hover:underline font-bold text-[10px]"
+                className="text-[#780D22] hover:underline font-bold text-[10px] shrink-0 ml-1"
               >
                 Refresh
               </button>
@@ -233,13 +281,19 @@ export default function SharedInboxPage() {
             {filteredThreads.length === 0 ? (
               <div className="p-8 text-center text-xs text-[#9A8A8C] space-y-2">
                 <Mail className="w-8 h-8 mx-auto text-[#D6C7C9]" />
-                <p>No email conversations found.</p>
+                <p>No conversations found matching filters.</p>
               </div>
             ) : (
               filteredThreads.map((t) => {
                 const isSelected = selectedThreadId === t.id;
                 const lastMsg = t.messages?.[t.messages.length - 1] || t.messages?.[0];
                 const isInbound = lastMsg?.direction === "INBOUND";
+                const isBooked = isThreadBooked(t);
+                const kausapName =
+                  t.client?.primaryContact ||
+                  t.client?.contactPerson ||
+                  t.client?.companyName ||
+                  "Valued Client";
 
                 return (
                   <button
@@ -251,11 +305,31 @@ export default function SharedInboxPage() {
                         : "hover:bg-[#FCF9F8]"
                     }`}
                   >
+                    {/* Top Row: Status Badges & Timestamp */}
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-[#1E1416] truncate max-w-[190px]">
-                        {t.client?.companyName || t.client?.primaryContact || "Valued Client"}
-                      </span>
-                      <span className="text-[10px] text-[#756568] font-mono">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {isBooked ? (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                            BOOKED / SECURED
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                            QUOTATION REQUEST
+                          </span>
+                        )}
+
+                        <span
+                          className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                            isInbound
+                              ? "bg-rose-100 text-rose-900 border border-rose-200"
+                              : "bg-gray-100 text-gray-700 border border-gray-200"
+                          }`}
+                        >
+                          {isInbound ? "INBOUND" : "SENT"}
+                        </span>
+                      </div>
+
+                      <span className="text-[10px] text-[#756568] font-mono shrink-0">
                         {new Date(t.lastActivityAt || Date.now()).toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
@@ -263,31 +337,54 @@ export default function SharedInboxPage() {
                       </span>
                     </div>
 
-                    <div className="text-xs font-medium text-[#211619] truncate">
+                    {/* Sino Kausap (Contact Person Highlight) */}
+                    <div className="flex items-center space-x-1.5 pt-0.5">
+                      <div className="w-5 h-5 rounded-full bg-[#780D22]/10 border border-[#780D22]/20 flex items-center justify-center text-[#780D22] text-[10px] font-bold shrink-0">
+                        <User className="w-3 h-3" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[9px] uppercase font-bold tracking-wider text-[#780D22] leading-none">
+                          Sino Kausap:
+                        </div>
+                        <span className="font-bold text-xs text-[#1E1416] truncate block leading-tight">
+                          {kausapName}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Company / Venue & Subject */}
+                    <div className="text-[11px] text-[#5C494E] truncate flex items-center gap-1">
+                      <Building2 className="w-3 h-3 text-[#A67C2E] shrink-0" />
+                      <span className="font-semibold text-[#1E1416] truncate">
+                        {t.client?.companyName || t.booking?.mallOrVenue || "Corporate Client"}
+                      </span>
+                    </div>
+
+                    <div className="text-[11px] font-medium text-[#211619] truncate">
                       {t.subject}
                     </div>
 
+                    {/* Message Preview Snippet */}
                     {lastMsg && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-[#5C494E]">
-                        <span
-                          className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
-                            isInbound
-                              ? "bg-amber-100 text-amber-900 border border-amber-300"
-                              : "bg-emerald-100 text-emerald-900 border border-emerald-300"
-                          }`}
-                        >
-                          {isInbound ? "INBOUND" : "SENT"}
-                        </span>
-                        <p className="line-clamp-1 truncate flex-1">{lastMsg.bodyText}</p>
-                      </div>
+                      <p className="text-[11px] text-[#756568] line-clamp-1 truncate">
+                        {lastMsg.bodyText}
+                      </p>
                     )}
 
+                    {/* Booking Reference, Venue & Quoted Amount */}
                     {t.booking && (
-                      <div className="pt-0.5 flex items-center space-x-1 text-[10px] text-[#8F620E] font-mono">
-                        <Calendar className="w-3 h-3 text-[#A67C2E]" />
-                        <span>
-                          {t.booking.bookingNumber} • {t.booking.mallOrVenue || "Corporate Venue"}
-                        </span>
+                      <div className="pt-1 flex items-center justify-between text-[10px] text-[#8F620E] font-mono border-t border-[#E8DFE0]/60 mt-1">
+                        <div className="flex items-center space-x-1 truncate max-w-[190px]">
+                          <Calendar className="w-3 h-3 text-[#A67C2E] shrink-0" />
+                          <span className="truncate">
+                            {t.booking.bookingNumber} • {t.booking.mallOrVenue || "Venue"}
+                          </span>
+                        </div>
+                        {t.booking.totalContractAmount && (
+                          <span className="font-bold text-emerald-800 shrink-0">
+                            ₱{Number(t.booking.totalContractAmount).toLocaleString()}
+                          </span>
+                        )}
                       </div>
                     )}
                   </button>
@@ -301,34 +398,114 @@ export default function SharedInboxPage() {
         <div className="md:col-span-8 bg-white border border-[#E8DFE0] rounded-2xl flex flex-col overflow-hidden shadow-sm">
           {activeThread ? (
             <>
-              {/* Thread Header */}
-              <div className="p-4 border-b border-[#E8DFE0] bg-[#FAF7F5] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-bold font-serif text-[#1E1416]">
-                    {activeThread.subject}
-                  </h3>
-                  <div className="text-xs text-[#5C494E] mt-0.5">
-                    Client:{" "}
-                    <strong className="text-[#1E1416]">
-                      {activeThread.client?.primaryContact}
-                    </strong>{" "}
-                    ({activeThread.client?.companyName}) •{" "}
+              {/* Thread Header & Complete Client Dossier */}
+              <div className="p-4 border-b border-[#E8DFE0] bg-[#FAF7F5] space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          isThreadBooked(activeThread)
+                            ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                            : "bg-amber-100 text-amber-900 border border-amber-300"
+                        }`}
+                      >
+                        {isThreadBooked(activeThread) ? "Booked / Secured Event" : "Quotation Request"}
+                      </span>
+                      {activeThread.booking?.bookingNumber && (
+                        <span className="px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold bg-[#FAF3EB] border border-[#D6B36A] text-[#8F620E]">
+                          Ref: {activeThread.booking.bookingNumber}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-base font-bold font-serif text-[#1E1416] mt-1">
+                      {activeThread.subject}
+                    </h3>
+                  </div>
+
+                  {/* Navigation Shortcuts */}
+                  <div className="flex items-center gap-1.5 shrink-0">
                     <a
-                      href={`mailto:${activeThread.client?.email}`}
-                      className="text-[#780D22] font-semibold hover:underline"
+                      href="/admin/crm"
+                      className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-[#FAF3EB] border border-[#D6C7C9] text-[11px] font-bold text-[#780D22] flex items-center space-x-1 shadow-sm transition"
                     >
-                      {activeThread.client?.email}
+                      <span>CRM Pipeline</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </a>
+                    <a
+                      href="/admin/calendar"
+                      className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-[#FAF3EB] border border-[#D6C7C9] text-[11px] font-bold text-[#5C494E] flex items-center space-x-1 shadow-sm transition"
+                    >
+                      <Calendar className="w-3 h-3" />
+                      <span>Calendar</span>
                     </a>
                   </div>
                 </div>
 
-                {activeThread.booking && (
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-1 rounded-md text-[10px] font-mono font-bold bg-[#FAF3EB] border border-[#D6B36A] text-[#8F620E]">
-                      Ref: {activeThread.booking.bookingNumber}
+                {/* Sino Kausap & Client Dossier Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-xl bg-white border border-[#E8DFE0] text-xs">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] uppercase font-bold text-[#780D22] tracking-wider flex items-center gap-1">
+                      <User className="w-3 h-3 text-[#780D22]" /> Sino Kausap:
                     </span>
+                    <p className="font-bold text-[#1E1416] truncate">
+                      {activeThread.client?.primaryContact || activeThread.client?.contactPerson || "Valued Client"}
+                    </p>
+                    <p className="text-[10px] text-[#756568] truncate">
+                      {activeThread.client?.companyName || "Direct Client"}
+                    </p>
                   </div>
-                )}
+
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] uppercase font-bold text-[#756568] tracking-wider flex items-center gap-1">
+                      <Mail className="w-3 h-3" /> Email &amp; Contact:
+                    </span>
+                    <p className="truncate">
+                      <a
+                        href={`mailto:${activeThread.client?.email}`}
+                        className="text-[#780D22] font-semibold hover:underline truncate block"
+                      >
+                        {activeThread.client?.email || "events@client.local"}
+                      </a>
+                    </p>
+                    <p className="text-[10px] text-[#756568] truncate">
+                      Mobile:{" "}
+                      <a href={`tel:${activeThread.client?.phone}`} className="font-mono hover:underline">
+                        {activeThread.client?.phone || "N/A"}
+                      </a>
+                    </p>
+                  </div>
+
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] uppercase font-bold text-[#756568] tracking-wider flex items-center gap-1">
+                      <Calendar className="w-3 h-3" /> Event Details:
+                    </span>
+                    <p className="font-semibold text-[#1E1416] truncate">
+                      {activeThread.booking?.eventDate
+                        ? new Date(activeThread.booking.eventDate).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })
+                        : "Nov 2026"}
+                    </p>
+                    <p className="text-[10px] text-[#756568] truncate">
+                      {activeThread.booking?.mallOrVenue || "Metro Manila"}
+                    </p>
+                  </div>
+
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] uppercase font-bold text-[#756568] tracking-wider flex items-center gap-1">
+                      <BadgeDollarSign className="w-3 h-3 text-emerald-600" /> Package / Rate:
+                    </span>
+                    <p className="font-bold text-emerald-800 text-sm">
+                      ₱{Number(activeThread.booking?.totalContractAmount || 24000).toLocaleString()}
+                    </p>
+                    <p className="text-[10px] text-[#756568]">
+                      50% DP: ₱{Math.round(Number(activeThread.booking?.totalContractAmount || 24000) * 0.5).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {/* Message History Feed */}

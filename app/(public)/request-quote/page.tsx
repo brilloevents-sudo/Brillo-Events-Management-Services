@@ -305,18 +305,6 @@ function RequestQuoteForm() {
                 <Phone className="w-4 h-4" />
                 <span>Call Desk: 0927 887 2343</span>
               </a>
-              <Link
-                href="/portal"
-                className="px-4 py-2.5 rounded-full bg-[#FAF3EB] hover:bg-[#F2E6D8] text-[#5C494E] font-semibold text-center transition"
-              >
-                Track in Customer Portal (/portal) →
-              </Link>
-              <Link
-                href="/client-login"
-                className="px-4 py-2.5 rounded-full bg-[#FAF3EB] hover:bg-[#F2E6D8] text-[#5C494E] font-semibold text-center transition"
-              >
-                Client &amp; Account Sign In →
-              </Link>
             </div>
           </div>
         </div>

@@ -652,7 +652,7 @@ export default function BrilloLuxuryLandingPage() {
               <div>
                 <div className="h-72 overflow-hidden relative bg-[#211619]">
                   <img
-                    src="/talents/Cedric/cedric_photo_1.jpg"
+                    src="/brand/package_real_beard_santa.jpg"
                     alt="Real-Beard Santa Claus Experience"
                     className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
                   />
@@ -699,7 +699,7 @@ export default function BrilloLuxuryLandingPage() {
               <div>
                 <div className="h-72 overflow-hidden relative bg-[#211619]">
                   <img
-                    src="/talents/Edwin/edwin_photo_2.jpg"
+                    src="/brand/package_classic_santa.jpg"
                     alt="Classic Santa Claus Experience"
                     className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
                   />
@@ -745,7 +745,7 @@ export default function BrilloLuxuryLandingPage() {
               <div>
                 <div className="h-72 overflow-hidden relative bg-[#211619]">
                   <img
-                    src="/talents/Benito/benito_photo_1.jpg"
+                    src="/brand/package_santa_and_two_elves.jpg"
                     alt="Santa and Two Elves Complete Character Package"
                     className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
                   />

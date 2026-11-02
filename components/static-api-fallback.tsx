@@ -1377,7 +1377,26 @@ export function StaticApiFallback() {
           for (const t of combined) {
             if (seen.has(t.id)) continue;
             seen.add(t.id);
-            result.push(editsMap[t.id] ? { ...t, ...editsMap[t.id] } : t);
+            if (editsMap[t.id]) {
+              const edit = editsMap[t.id];
+              // Ensure images are safely merged and never discarded
+              const baseImgs = Array.isArray(t.images) ? t.images : [];
+              const editImgs = Array.isArray(edit.images) ? edit.images : [];
+              const mergedImgs = [
+                ...editImgs,
+                ...baseImgs.filter(
+                  (bImg: any) =>
+                    !editImgs.some(
+                      (eImg: any) =>
+                        (eImg.id && bImg.id && eImg.id === bImg.id) ||
+                        (eImg.publicUrl && bImg.publicUrl && eImg.publicUrl === bImg.publicUrl)
+                    )
+                ),
+              ];
+              result.push({ ...t, ...edit, images: mergedImgs });
+            } else {
+              result.push(t);
+            }
           }
           return result;
         } catch {
@@ -1439,12 +1458,41 @@ export function StaticApiFallback() {
 
       // Handle Talent Profile Edit & Photo Upload in Static Mode (PATCH /api/talents/[id])
       if (pathname.startsWith("/api/talents/") && method === "PATCH") {
-        const id = pathname.split("/").pop() || "";
+        const cleanPath = pathname.replace(/\/+$/, "");
+        const id = cleanPath.split("/").pop() || "";
         const merged = getMergedTalents();
+        const baseTalents: any[] = snap.talents?.talents || [];
         const target =
-          merged.find((t: any) => t.id === id || t.canonicalId === id) || merged[0];
+          merged.find(
+            (t: any) =>
+              t.id === id ||
+              t.canonicalId === id ||
+              (t.id && id && t.id.toLowerCase() === id.toLowerCase()) ||
+              (t.canonicalId && id && t.canonicalId.toLowerCase() === id.toLowerCase())
+          ) ||
+          baseTalents.find(
+            (t: any) =>
+              t.id === id ||
+              t.canonicalId === id ||
+              (t.id && id && t.id.toLowerCase() === id.toLowerCase()) ||
+              (t.canonicalId && id && t.canonicalId.toLowerCase() === id.toLowerCase())
+          ) ||
+          merged[0];
         if (target) {
-          const updated = { ...target, images: [...(target.images || [])] };
+          const baseImgs = Array.isArray(target.images) ? target.images : [];
+          const incomingImgs = Array.isArray(parsedBody.images) ? parsedBody.images : [];
+          const combinedImgs = [
+            ...incomingImgs,
+            ...baseImgs.filter(
+              (b: any) =>
+                !incomingImgs.some(
+                  (inc: any) =>
+                    (inc.id && b.id && inc.id === b.id) ||
+                    (inc.publicUrl && b.publicUrl && inc.publicUrl === b.publicUrl)
+                )
+            ),
+          ];
+          const updated = { ...target, images: combinedImgs.length > 0 ? combinedImgs : baseImgs };
           const action = parsedBody.action;
 
           if (action === "ADD_PHOTO" || action === "ADD_MEDIA") {
@@ -1533,6 +1581,48 @@ export function StaticApiFallback() {
               updated.specialRateNote = parsedBody.specialRateNote;
             if (parsedBody.approvedForPublicDisplay !== undefined)
               updated.approvedForPublicDisplay = Boolean(parsedBody.approvedForPublicDisplay);
+
+            // If a pending photo was attached during profile save, add it to images
+            const pending = parsedBody.pendingPhoto || (parsedBody.fileDataUrl ? {
+              fileName: parsedBody.fileName,
+              fileDataUrl: parsedBody.fileDataUrl,
+              publicUrl: parsedBody.publicUrl,
+              caption: parsedBody.caption,
+              setAsPrimary: parsedBody.setAsPrimary,
+              approvedForClient: parsedBody.approvedForClient
+            } : null);
+
+            if (pending && (pending.fileDataUrl || pending.publicUrl)) {
+              const pUrl = pending.fileDataUrl || pending.publicUrl || "";
+              const isVideoItem =
+                (pUrl && pUrl.startsWith("data:video/")) ||
+                /\.(mp4|webm|mov|m4v)(\?|$)/i.test(pUrl) ||
+                /\.(mp4|webm|mov|m4v)$/i.test(pending.fileName || "") ||
+                /youtube\.com|youtu\.be|vimeo\.com|drive\.google\.com/i.test(pUrl);
+              const shouldBePrimary = Boolean(!isVideoItem && (pending.setAsPrimary || updated.images.length === 0));
+              if (shouldBePrimary) {
+                updated.images = updated.images.map((img: any) => ({ ...img, isPrimary: false }));
+              }
+              const newPendingImg = {
+                id: `img_${Date.now()}`,
+                talentId: updated.id,
+                fileName:
+                  pending.fileName ||
+                  (isVideoItem ? `santa_${updated.displayName}.mp4` : `santa_${updated.displayName}.jpg`),
+                publicUrl: pUrl,
+                originalPath: pUrl,
+                isPrimary: shouldBePrimary,
+                mediaType: isVideoItem ? "VIDEO" : "IMAGE",
+                caption:
+                  pending.caption ||
+                  `Santa ${updated.displayName} ${isVideoItem ? "Video Clip" : "Portrait"}`,
+                approvedForClient:
+                  pending.approvedForClient !== undefined
+                    ? Boolean(pending.approvedForClient)
+                    : updated.approvedForPublicDisplay,
+              };
+              updated.images = shouldBePrimary ? [newPendingImg, ...updated.images] : [...updated.images, newPendingImg];
+            }
           }
 
           if (typeof localStorage !== "undefined") {
@@ -1542,7 +1632,14 @@ export function StaticApiFallback() {
               );
               editsMap[updated.id] = updated;
               localStorage.setItem("brillo_talent_edits_v3", JSON.stringify(editsMap));
-            } catch {}
+            } catch {
+              // If localStorage is full, save current talent cleanly
+              try {
+                const minimalMap: Record<string, any> = {};
+                minimalMap[updated.id] = updated;
+                localStorage.setItem("brillo_talent_edits_v3", JSON.stringify(minimalMap));
+              } catch {}
+            }
           }
           const idx = snap.talents?.talents?.findIndex((t: any) => t.id === updated.id);
           if (idx !== undefined && idx >= 0) {
@@ -1731,10 +1828,17 @@ export function StaticApiFallback() {
         return jsonResponse({ success: true, count: allT.length, talents: allT });
       }
       if (pathname.startsWith("/api/talents/")) {
-        const id = pathname.split("/").pop();
+        const cleanPath = pathname.replace(/\/+$/, "");
+        const id = cleanPath.split("/").pop() || "";
         const allT = getMergedTalents();
         const talent =
-          allT.find((t: any) => t.id === id || t.canonicalId === id) || allT[0];
+          allT.find(
+            (t: any) =>
+              t.id === id ||
+              t.canonicalId === id ||
+              (t.id && id && t.id.toLowerCase() === id.toLowerCase()) ||
+              (t.canonicalId && id && t.canonicalId.toLowerCase() === id.toLowerCase())
+          ) || allT[0];
         return jsonResponse({ success: true, talent });
       }
       if (pathname === "/api/leads") {

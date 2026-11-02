@@ -277,6 +277,71 @@ export async function PATCH(
       updates.approvedForPublicDisplay = Boolean(approvedForPublicDisplay);
     }
 
+    // If pending photo was picked during profile edit, save it automatically
+    const pendingMedia = body.pendingPhoto || (body.fileDataUrl ? {
+      fileName: body.fileName,
+      fileDataUrl: body.fileDataUrl,
+      publicUrl: body.publicUrl,
+      caption: body.caption,
+      setAsPrimary: body.setAsPrimary,
+      approvedForClient: body.approvedForClient
+    } : null);
+
+    if (pendingMedia && (pendingMedia.fileDataUrl || pendingMedia.publicUrl)) {
+      let resolvedPendingUrl = pendingMedia.publicUrl || "";
+      const safePendingName = (pendingMedia.fileName || `santa_${existing.displayName}_${Date.now()}.jpg`).replace(
+        /[^a-zA-Z0-9._-]/g,
+        "_"
+      );
+      if (pendingMedia.fileDataUrl && typeof pendingMedia.fileDataUrl === "string" && pendingMedia.fileDataUrl.startsWith("data:")) {
+        try {
+          const matches = pendingMedia.fileDataUrl.match(/^data:(image|video)\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
+          if (matches) {
+            const buffer = Buffer.from(matches[3], "base64");
+            const uploadDir = path.join(process.cwd(), "public", "talents", "uploads");
+            fs.mkdirSync(uploadDir, { recursive: true });
+            const uniqueFile = `${Date.now()}_${safePendingName}`;
+            fs.writeFileSync(path.join(uploadDir, uniqueFile), buffer);
+            resolvedPendingUrl = `/talents/uploads/${uniqueFile}`;
+          } else {
+            resolvedPendingUrl = pendingMedia.fileDataUrl;
+          }
+        } catch {
+          resolvedPendingUrl = pendingMedia.fileDataUrl;
+        }
+      }
+
+      if (resolvedPendingUrl) {
+        const isVideoItem =
+          (pendingMedia.fileDataUrl && pendingMedia.fileDataUrl.startsWith("data:video/")) ||
+          /\.(mp4|webm|mov|m4v)(\?|$)/i.test(resolvedPendingUrl) ||
+          /\.(mp4|webm|mov|m4v)$/i.test(safePendingName);
+
+        const shouldPrimary = Boolean(!isVideoItem && (pendingMedia.setAsPrimary || existing.images.length === 0));
+        if (shouldPrimary) {
+          await prisma.talentImage.updateMany({
+            where: { talentId: existing.id },
+            data: { isPrimary: false },
+          });
+        }
+
+        await prisma.talentImage.create({
+          data: {
+            talentId: existing.id,
+            fileName: safePendingName,
+            originalPath: resolvedPendingUrl,
+            publicUrl: resolvedPendingUrl,
+            isPrimary: shouldPrimary,
+            caption: pendingMedia.caption || `Santa ${existing.displayName} Portrait`,
+            approvedForClient:
+              pendingMedia.approvedForClient !== undefined
+                ? Boolean(pendingMedia.approvedForClient)
+                : existing.approvedForPublicDisplay,
+          },
+        });
+      }
+    }
+
     const updated = await prisma.talent.update({
       where: { id: existing.id },
       data: updates,

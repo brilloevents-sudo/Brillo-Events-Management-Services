@@ -206,6 +206,50 @@ export default function UnifiedRosterPage() {
     return null;
   }
 
+  function compressImageFile(file: File, maxDim = 1200, quality = 0.85): Promise<string> {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+        reader.readAsDataURL(file);
+        return;
+      }
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        } else {
+          const reader = new FileReader();
+          reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+          reader.readAsDataURL(file);
+        }
+      };
+      img.onerror = () => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+        reader.readAsDataURL(file);
+      };
+      img.src = url;
+    });
+  }
+
   function loadRoster() {
     setLoading(true);
     Promise.all([
@@ -213,7 +257,30 @@ export default function UnifiedRosterPage() {
       fetch("/api/bookings").then((r) => r.json()),
     ])
       .then(([tData, bData]) => {
-        if (tData?.talents) setTalents(tData.talents);
+        if (tData?.talents) {
+          setTalents(tData.talents);
+          setSelectedTalent((curr: any) => {
+            if (!curr?.id) return curr;
+            const updatedFromList = tData.talents.find(
+              (t: any) => t.id === curr.id || t.canonicalId === curr.canonicalId
+            );
+            if (!updatedFromList) return curr;
+            const baseImgs = Array.isArray(curr.images) ? curr.images : [];
+            const listImgs = Array.isArray(updatedFromList.images) ? updatedFromList.images : [];
+            const mergedImgs = [
+              ...listImgs,
+              ...baseImgs.filter(
+                (cImg: any) =>
+                  !listImgs.some(
+                    (uImg: any) =>
+                      (uImg.id && cImg.id && uImg.id === cImg.id) ||
+                      (uImg.publicUrl && cImg.publicUrl && uImg.publicUrl === cImg.publicUrl)
+                  )
+              ),
+            ];
+            return { ...curr, ...updatedFromList, images: mergedImgs };
+          });
+        }
         if (bData?.bookings) setBookings(bData.bookings);
       })
       .catch(() => {})
@@ -308,19 +375,57 @@ export default function UnifiedRosterPage() {
     try {
       const url = isNewTalent ? "/api/talents" : `/api/talents/${editForm.id}`;
       const method = isNewTalent ? "POST" : "PATCH";
+
+      // If user selected or pasted a photo/video without clicking the upload button, include it!
+      const hasPendingMedia = Boolean(photoPreviewUrl) || Boolean(videoExternalUrl.trim());
+      const pendingPhotoData = hasPendingMedia
+        ? {
+            fileName: photoFileName || `santa_${editForm.displayName || "photo"}.jpg`,
+            fileDataUrl: photoPreviewUrl || undefined,
+            publicUrl: videoExternalUrl.trim() || undefined,
+            caption: photoCaption || `Santa ${editForm.displayName} Portrait`,
+            setAsPrimary: pickedIsVideo ? false : photoSetPrimary,
+            approvedForClient: photoPublicApproved,
+          }
+        : undefined;
+
+      const bodyPayload = {
+        ...editForm,
+        images: selectedTalent?.images || [],
+        pendingPhoto: pendingPhotoData,
+        fileDataUrl: photoPreviewUrl || undefined,
+      };
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify(bodyPayload),
       });
       const data = await res.json();
       if (!res.ok || data.success === false) {
         throw new Error(data.error || "Failed to save profile");
       }
       if (data.talent) {
-        setSelectedTalent(data.talent);
+        const baseImgs = Array.isArray(selectedTalent?.images) ? selectedTalent.images : [];
+        const returnedImgs = Array.isArray(data.talent.images) ? data.talent.images : [];
+        const mergedImgs = [
+          ...returnedImgs,
+          ...baseImgs.filter(
+            (sImg: any) =>
+              !returnedImgs.some(
+                (dImg: any) =>
+                  (dImg.id && sImg.id && dImg.id === sImg.id) ||
+                  (dImg.publicUrl && sImg.publicUrl && dImg.publicUrl === sImg.publicUrl)
+              )
+          ),
+        ];
+        const preservedTalent = { ...selectedTalent, ...data.talent, images: mergedImgs };
+        setSelectedTalent(preservedTalent);
         setIsNewTalent(false);
-        setEditForm((prev: any) => ({ ...prev, id: data.talent.id }));
+        setEditForm((prev: any) => ({ ...prev, id: data.talent.id, images: mergedImgs }));
+        setPhotoPreviewUrl("");
+        setPhotoFileName("");
+        setVideoExternalUrl("");
       }
       loadRoster();
       setFeedback({
@@ -334,7 +439,7 @@ export default function UnifiedRosterPage() {
     }
   }
 
-  function handleFilePicked(file: File | undefined) {
+  async function handleFilePicked(file: File | undefined) {
     if (!file) return;
     setPhotoFileName(file.name);
     const isVid = file.type.startsWith("video/") || /\.(mp4|webm|mov|m4v)$/i.test(file.name);
@@ -345,13 +450,28 @@ export default function UnifiedRosterPage() {
         `Santa ${selectedTalent.displayName} ${isVid ? "Performance Video Clip" : "Portrait"}`
       );
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setPhotoPreviewUrl(reader.result);
+    if (isVid) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          setPhotoPreviewUrl(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    } else {
+      try {
+        const compressed = await compressImageFile(file, 1200, 0.85);
+        setPhotoPreviewUrl(compressed);
+      } catch {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === "string") {
+            setPhotoPreviewUrl(reader.result);
+          }
+        };
+        reader.readAsDataURL(file);
       }
-    };
-    reader.readAsDataURL(file);
+    }
   }
 
   async function handleUploadPhotoSubmit(e: React.FormEvent) {

@@ -759,7 +759,7 @@ export default function BrilloLuxuryLandingPage() {
             {/* 6th Visual Showcase Card */}
             <div className="rounded-2xl overflow-hidden border border-[#D6B36A]/50 relative min-h-[250px] group">
               <img
-                src="/talents/Perry/perry_photo_2.jpg"
+                src="/brand/showcase_santa_muntinlupa.jpg"
                 alt="Authentic Brillo Events Christmas Appearance"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
               />

@@ -1494,25 +1494,25 @@ export default function BrilloLuxuryLandingPage() {
             <div className="lg:col-span-6 grid grid-cols-2 gap-4">
               <div className="space-y-4">
                 <img
-                  src="/talents/Perry/perry_photo_3.jpg"
-                  alt="Mall Christmas Appearance"
+                  src="/brand/trust_sm_muntinlupa_confetti.jpg"
+                  alt="SM Center Muntinlupa Christmas Launch"
                   className="w-full h-56 object-cover rounded-2xl border-2 border-[#D6B36A]/60 shadow-md"
                 />
                 <img
-                  src="/talents/Randy/randy_photo_1.jpg"
-                  alt="Corporate Holiday Event"
+                  src="/brand/trust_santa_lantern_bench.jpg"
+                  alt="Santa on Gold Bench with Festive Lanterns"
                   className="w-full h-64 object-cover rounded-2xl border-2 border-[#D6B36A]/60 shadow-md"
                 />
               </div>
               <div className="space-y-4 pt-6">
                 <img
-                  src="/talents/Terry/terry_photo_2.jpg"
-                  alt="Holiday Tree Lighting"
+                  src="/brand/trust_elves_sack.jpg"
+                  alt="Festive Christmas Elves with Holiday Gift Sack"
                   className="w-full h-64 object-cover rounded-2xl border-2 border-[#D6B36A]/60 shadow-md"
                 />
                 <img
-                  src="/talents/Richard/richard_photo_1.jpg"
-                  alt="Family Santa Celebration"
+                  src="/brand/trust_mrs_claus_fireplace.jpg"
+                  alt="Mrs. Claus by Warm Holiday Fireplace"
                   className="w-full h-56 object-cover rounded-2xl border-2 border-[#D6B36A]/60 shadow-md"
                 />
               </div>

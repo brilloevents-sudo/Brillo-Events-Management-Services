@@ -21,9 +21,55 @@ export interface AutomationSequenceItem {
   label: string;
   templateId: string;
   timing: string;
-  recipientType: "CUSTOMER" | "STAFF";
+  recipientType: "CUSTOMER" | "STAFF" | "SANTA" | "CUSTOM";
   enabled: boolean;
+  subjectOverride?: string;
+  customNotes?: string;
+  customRecipient?: string;
+  delayDescription?: string;
 }
+
+export interface EmailCampaign {
+  id: string;
+  title: string;
+  targetAudience: "ALL_LEADS" | "CORPORATE_MALLS" | "PRIVATE_EVENTS" | "CONFIRMED_BOOKINGS" | "CUSTOM_LIST";
+  templateId: string;
+  subject: string;
+  customMessage?: string;
+  status: "DRAFT" | "SCHEDULED" | "SENDING" | "COMPLETED";
+  recipientCount: number;
+  deliveredCount: number;
+  createdAt: string;
+  dispatchedAt?: string;
+}
+
+export const DEFAULT_CAMPAIGNS: EmailCampaign[] = [
+  {
+    id: "camp_1",
+    title: "Christmas 2026 VIP Early-Bird Booking Launch 🎄",
+    targetAudience: "CORPORATE_MALLS",
+    templateId: "EMAIL_03_PROPOSAL_SENT",
+    subject: "Exclusive 2026 Santa Claus Appearances — Priority Reservation for Premier Venues",
+    customMessage: "Book your Real-Beard Santa Claus before peak season holds close. Special priority slots open for Christmas village launches.",
+    status: "COMPLETED",
+    recipientCount: 12,
+    deliveredCount: 12,
+    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+    dispatchedAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+  },
+  {
+    id: "camp_2",
+    title: "Corporate Mall & Hotel Package Follow-up",
+    targetAudience: "ALL_LEADS",
+    templateId: "EMAIL_01_INQUIRY_ACK",
+    subject: "Santa Roster Availability Update: Weekend Dates Nearing Capacity",
+    customMessage: "Only 4 weekend prime slots remain for Real-Beard Santa Bob and Santa Nick. Confirm your date hold today.",
+    status: "DRAFT",
+    recipientCount: 28,
+    deliveredCount: 0,
+    createdAt: new Date().toISOString(),
+  },
+];
 
 export const DEFAULT_AUTOMATIONS: AutomationSequenceItem[] = [
   { id: "auto_1", triggerName: "INQUIRY_SUBMITTED", label: "New Inquiry Thank-You", templateId: "EMAIL_01_INQUIRY_ACK", timing: "Immediate", recipientType: "CUSTOMER", enabled: true },

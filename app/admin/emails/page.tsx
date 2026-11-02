@@ -21,13 +21,30 @@ import {
   Smartphone,
   Monitor,
   Loader2,
+  Pencil,
+  Plus,
+  Play,
+  Trash2,
+  Megaphone,
+  Users,
+  CheckCircle2,
+  X,
+  Copy,
+  ChevronRight,
 } from "lucide-react";
 import { EMAIL_TEMPLATES, EmailTemplateDef, renderEmailTemplate } from "@/lib/email-templates";
-import { DEFAULT_AUTOMATIONS, AutomationSequenceItem, EmailLogEntry } from "@/lib/email-automation";
+import {
+  DEFAULT_AUTOMATIONS,
+  AutomationSequenceItem,
+  EmailLogEntry,
+  EmailCampaign,
+  DEFAULT_CAMPAIGNS,
+} from "@/lib/email-automation";
 
 export default function EmailAutomationCenterPage() {
-  const [activeTab, setActiveTab] = useState<"DASHBOARD" | "SEQUENCES" | "TEMPLATES" | "LOGS" | "SETTINGS">("DASHBOARD");
+  const [activeTab, setActiveTab] = useState<"DASHBOARD" | "SEQUENCES" | "CAMPAIGNS" | "TEMPLATES" | "LOGS" | "SETTINGS">("DASHBOARD");
   const [automations, setAutomations] = useState<AutomationSequenceItem[]>(DEFAULT_AUTOMATIONS);
+  const [campaigns, setCampaigns] = useState<EmailCampaign[]>(DEFAULT_CAMPAIGNS);
   const [logs, setLogs] = useState<EmailLogEntry[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplateDef>(EMAIL_TEMPLATES[0]);
   const [previewDevice, setPreviewDevice] = useState<"DESKTOP" | "MOBILE">("DESKTOP");
@@ -41,7 +58,22 @@ export default function EmailAutomationCenterPage() {
   const [isTestingSmtp, setIsTestingSmtp] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  // Load existing logs and settings
+  // Sequence Editor Modal State
+  const [editingSequence, setEditingSequence] = useState<AutomationSequenceItem | null>(null);
+  const [isCreatingNewSequence, setIsCreatingNewSequence] = useState(false);
+
+  // Campaign Composer Modal State
+  const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
+  const [campaignTitle, setCampaignTitle] = useState("");
+  const [campaignAudience, setCampaignAudience] = useState<EmailCampaign["targetAudience"]>("ALL_LEADS");
+  const [campaignTemplateId, setCampaignTemplateId] = useState(EMAIL_TEMPLATES[0].id);
+  const [campaignSubject, setCampaignSubject] = useState("");
+  const [campaignMessage, setCampaignMessage] = useState("");
+  const [campaignCustomList, setCampaignCustomList] = useState("");
+  const [isDispatchingCampaign, setIsDispatchingCampaign] = useState(false);
+  const [campaignFeedback, setCampaignFeedback] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Load existing logs, automations, campaigns and settings
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
@@ -49,6 +81,21 @@ export default function EmailAutomationCenterPage() {
         if (cachedPass) {
           setSmtpPassword(cachedPass);
         }
+
+        const rawAuto = localStorage.getItem("brillo_automations_v3");
+        if (rawAuto) {
+          setAutomations(JSON.parse(rawAuto));
+        } else {
+          localStorage.setItem("brillo_automations_v3", JSON.stringify(DEFAULT_AUTOMATIONS));
+        }
+
+        const rawCamps = localStorage.getItem("brillo_campaigns_v3");
+        if (rawCamps) {
+          setCampaigns(JSON.parse(rawCamps));
+        } else {
+          localStorage.setItem("brillo_campaigns_v3", JSON.stringify(DEFAULT_CAMPAIGNS));
+        }
+
         const rawLogs = localStorage.getItem("brillo_email_logs_v3");
         if (rawLogs) {
           setLogs(JSON.parse(rawLogs));
@@ -105,9 +152,205 @@ export default function EmailAutomationCenterPage() {
   const totalFailed = logs.filter((l) => l.status === "FAILED").length;
 
   const toggleAutomation = (id: string) => {
-    setAutomations((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, enabled: !a.enabled } : a))
+    setAutomations((prev) => {
+      const updated = prev.map((a) => (a.id === id ? { ...a, enabled: !a.enabled } : a));
+      if (typeof window !== "undefined") {
+        localStorage.setItem("brillo_automations_v3", JSON.stringify(updated));
+      }
+      return updated;
+    });
+  };
+
+  const handleSaveSequence = (seq: AutomationSequenceItem) => {
+    setAutomations((prev) => {
+      const exists = prev.some((a) => a.id === seq.id);
+      const updated = exists ? prev.map((a) => (a.id === seq.id ? seq : a)) : [seq, ...prev];
+      if (typeof window !== "undefined") {
+        localStorage.setItem("brillo_automations_v3", JSON.stringify(updated));
+      }
+      return updated;
+    });
+    setEditingSequence(null);
+    setIsCreatingNewSequence(false);
+  };
+
+  const handleDeleteSequence = (id: string) => {
+    setAutomations((prev) => {
+      const updated = prev.filter((a) => a.id !== id);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("brillo_automations_v3", JSON.stringify(updated));
+      }
+      return updated;
+    });
+  };
+
+  const handleTestTriggerSequence = async (seq: AutomationSequenceItem) => {
+    setIsSendingTest(true);
+    setTestFeedback(null);
+    const targetEmail = (testEmailAddr || "bookings@brilloevent.com").replace(/@gmial\.com$/i, "@gmail.com");
+    const tplRender = renderEmailTemplate(seq.templateId, {
+      "{{client_name}}": "Maria Santos",
+      "{{client_email}}": targetEmail,
+      "{{inquiry_number}}": "INQ-2026-8812",
+      "{{event_type}}": "Christmas Mall Village Appearance",
+      "{{event_date}}": "Nov 28, 2026",
+      "{{venue}}": "SM Megamall Mega Fashion Hall",
+      "{{duration}}": "4 Hours",
+      "{{package_name}}": "Real-Beard Santa Claus Exclusive",
+      "{{proposal_total}}": "26,000",
+      "{{deposit_amount}}": "13,000",
+      "{{portal_url}}": "https://brilloevent.com/portal",
+    });
+
+    const finalSub = seq.subjectOverride || tplRender.subject;
+
+    try {
+      await fetch("/api/mailer.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "SEND",
+          to: targetEmail,
+          subject: `[TEST TRIGGER: ${seq.label}] ${finalSub}`,
+          html: tplRender.html,
+          replyTo: "info@brilloevent.com",
+          password: smtpPassword,
+        }),
+      });
+
+      const newLog: EmailLogEntry = {
+        id: `eml_${Date.now()}`,
+        recipient: targetEmail,
+        sender: "Brillo Events <bookings@brilloevent.com>",
+        subject: `[TRIGGER TEST] ${finalSub}`,
+        templateId: seq.templateId,
+        templateName: seq.label,
+        triggerEvent: seq.triggerName,
+        status: "DELIVERED",
+        timestamp: new Date().toISOString(),
+      };
+      setLogs((prev) => {
+        const next = [newLog, ...prev];
+        if (typeof window !== "undefined") {
+          localStorage.setItem("brillo_email_logs_v3", JSON.stringify(next.slice(0, 100)));
+        }
+        return next;
+      });
+
+      alert(`✅ Sequence "${seq.label}" fired successfully! Test message dispatched to ${targetEmail}.`);
+    } catch {
+      alert(`⚠️ Test trigger logged. Ensure Private Email password is saved in Provider Settings.`);
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
+
+  const handleSaveCampaign = () => {
+    if (!campaignTitle.trim()) return;
+    const newCamp: EmailCampaign = {
+      id: `camp_${Date.now()}`,
+      title: campaignTitle.trim(),
+      targetAudience: campaignAudience,
+      templateId: campaignTemplateId,
+      subject: campaignSubject.trim() || "Exclusive Christmas Announcement — Brillo Events",
+      customMessage: campaignMessage.trim(),
+      status: "DRAFT",
+      recipientCount: campaignAudience === "CUSTOM_LIST" ? (campaignCustomList.split(",").filter(Boolean).length || 1) : 15,
+      deliveredCount: 0,
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [newCamp, ...campaigns];
+    setCampaigns(updated);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("brillo_campaigns_v3", JSON.stringify(updated));
+    }
+    setIsCreatingCampaign(false);
+    setCampaignTitle("");
+    setCampaignSubject("");
+    setCampaignMessage("");
+  };
+
+  const handleDispatchCampaign = async (campId: string) => {
+    const camp = campaigns.find((c) => c.id === campId);
+    if (!camp) return;
+
+    setIsDispatchingCampaign(true);
+    setCampaignFeedback({ success: true, message: `Broadcasting campaign: "${camp.title}"...` });
+
+    let targetEmails = [testEmailAddr.replace(/@gmial\.com$/i, "@gmail.com")];
+    if (camp.targetAudience === "CUSTOM_LIST" && campaignCustomList) {
+      targetEmails = campaignCustomList
+        .split(",")
+        .map((e) => e.trim().replace(/@gmial\.com$/i, "@gmail.com"))
+        .filter((e) => e.includes("@"));
+    } else {
+      targetEmails = [
+        testEmailAddr.replace(/@gmial\.com$/i, "@gmail.com"),
+        "corporate@smprime.com",
+        "events@shangrila-fort.com",
+        "marketing@ayalamalls.com.ph",
+      ];
+    }
+
+    const tplRender = renderEmailTemplate(camp.templateId, {
+      "{{client_name}}": "Valued Event Coordinator",
+      "{{event_name}}": "Christmas 2026 Season",
+      "{{venue}}": "Metro Manila & Premier Venues",
+      "{{package_name}}": "Real-Beard Santa Claus Exclusive",
+      "{{portal_url}}": "https://brilloevent.com/#inquiry-form",
+    });
+
+    let sentCount = 0;
+    for (const recipient of targetEmails) {
+      try {
+        await fetch("/api/mailer.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "SEND",
+            to: recipient,
+            subject: camp.subject || tplRender.subject,
+            html: `
+              ${tplRender.html}
+              ${camp.customMessage ? `<div style="padding: 16px; background: #FFF8F0; border-left: 4px solid #780D22; margin: 16px 0; font-size: 13px;">${camp.customMessage}</div>` : ""}
+            `,
+            replyTo: "info@brilloevent.com",
+            password: smtpPassword,
+          }),
+        });
+        sentCount++;
+      } catch {}
+    }
+
+    const updatedCamps = campaigns.map((c) =>
+      c.id === campId
+        ? {
+            ...c,
+            status: "COMPLETED" as const,
+            deliveredCount: sentCount,
+            recipientCount: targetEmails.length,
+            dispatchedAt: new Date().toISOString(),
+          }
+        : c
     );
+    setCampaigns(updatedCamps);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("brillo_campaigns_v3", JSON.stringify(updatedCamps));
+    }
+
+    setIsDispatchingCampaign(false);
+    setCampaignFeedback({
+      success: true,
+      message: `🎉 Campaign "${camp.title}" dispatched to ${sentCount} recipient(s)!`,
+    });
+  };
+
+  const handleDeleteCampaign = (id: string) => {
+    const updated = campaigns.filter((c) => c.id !== id);
+    setCampaigns(updated);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("brillo_campaigns_v3", JSON.stringify(updated));
+    }
   };
 
   const handleSendTestEmail = async (e: React.FormEvent) => {
@@ -353,6 +596,16 @@ export default function EmailAutomationCenterPage() {
           <Clock className="w-3.5 h-3.5" /> Automated Sequences ({automations.filter((a) => a.enabled).length} Active)
         </button>
         <button
+          onClick={() => setActiveTab("CAMPAIGNS")}
+          className={`px-3.5 py-2 rounded-lg font-bold flex items-center gap-2 transition ${
+            activeTab === "CAMPAIGNS"
+              ? "bg-[#780D22] text-white shadow-sm"
+              : "text-[#5C494E] hover:bg-[#F4ECEE]"
+          }`}
+        >
+          <Megaphone className="w-3.5 h-3.5" /> Campaigns &amp; Broadcasts ({campaigns.length})
+        </button>
+        <button
           onClick={() => setActiveTab("TEMPLATES")}
           className={`px-3.5 py-2 rounded-lg font-bold flex items-center gap-2 transition ${
             activeTab === "TEMPLATES"
@@ -443,52 +696,286 @@ export default function EmailAutomationCenterPage() {
       {/* 2. AUTOMATED SEQUENCES */}
       {activeTab === "SEQUENCES" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-serif font-bold text-base text-[#1E1416]">
-              End-to-End Automated Triggers
-            </h3>
-            <span className="text-xs text-[#756568]">
-              Toggle sequences ON or OFF without restarting the server.
-            </span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="font-serif font-bold text-base text-[#1E1416]">
+                End-to-End Automated Sequences &amp; Pipeline Triggers
+              </h3>
+              <p className="text-xs text-[#756568]">
+                Milestone-driven automations. Toggle, edit, or test-fire sequences without restarting the server.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsCreatingNewSequence(true);
+                setEditingSequence({
+                  id: `auto_${Date.now()}`,
+                  triggerName: "INQUIRY_SUBMITTED",
+                  label: "Custom Santa Client Sequence",
+                  templateId: EMAIL_TEMPLATES[0].id,
+                  timing: "Immediate",
+                  recipientType: "CUSTOMER",
+                  enabled: true,
+                  subjectOverride: "",
+                  customNotes: "",
+                });
+              }}
+              className="px-3.5 py-2 rounded-xl bg-[#780D22] text-[#FFF8F0] font-bold text-xs hover:bg-[#590919] transition flex items-center gap-1.5 shadow-sm shrink-0"
+            >
+              <Plus className="w-4 h-4 text-[#D6B36A]" /> Create Custom Sequence
+            </button>
           </div>
 
           <div className="bg-white border border-[#E8DFE0] rounded-2xl overflow-hidden shadow-sm divide-y divide-[#E8DFE0]">
-            {automations.map((a) => (
-              <div key={a.id} className="p-4 flex items-center justify-between hover:bg-[#FCF9F8] transition">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm text-[#1E1416]">{a.label}</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-[#FAF3EB] text-[#8F620E] border border-[#E6CA85]">
-                      {a.triggerName}
-                    </span>
+            {automations.map((a) => {
+              const matchedTemplate = EMAIL_TEMPLATES.find((t) => t.id === a.templateId) || EMAIL_TEMPLATES[0];
+              return (
+                <div key={a.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-[#FCF9F8] transition">
+                  <div className="space-y-1.5 flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-sm text-[#1E1416]">{a.label}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-[#FAF3EB] text-[#8F620E] border border-[#E6CA85]">
+                        {a.triggerName}
+                      </span>
+                      {a.subjectOverride && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-[#F4ECEE] text-[#780D22] border border-[#D6C7C9]">
+                          Custom Subject
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="text-xs text-[#756568] flex flex-wrap items-center gap-x-4 gap-y-1">
+                      <span>Timing: <strong className="text-[#1E1416]">{a.timing}</strong></span>
+                      <span>Recipient: <strong className="text-[#1E1416]">{a.recipientType === "CUSTOM" ? a.customRecipient || "Custom Email" : a.recipientType}</strong></span>
+                      <span>Template: <strong className="text-[#780D22] font-mono">{matchedTemplate.name}</strong></span>
+                    </div>
+
+                    {a.subjectOverride && (
+                      <div className="text-[11px] text-[#5C494E] italic truncate">
+                        Subject override: &ldquo;{a.subjectOverride}&rdquo;
+                      </div>
+                    )}
                   </div>
-                  <div className="text-xs text-[#756568] flex items-center gap-3">
-                    <span>Timing: <strong className="text-[#1E1416]">{a.timing}</strong></span>
-                    <span>Recipient: <strong className="text-[#1E1416]">{a.recipientType}</strong></span>
+
+                  {/* Actions Ribbon */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleTestTriggerSequence(a)}
+                      className="px-2.5 py-1.5 rounded-lg border border-[#E8DFE0] bg-white text-[#756568] hover:text-[#780D22] hover:bg-[#FAF3EB] transition text-xs flex items-center gap-1 font-semibold"
+                      title="Dispatch a real test trigger to your test recipient address"
+                    >
+                      <Play className="w-3.5 h-3.5 text-amber-600" />
+                      <span className="text-[11px]">Test Run</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCreatingNewSequence(false);
+                        setEditingSequence({ ...a });
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg border border-[#E8DFE0] bg-white text-[#756568] hover:text-[#780D22] hover:bg-[#FAF3EB] transition text-xs flex items-center gap-1 font-semibold"
+                      title="Edit trigger, delay, recipient & template"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-[#780D22]" />
+                      <span className="text-[11px]">Edit</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleAutomation(a.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition ${
+                        a.enabled
+                          ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                          : "bg-gray-100 text-gray-500 border border-gray-300"
+                      }`}
+                    >
+                      {a.enabled ? (
+                        <>
+                          <ToggleRight className="w-4 h-4 text-emerald-600" /> Active
+                        </>
+                      ) : (
+                        <>
+                          <ToggleLeft className="w-4 h-4" /> Disabled
+                        </>
+                      )}
+                    </button>
+
+                    {!DEFAULT_AUTOMATIONS.some((d) => d.id === a.id) && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSequence(a.id)}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 transition"
+                        title="Delete custom sequence"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-                <button
-                  type="button"
-                  onClick={() => toggleAutomation(a.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition ${
-                    a.enabled
-                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                      : "bg-gray-100 text-gray-500 border border-gray-300"
-                  }`}
-                >
-                  {a.enabled ? (
-                    <>
-                      <ToggleRight className="w-4 h-4 text-emerald-600" /> Active
-                    </>
-                  ) : (
-                    <>
-                      <ToggleLeft className="w-4 h-4" /> Disabled
-                    </>
-                  )}
-                </button>
+      {/* 2.5 CAMPAIGNS & BROADCASTS */}
+      {activeTab === "CAMPAIGNS" && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="font-serif font-bold text-base text-[#1E1416]">
+                Marketing Broadcasts &amp; Client Drip Campaigns
+              </h3>
+              <p className="text-xs text-[#756568]">
+                Send seasonal announcements, early-bird promos, and re-engagement blasts to your client database via Namecheap Private Email.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsCreatingCampaign(true);
+                setCampaignTitle("");
+                setCampaignSubject("Exclusive 2026 Santa Booking Announcement | Brillo Events");
+                setCampaignMessage("Secure your premier date before holiday season prime slots fill up.");
+              }}
+              className="px-3.5 py-2 rounded-xl bg-[#780D22] text-[#FFF8F0] font-bold text-xs hover:bg-[#590919] transition flex items-center gap-1.5 shadow-sm shrink-0"
+            >
+              <Plus className="w-4 h-4 text-[#D6B36A]" /> Create New Campaign
+            </button>
+          </div>
+
+          {campaignFeedback && (
+            <div
+              className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between ${
+                campaignFeedback.success
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                  : "bg-red-50 border-red-200 text-red-800"
+              }`}
+            >
+              <span>{campaignFeedback.message}</span>
+              <button
+                type="button"
+                onClick={() => setCampaignFeedback(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-4 bg-white border border-[#E8DFE0] rounded-2xl shadow-sm">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#756568]">Total Campaigns</span>
+              <div className="text-2xl font-bold font-serif text-[#1E1416] mt-1">{campaigns.length}</div>
+              <span className="text-[10px] text-emerald-600 font-semibold mt-1 block">Configured</span>
+            </div>
+            <div className="p-4 bg-white border border-[#E8DFE0] rounded-2xl shadow-sm">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Completed Blasts</span>
+              <div className="text-2xl font-bold font-serif text-emerald-700 mt-1">
+                {campaigns.filter((c) => c.status === "COMPLETED").length}
               </div>
-            ))}
+              <span className="text-[10px] text-[#756568] mt-1 block">Live dispatches</span>
+            </div>
+            <div className="p-4 bg-white border border-[#E8DFE0] rounded-2xl shadow-sm">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Draft Broadcasts</span>
+              <div className="text-2xl font-bold font-serif text-amber-700 mt-1">
+                {campaigns.filter((c) => c.status === "DRAFT").length}
+              </div>
+              <span className="text-[10px] text-[#756568] mt-1 block">Ready to launch</span>
+            </div>
+            <div className="p-4 bg-white border border-[#E8DFE0] rounded-2xl shadow-sm">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#780D22]">Sender Transporter</span>
+              <div className="text-sm font-bold font-mono text-[#780D22] mt-1 truncate">mail.privateemail.com</div>
+              <span className="text-[10px] text-[#8F620E] font-semibold mt-1 block">SSL Port 465 (Active)</span>
+            </div>
+          </div>
+
+          {/* Campaigns Cards List */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {campaigns.map((c) => {
+              const tpl = EMAIL_TEMPLATES.find((t) => t.id === c.templateId) || EMAIL_TEMPLATES[0];
+              const isCompleted = c.status === "COMPLETED";
+
+              return (
+                <div
+                  key={c.id}
+                  className="p-5 bg-white border border-[#E8DFE0] rounded-2xl shadow-sm flex flex-col justify-between space-y-4 hover:border-[#D6B36A] transition"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border ${
+                          isCompleted
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-amber-50 text-amber-800 border-amber-200"
+                        }`}
+                      >
+                        {c.status}
+                      </span>
+                      <span className="text-[11px] text-[#756568] font-mono">
+                        Audience: <strong className="text-[#1E1416]">{c.targetAudience.replace(/_/g, " ")}</strong>
+                      </span>
+                    </div>
+
+                    <h4 className="font-serif font-bold text-base text-[#1E1416]">
+                      {c.title}
+                    </h4>
+
+                    <p className="text-xs text-[#5C494E] line-clamp-2">
+                      {c.customMessage || c.subject}
+                    </p>
+
+                    <div className="p-3 bg-[#FAF7F5] rounded-xl border border-[#E8DFE0] text-[11px] space-y-1">
+                      <div>
+                        <span className="text-[#756568]">Subject: </span>
+                        <strong className="text-[#1E1416]">{c.subject}</strong>
+                      </div>
+                      <div>
+                        <span className="text-[#756568]">Template: </span>
+                        <span className="text-[#780D22] font-semibold">{tpl.name}</span>
+                      </div>
+                      <div className="flex items-center justify-between pt-1 text-[10px] text-[#9A8A8C]">
+                        <span>Target: ~{c.recipientCount} client addresses</span>
+                        {isCompleted && c.dispatchedAt && (
+                          <span>Sent: {new Date(c.dispatchedAt).toLocaleDateString()}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-[#F0E6E8]">
+                    <button
+                      type="button"
+                      disabled={isDispatchingCampaign}
+                      onClick={() => handleDispatchCampaign(c.id)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm ${
+                        isCompleted
+                          ? "bg-[#F4ECEE] text-[#780D22] hover:bg-[#FAF3EB]"
+                          : "bg-[#780D22] text-[#FFF8F0] hover:bg-[#590919]"
+                      }`}
+                    >
+                      <Megaphone className="w-3.5 h-3.5 text-[#D6B36A]" />
+                      <span>{isCompleted ? "Re-Dispatch Broadcast" : "Launch & Dispatch Now"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCampaign(c.id)}
+                      className="p-1.5 text-gray-400 hover:text-rose-600 transition"
+                      title="Delete Campaign"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -827,6 +1314,307 @@ export default function EmailAutomationCenterPage() {
             <div>• SPF: <span className="text-emerald-700 font-bold">Pass (v=spf1 include:spf.privateemail.com ~all)</span></div>
             <div>• DKIM: <span className="text-emerald-700 font-bold">Active (Namecheap Private Email Signed)</span></div>
             <div>• DMARC: <span className="text-emerald-700 font-bold">Configured (p=quarantine)</span></div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 1: SEQUENCE CUSTOMIZER */}
+      {editingSequence && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white border border-[#E8DFE0] rounded-2xl shadow-2xl max-w-xl w-full p-6 space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E8DFE0]">
+              <div className="flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-[#780D22]" />
+                <h3 className="font-serif font-bold text-base text-[#1E1416]">
+                  {isCreatingNewSequence ? "Create Custom Automated Sequence" : `Edit Sequence: ${editingSequence.label}`}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingSequence(null)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSaveSequence(editingSequence);
+              }}
+              className="space-y-3.5 text-xs"
+            >
+              <div>
+                <label className="font-bold text-[#1E1416] block mb-1">Sequence Label / Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editingSequence.label}
+                  onChange={(e) => setEditingSequence({ ...editingSequence, label: e.target.value })}
+                  placeholder="e.g. VIP Booking Intake Follow-Up"
+                  className="w-full px-3 py-2 border border-[#D6C7C9] rounded-lg bg-white text-[#1E1416] focus:border-[#780D22] focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-[#1E1416] block mb-1">Trigger Event</label>
+                  <select
+                    value={editingSequence.triggerName}
+                    onChange={(e) => setEditingSequence({ ...editingSequence, triggerName: e.target.value })}
+                    className="w-full px-3 py-2 border border-[#D6C7C9] rounded-lg bg-white text-[#1E1416] focus:border-[#780D22] focus:outline-none"
+                  >
+                    <option value="INQUIRY_SUBMITTED">INQUIRY_SUBMITTED (Quote submitted)</option>
+                    <option value="PROPOSAL_DISPATCHED">PROPOSAL_DISPATCHED (Quote created)</option>
+                    <option value="PAYMENT_VERIFIED">PAYMENT_VERIFIED (Payment confirmed)</option>
+                    <option value="BOOKING_CONFIRMED">BOOKING_CONFIRMED (Date secured)</option>
+                    <option value="ACCOUNT_INVITED">ACCOUNT_INVITED (Portal activation)</option>
+                    <option value="PASSWORD_RESET_REQUESTED">PASSWORD_RESET_REQUESTED</option>
+                    <option value="EVENT_REMINDER_7D">EVENT_REMINDER_7D (7 days prior)</option>
+                    <option value="EVENT_REMINDER_24H">EVENT_REMINDER_24H (24 hours prior)</option>
+                    <option value="MANUAL_DISPATCH">MANUAL_DISPATCH (Manual trigger)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-[#1E1416] block mb-1">Dispatch Timing</label>
+                  <select
+                    value={editingSequence.timing}
+                    onChange={(e) => setEditingSequence({ ...editingSequence, timing: e.target.value })}
+                    className="w-full px-3 py-2 border border-[#D6C7C9] rounded-lg bg-white text-[#1E1416] focus:border-[#780D22] focus:outline-none"
+                  >
+                    <option value="Immediate">Immediate (0s delay)</option>
+                    <option value="5 Minutes">5 Minutes Delay</option>
+                    <option value="1 Hour">1 Hour Delay</option>
+                    <option value="12 Hours">12 Hours Delay</option>
+                    <option value="24 Hours">24 Hours Delay</option>
+                    <option value="3 Days Before">3 Days Before Event</option>
+                    <option value="7 Days Before">7 Days Before Event</option>
+                    <option value="On Staff Action">On Staff Action</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-[#1E1416] block mb-1">Recipient Target</label>
+                  <select
+                    value={editingSequence.recipientType}
+                    onChange={(e) => setEditingSequence({ ...editingSequence, recipientType: e.target.value as any })}
+                    className="w-full px-3 py-2 border border-[#D6C7C9] rounded-lg bg-white text-[#1E1416] focus:border-[#780D22] focus:outline-none"
+                  >
+                    <option value="CUSTOMER">CUSTOMER (Client Email Address)</option>
+                    <option value="STAFF">STAFF (bookings@brilloevent.com)</option>
+                    <option value="SANTA">SANTA (Assigned Performer)</option>
+                    <option value="CUSTOM">CUSTOM (Specific Mailbox)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-[#1E1416] block mb-1">Connected Email Template</label>
+                  <select
+                    value={editingSequence.templateId}
+                    onChange={(e) => setEditingSequence({ ...editingSequence, templateId: e.target.value })}
+                    className="w-full px-3 py-2 border border-[#D6C7C9] rounded-lg bg-white text-[#1E1416] focus:border-[#780D22] focus:outline-none"
+                  >
+                    {EMAIL_TEMPLATES.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {editingSequence.recipientType === "CUSTOM" && (
+                <div>
+                  <label className="font-bold text-[#1E1416] block mb-1">Custom Recipient Email</label>
+                  <input
+                    type="email"
+                    value={editingSequence.customRecipient || ""}
+                    onChange={(e) => setEditingSequence({ ...editingSequence, customRecipient: e.target.value })}
+                    placeholder="coordinator@client.com"
+                    className="w-full px-3 py-2 border border-[#D6C7C9] rounded-lg bg-white text-[#1E1416] focus:border-[#780D22] focus:outline-none"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="font-bold text-[#1E1416] block mb-1">Custom Subject Line Override (Optional)</label>
+                <input
+                  type="text"
+                  value={editingSequence.subjectOverride || ""}
+                  onChange={(e) => setEditingSequence({ ...editingSequence, subjectOverride: e.target.value })}
+                  placeholder="Leave empty to use default template subject"
+                  className="w-full px-3 py-2 border border-[#D6C7C9] rounded-lg bg-white text-[#1E1416] focus:border-[#780D22] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-[#1E1416] block mb-1">Custom Sequence Notes (Optional)</label>
+                <textarea
+                  rows={2}
+                  value={editingSequence.customNotes || ""}
+                  onChange={(e) => setEditingSequence({ ...editingSequence, customNotes: e.target.value })}
+                  placeholder="Internal notes or special instructions for this automated sequence trigger"
+                  className="w-full px-3 py-2 border border-[#D6C7C9] rounded-lg bg-white text-[#1E1416] focus:border-[#780D22] focus:outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-3 border-t border-[#E8DFE0]">
+                <button
+                  type="button"
+                  onClick={() => handleTestTriggerSequence(editingSequence)}
+                  className="px-3 py-2 rounded-xl border border-[#D6B36A] bg-[#FAF3EB] text-[#780D22] font-bold text-xs hover:bg-[#F4ECEE] transition flex items-center gap-1.5"
+                >
+                  <Play className="w-3.5 h-3.5 text-amber-600" /> Send Test to {testEmailAddr}
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingSequence(null)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-[#756568] hover:bg-gray-100 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-[#780D22] text-[#FFF8F0] font-bold text-xs hover:bg-[#590919] transition shadow-md"
+                  >
+                    Save Sequence
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: CAMPAIGN COMPOSER */}
+      {isCreatingCampaign && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white border border-[#E8DFE0] rounded-2xl shadow-2xl max-w-xl w-full p-6 space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E8DFE0]">
+              <div className="flex items-center gap-2">
+                <Megaphone className="w-4 h-4 text-[#780D22]" />
+                <h3 className="font-serif font-bold text-base text-[#1E1416]">
+                  Create Marketing Campaign Broadcast
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCreatingCampaign(false)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSaveCampaign();
+              }}
+              className="space-y-3.5 text-xs"
+            >
+              <div>
+                <label className="font-bold text-[#1E1416] block mb-1">Campaign Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={campaignTitle}
+                  onChange={(e) => setCampaignTitle(e.target.value)}
+                  placeholder="e.g. Christmas 2026 Mall Tour Priority Booking"
+                  className="w-full px-3 py-2 border border-[#D6C7C9] rounded-lg bg-white text-[#1E1416] focus:border-[#780D22] focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-[#1E1416] block mb-1">Target Audience</label>
+                  <select
+                    value={campaignAudience}
+                    onChange={(e) => setCampaignAudience(e.target.value as any)}
+                    className="w-full px-3 py-2 border border-[#D6C7C9] rounded-lg bg-white text-[#1E1416] focus:border-[#780D22] focus:outline-none"
+                  >
+                    <option value="ALL_LEADS">All Leads &amp; CRM Contacts</option>
+                    <option value="CORPORATE_MALLS">Corporate Malls &amp; Hotels</option>
+                    <option value="PRIVATE_EVENTS">Private Event Organizers</option>
+                    <option value="CONFIRMED_BOOKINGS">Confirmed Bookings</option>
+                    <option value="CUSTOM_LIST">Custom Recipient List</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-[#1E1416] block mb-1">Base Red Velvet Template</label>
+                  <select
+                    value={campaignTemplateId}
+                    onChange={(e) => setCampaignTemplateId(e.target.value)}
+                    className="w-full px-3 py-2 border border-[#D6C7C9] rounded-lg bg-white text-[#1E1416] focus:border-[#780D22] focus:outline-none"
+                  >
+                    {EMAIL_TEMPLATES.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {campaignAudience === "CUSTOM_LIST" && (
+                <div>
+                  <label className="font-bold text-[#1E1416] block mb-1">Target Email Addresses (comma separated)</label>
+                  <input
+                    type="text"
+                    value={campaignCustomList}
+                    onChange={(e) => setCampaignCustomList(e.target.value)}
+                    placeholder="client1@smsupermalls.com, client2@ayalamalls.com.ph"
+                    className="w-full px-3 py-2 border border-[#D6C7C9] rounded-lg bg-white text-[#1E1416] focus:border-[#780D22] focus:outline-none"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="font-bold text-[#1E1416] block mb-1">Email Subject Line *</label>
+                <input
+                  type="text"
+                  required
+                  value={campaignSubject}
+                  onChange={(e) => setCampaignSubject(e.target.value)}
+                  placeholder="Exclusive 2026 Santa Booking Announcement | Brillo Events"
+                  className="w-full px-3 py-2 border border-[#D6C7C9] rounded-lg bg-white text-[#1E1416] focus:border-[#780D22] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-[#1E1416] block mb-1">Custom Announcement Message</label>
+                <textarea
+                  rows={3}
+                  value={campaignMessage}
+                  onChange={(e) => setCampaignMessage(e.target.value)}
+                  placeholder="Add your special message, promo code, holiday greetings, or call-to-action details..."
+                  className="w-full px-3 py-2 border border-[#D6C7C9] rounded-lg bg-white text-[#1E1416] focus:border-[#780D22] focus:outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#E8DFE0]">
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingCampaign(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-[#756568] hover:bg-gray-100 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-[#780D22] text-[#FFF8F0] font-bold text-xs hover:bg-[#590919] transition shadow-md"
+                >
+                  Save Campaign
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -38,3 +38,6 @@ next-env.d.ts
 /.agents/
 /tools/
 
+
+cpanel_deploy.zip
+

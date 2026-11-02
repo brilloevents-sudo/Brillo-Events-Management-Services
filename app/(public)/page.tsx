@@ -496,9 +496,9 @@ export default function BrilloLuxuryLandingPage() {
             >
               <div className="rounded-3xl overflow-hidden border-2 border-[#D6B36A] shadow-luxury-card bg-[#211619]">
                 <img
-                  src="/talents/Bob/bob_photo_2.jpg"
-                  alt="Santa Bob sharing a heartfelt Christmas moment"
-                  className="w-full h-[420px] object-cover object-top"
+                  src="/talents/Bob/santa_throne_story.jpg"
+                  alt="Santa Bob sharing a heartfelt Christmas moment with children"
+                  className="w-full h-[420px] object-cover object-center"
                 />
               </div>
               <div className="p-4 rounded-2xl bg-[#F9EFE4] border border-[#D6B36A]/50 flex items-center space-x-3">

@@ -17,6 +17,10 @@ import {
   Heart,
   Star,
   ShieldCheck,
+  Pencil,
+  Upload,
+  X,
+  RotateCcw,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { SnowfallCanvas } from "@/components/visual-effects/snowfall-canvas";
@@ -99,6 +103,46 @@ const SPECIALIZED_EVENTS = [
     link: "/real-beard-santa-for-hire",
     activityTag: "PHOTO_SHOOT" as SantaEventActivityTag,
   },
+];
+
+const DEFAULT_PACKAGE_TILES = [
+  {
+    id: "pkg_real_beard",
+    title: "REAL-BEARD SANTA CLAUS",
+    desc: "For clients who want the authentic Santa Claus experience. Ideal for luxury malls, hotels, corporate launches, brand activations, and exclusive private celebrations.",
+    image: "/brand/package_real_beard_santa.jpg",
+    badge: "Premium Experience",
+    tier: "REAL_BEARD",
+  },
+  {
+    id: "pkg_classic",
+    title: "CLASSIC SANTA CLAUS",
+    desc: "A festive Santa experience for mall activities, Christmas photo shoots, holiday celebrations, and private parties.",
+    image: "/brand/package_classic_santa.jpg",
+    badge: "Festive Favorite",
+    tier: "FAKE_BEARD",
+  },
+  {
+    id: "pkg_santa_elves",
+    title: "SANTA & TWO ELVES",
+    desc: "Bring more energy, color, and Christmas excitement to your celebration.",
+    image: "/brand/package_santa_and_two_elves.jpg",
+    badge: "Complete Character Package",
+    tier: "SANTA_AND_ELVES",
+  },
+];
+
+const PRESET_PHOTOS = [
+  { name: "Real-Beard Santa (SM Urdaneta)", url: "/brand/package_real_beard_santa.jpg" },
+  { name: "Classic Santa (SM Manila)", url: "/brand/package_classic_santa.jpg" },
+  { name: "Santa & Two Elves", url: "/brand/package_santa_and_two_elves.jpg" },
+  { name: "Santa Cedric (Portrait)", url: "/talents/Cedric/cedric_photo_1.jpg" },
+  { name: "Santa Bob (Red Suit)", url: "/talents/Bob/bob_photo_1.jpg" },
+  { name: "Santa Perry (Mall Stage)", url: "/talents/Perry/perry_photo_1.jpg" },
+  { name: "Santa Terry (Tree Lighting)", url: "/talents/Terry/terry_photo_1.jpg" },
+  { name: "Santa Edwin (Barong)", url: "/talents/Edwin/edwin_photo_1.jpg" },
+  { name: "Santa Roy (Tall Velvet)", url: "/talents/Roy/roy_photo_1.jpg" },
+  { name: "Santa Benito (Festive)", url: "/talents/Benito/benito_photo_1.jpg" },
 ];
 
 const BOOKING_STEPS = [
@@ -199,6 +243,116 @@ export default function BrilloLuxuryLandingPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submittedResult, setSubmittedResult] = useState<any | null>(null);
   const [copiedSummary, setCopiedSummary] = useState(false);
+
+  // Customizable Tiles State (persisted in localStorage for easy user customization)
+  const [eventTiles, setEventTiles] = useState(SPECIALIZED_EVENTS);
+  const [packageTiles, setPackageTiles] = useState(DEFAULT_PACKAGE_TILES);
+
+  const [tileEditorOpen, setTileEditorOpen] = useState(false);
+  const [tileEditorType, setTileEditorType] = useState<"EVENT" | "PACKAGE">("EVENT");
+  const [tileEditorIndex, setTileEditorIndex] = useState<number>(0);
+  const [tileFormTitle, setTileFormTitle] = useState("");
+  const [tileFormDesc, setTileFormDesc] = useState("");
+  const [tileFormImage, setTileFormImage] = useState("");
+  const [tileFormLink, setTileFormLink] = useState("");
+  const [tileSavedToast, setTileSavedToast] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const savedEvents = localStorage.getItem("brillo_custom_tiles_v1");
+        if (savedEvents) {
+          setEventTiles(JSON.parse(savedEvents));
+        }
+        const savedPackages = localStorage.getItem("brillo_package_tiles_v1");
+        if (savedPackages) {
+          setPackageTiles(JSON.parse(savedPackages));
+        }
+      } catch {}
+    }
+  }, []);
+
+  const openTileEditor = (type: "EVENT" | "PACKAGE", idx: number) => {
+    setTileEditorType(type);
+    setTileEditorIndex(idx);
+    if (type === "EVENT") {
+      const tile = eventTiles[idx] || SPECIALIZED_EVENTS[idx];
+      setTileFormTitle(tile.title);
+      setTileFormDesc(tile.desc);
+      setTileFormImage(tile.image);
+      setTileFormLink(tile.link || "");
+    } else {
+      const tile = packageTiles[idx] || DEFAULT_PACKAGE_TILES[idx];
+      setTileFormTitle(tile.title);
+      setTileFormDesc(tile.desc);
+      setTileFormImage(tile.image);
+      setTileFormLink("");
+    }
+    setTileEditorOpen(true);
+  };
+
+  const handleTileImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setTileFormImage(event.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveTile = () => {
+    if (tileEditorType === "EVENT") {
+      const updated = [...eventTiles];
+      updated[tileEditorIndex] = {
+        ...updated[tileEditorIndex],
+        title: tileFormTitle,
+        desc: tileFormDesc,
+        image: tileFormImage,
+        link: tileFormLink || updated[tileEditorIndex].link,
+      };
+      setEventTiles(updated);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("brillo_custom_tiles_v1", JSON.stringify(updated));
+      }
+    } else {
+      const updated = [...packageTiles];
+      updated[tileEditorIndex] = {
+        ...updated[tileEditorIndex],
+        title: tileFormTitle,
+        desc: tileFormDesc,
+        image: tileFormImage,
+      };
+      setPackageTiles(updated);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("brillo_package_tiles_v1", JSON.stringify(updated));
+      }
+    }
+    setTileSavedToast(true);
+    setTimeout(() => setTileSavedToast(false), 3000);
+    setTileEditorOpen(false);
+  };
+
+  const handleResetTile = () => {
+    if (tileEditorType === "EVENT") {
+      const original = SPECIALIZED_EVENTS[tileEditorIndex];
+      if (original) {
+        setTileFormTitle(original.title);
+        setTileFormDesc(original.desc);
+        setTileFormImage(original.image);
+        setTileFormLink(original.link);
+      }
+    } else {
+      const original = DEFAULT_PACKAGE_TILES[tileEditorIndex];
+      if (original) {
+        setTileFormTitle(original.title);
+        setTileFormDesc(original.desc);
+        setTileFormImage(original.image);
+      }
+    }
+  };
 
   const loadPublicTalents = useCallback(() => {
     fetch("/api/talents?publicOnly=true")
@@ -648,24 +802,36 @@ export default function BrilloLuxuryLandingPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Experience 1: Real-Beard Santa */}
-            <div className="rounded-3xl bg-white border-2 border-[#D6B36A] shadow-luxury-card overflow-hidden flex flex-col justify-between group hover:-translate-y-1 transition duration-300">
+            <div className="rounded-3xl bg-white border-2 border-[#D6B36A] shadow-luxury-card overflow-hidden flex flex-col justify-between group hover:-translate-y-1 transition duration-300 relative">
               <div>
                 <div className="h-72 overflow-hidden relative bg-[#211619]">
                   <img
-                    src="/brand/package_real_beard_santa.jpg"
-                    alt="Real-Beard Santa Claus Experience"
+                    src={packageTiles[0]?.image || "/brand/package_real_beard_santa.jpg"}
+                    alt={packageTiles[0]?.title || "Real-Beard Santa Claus Experience"}
                     className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
                   />
                   <span className="absolute top-4 left-4 px-3.5 py-1 rounded-full bg-[#780D22] text-[#D6B36A] border border-[#D6B36A]/60 text-[11px] font-bold uppercase tracking-wider">
-                    Premium Experience
+                    {packageTiles[0]?.badge || "Premium Experience"}
                   </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openTileEditor("PACKAGE", 0);
+                    }}
+                    className="absolute top-4 right-4 px-3 py-1.5 rounded-full bg-white/95 hover:bg-white text-[#780D22] hover:text-[#590919] text-xs font-bold shadow-md border border-[#D6B36A] flex items-center space-x-1.5 transition z-20 backdrop-blur-sm hover:scale-105"
+                    title="Edit this tile"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-[#780D22]" />
+                    <span>Edit</span>
+                  </button>
                 </div>
                 <div className="p-7 space-y-4">
                   <h3 className="font-display font-bold text-3xl text-[#211619]">
-                    REAL-BEARD SANTA CLAUS
+                    {packageTiles[0]?.title || "REAL-BEARD SANTA CLAUS"}
                   </h3>
                   <p className="text-[15px] text-[#211619]/80 leading-relaxed">
-                    For clients who want the authentic Santa Claus experience. Ideal for luxury malls, hotels, corporate launches, brand activations, and exclusive private celebrations.
+                    {packageTiles[0]?.desc || "For clients who want the authentic Santa Claus experience. Ideal for luxury malls, hotels, corporate launches, brand activations, and exclusive private celebrations."}
                   </p>
                   <ul className="space-y-2.5 pt-2 border-t border-[#E6D7C3] text-[14px] text-[#211619]/90">
                     {[
@@ -695,24 +861,36 @@ export default function BrilloLuxuryLandingPage() {
             </div>
 
             {/* Experience 2: Classic Santa */}
-            <div className="rounded-3xl bg-white border-2 border-[#E6D7C3] hover:border-[#D6B36A] shadow-luxury-card overflow-hidden flex flex-col justify-between group hover:-translate-y-1 transition duration-300">
+            <div className="rounded-3xl bg-white border-2 border-[#E6D7C3] hover:border-[#D6B36A] shadow-luxury-card overflow-hidden flex flex-col justify-between group hover:-translate-y-1 transition duration-300 relative">
               <div>
                 <div className="h-72 overflow-hidden relative bg-[#211619]">
                   <img
-                    src="/brand/package_classic_santa.jpg"
-                    alt="Classic Santa Claus Experience"
+                    src={packageTiles[1]?.image || "/brand/package_classic_santa.jpg"}
+                    alt={packageTiles[1]?.title || "Classic Santa Claus Experience"}
                     className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
                   />
                   <span className="absolute top-4 left-4 px-3.5 py-1 rounded-full bg-[#211619]/85 text-[#FFF8F0] border border-[#D6B36A]/50 text-[11px] font-bold uppercase tracking-wider">
-                    Festive Favorite
+                    {packageTiles[1]?.badge || "Festive Favorite"}
                   </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openTileEditor("PACKAGE", 1);
+                    }}
+                    className="absolute top-4 right-4 px-3 py-1.5 rounded-full bg-white/95 hover:bg-white text-[#780D22] hover:text-[#590919] text-xs font-bold shadow-md border border-[#D6B36A] flex items-center space-x-1.5 transition z-20 backdrop-blur-sm hover:scale-105"
+                    title="Edit this tile"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-[#780D22]" />
+                    <span>Edit</span>
+                  </button>
                 </div>
                 <div className="p-7 space-y-4">
                   <h3 className="font-display font-bold text-3xl text-[#211619]">
-                    CLASSIC SANTA CLAUS
+                    {packageTiles[1]?.title || "CLASSIC SANTA CLAUS"}
                   </h3>
                   <p className="text-[15px] text-[#211619]/80 leading-relaxed">
-                    A festive Santa experience for mall activities, Christmas photo shoots, holiday celebrations, and private parties.
+                    {packageTiles[1]?.desc || "A festive Santa experience for mall activities, Christmas photo shoots, holiday celebrations, and private parties."}
                   </p>
                   <ul className="space-y-2.5 pt-2 border-t border-[#E6D7C3] text-[14px] text-[#211619]/90">
                     {[
@@ -741,24 +919,36 @@ export default function BrilloLuxuryLandingPage() {
             </div>
 
             {/* Experience 3: Santa & Two Elves */}
-            <div className="rounded-3xl bg-white border-2 border-[#D6B36A] shadow-luxury-card overflow-hidden flex flex-col justify-between group hover:-translate-y-1 transition duration-300">
+            <div className="rounded-3xl bg-white border-2 border-[#D6B36A] shadow-luxury-card overflow-hidden flex flex-col justify-between group hover:-translate-y-1 transition duration-300 relative">
               <div>
                 <div className="h-72 overflow-hidden relative bg-[#211619]">
                   <img
-                    src="/brand/package_santa_and_two_elves.jpg"
-                    alt="Santa and Two Elves Complete Character Package"
+                    src={packageTiles[2]?.image || "/brand/package_santa_and_two_elves.jpg"}
+                    alt={packageTiles[2]?.title || "Santa and Two Elves Complete Character Package"}
                     className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
                   />
                   <span className="absolute top-4 left-4 px-3.5 py-1 rounded-full bg-[#A61932] text-[#FFF8F0] border border-[#D6B36A]/60 text-[11px] font-bold uppercase tracking-wider">
-                    Complete Character Package
+                    {packageTiles[2]?.badge || "Complete Character Package"}
                   </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openTileEditor("PACKAGE", 2);
+                    }}
+                    className="absolute top-4 right-4 px-3 py-1.5 rounded-full bg-white/95 hover:bg-white text-[#780D22] hover:text-[#590919] text-xs font-bold shadow-md border border-[#D6B36A] flex items-center space-x-1.5 transition z-20 backdrop-blur-sm hover:scale-105"
+                    title="Edit this tile"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-[#780D22]" />
+                    <span>Edit</span>
+                  </button>
                 </div>
                 <div className="p-7 space-y-4">
                   <h3 className="font-display font-bold text-3xl text-[#211619]">
-                    SANTA &amp; TWO ELVES
+                    {packageTiles[2]?.title || "SANTA & TWO ELVES"}
                   </h3>
                   <p className="text-[15px] text-[#211619]/80 leading-relaxed">
-                    Bring more energy, color, and Christmas excitement to your celebration.
+                    {packageTiles[2]?.desc || "Bring more energy, color, and Christmas excitement to your celebration."}
                   </p>
                   <ul className="space-y-2.5 pt-2 border-t border-[#E6D7C3] text-[14px] text-[#211619]/90">
                     {[
@@ -1055,18 +1245,31 @@ export default function BrilloLuxuryLandingPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
-            {SPECIALIZED_EVENTS.map((ev) => (
+            {eventTiles.map((ev, idx) => (
               <div
-                key={ev.title}
-                className="rounded-3xl bg-white border border-[#E6D7C3] hover:border-[#D6B36A] shadow-luxury-card overflow-hidden group transition duration-300 flex flex-col justify-between"
+                key={ev.title + idx}
+                className="rounded-3xl bg-white border border-[#E6D7C3] hover:border-[#D6B36A] shadow-luxury-card overflow-hidden group transition duration-300 flex flex-col justify-between relative"
               >
                 <div>
-                  <div className="h-56 overflow-hidden bg-[#211619]">
+                  <div className="h-56 overflow-hidden bg-[#211619] relative">
                     <img
                       src={ev.image}
                       alt={ev.title}
                       className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
                     />
+                    {/* Interactive Edit Button for Easy Customization */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openTileEditor("EVENT", idx);
+                      }}
+                      className="absolute top-3 right-3 px-3 py-1.5 rounded-full bg-white/95 hover:bg-white text-[#780D22] hover:text-[#590919] text-xs font-bold shadow-md border border-[#D6B36A] flex items-center space-x-1.5 transition z-20 backdrop-blur-sm hover:scale-105"
+                      title="Edit this tile"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-[#780D22]" />
+                      <span>Edit</span>
+                    </button>
                   </div>
                   <div className="p-6 space-y-2.5">
                     <h3 className="font-display font-bold text-2xl sm:text-[28px] text-[#211619] leading-snug">
@@ -1809,6 +2012,200 @@ export default function BrilloLuxuryLandingPage() {
         selectedTalent={selectedTalent}
         publicTalents={publicTalents}
       />
+
+      {/* Interactive Tile Customization Modal */}
+      {tileEditorOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white border-2 border-[#D6B36A] rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto font-body">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-[#E6D7C3]">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-full bg-[#780D22] text-[#D6B36A] flex items-center justify-center font-bold">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-serif font-bold text-lg text-[#211619]">
+                    Customize Tile
+                  </h3>
+                  <p className="text-[11px] text-[#7A666B]">
+                    Update image, title, and description for this section
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTileEditorOpen(false)}
+                className="p-1.5 rounded-full hover:bg-[#FAF3EB] text-[#7A666B] hover:text-[#211619] transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Live Preview Box */}
+            <div className="p-3.5 bg-[#FAF7F5] rounded-2xl border border-[#E6D7C3] flex items-center space-x-4">
+              <div className="w-24 h-20 rounded-xl overflow-hidden bg-[#211619] shrink-0 border border-[#D6B36A]/50">
+                <img
+                  src={tileFormImage || "/brand/package_real_beard_santa.jpg"}
+                  alt="Preview"
+                  className="w-full h-full object-cover object-top"
+                />
+              </div>
+              <div className="min-w-0 flex-1 space-y-1">
+                <span className="text-[10px] uppercase font-bold text-[#A61932] tracking-wider block">
+                  Live Preview
+                </span>
+                <h4 className="font-display font-bold text-sm text-[#211619] truncate">
+                  {tileFormTitle || "Tile Title"}
+                </h4>
+                <p className="text-[11px] text-[#7A666B] line-clamp-2">
+                  {tileFormDesc || "Description goes here..."}
+                </p>
+              </div>
+            </div>
+
+            {/* Upload or Choose Image */}
+            <div className="space-y-3">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#211619]">
+                Tile Photo / Image
+              </label>
+
+              {/* Direct File Upload */}
+              <label className="w-full py-3 px-4 rounded-xl border-2 border-dashed border-[#D6B36A] hover:border-[#780D22] bg-[#FFF8F0] hover:bg-[#FAF3EB] cursor-pointer flex items-center justify-center space-x-2 text-xs font-bold text-[#780D22] transition shadow-sm">
+                <Upload className="w-4 h-4 text-[#780D22]" />
+                <span>Upload New Photo from Computer</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleTileImageFileUpload}
+                />
+              </label>
+
+              {/* URL or Local Path */}
+              <div>
+                <span className="text-[11px] text-[#7A666B] block mb-1">
+                  Or enter Image URL / Path:
+                </span>
+                <input
+                  type="text"
+                  value={tileFormImage}
+                  onChange={(e) => setTileFormImage(e.target.value)}
+                  placeholder="/brand/package_real_beard_santa.jpg"
+                  className="w-full px-3 py-2 text-xs bg-white border border-[#D6C7C9] rounded-lg focus:outline-none focus:border-[#780D22]"
+                />
+              </div>
+
+              {/* Gallery Presets */}
+              <div>
+                <span className="text-[11px] font-semibold text-[#5C494E] block mb-1.5">
+                  Or Select from Santa &amp; Event Gallery:
+                </span>
+                <div className="grid grid-cols-5 gap-2">
+                  {PRESET_PHOTOS.map((p) => (
+                    <button
+                      key={p.url}
+                      type="button"
+                      onClick={() => setTileFormImage(p.url)}
+                      className={`group relative rounded-lg overflow-hidden h-14 border transition ${
+                        tileFormImage === p.url
+                          ? "border-[#780D22] ring-2 ring-[#780D22]"
+                          : "border-[#E6D7C3] hover:border-[#D6B36A]"
+                      }`}
+                      title={p.name}
+                    >
+                      <img
+                        src={p.url}
+                        alt={p.name}
+                        className="w-full h-full object-cover object-top"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Title Input */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#211619]">
+                Tile Title
+              </label>
+              <input
+                type="text"
+                value={tileFormTitle}
+                onChange={(e) => setTileFormTitle(e.target.value)}
+                className="w-full px-3.5 py-2.5 text-xs bg-white border border-[#D6C7C9] rounded-xl focus:outline-none focus:border-[#780D22] font-semibold text-[#1E1416]"
+              />
+            </div>
+
+            {/* Description Textarea */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#211619]">
+                Tile Description
+              </label>
+              <textarea
+                rows={3}
+                value={tileFormDesc}
+                onChange={(e) => setTileFormDesc(e.target.value)}
+                className="w-full px-3.5 py-2.5 text-xs bg-white border border-[#D6C7C9] rounded-xl focus:outline-none focus:border-[#780D22] text-[#1E1416] resize-none leading-relaxed"
+              />
+            </div>
+
+            {/* If Event Tile, Target Link */}
+            {tileEditorType === "EVENT" && (
+              <div className="space-y-1">
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#211619]">
+                  Target Link (Explore URL)
+                </label>
+                <input
+                  type="text"
+                  value={tileFormLink}
+                  onChange={(e) => setTileFormLink(e.target.value)}
+                  placeholder="/santa-for-malls"
+                  className="w-full px-3.5 py-2 text-xs bg-white border border-[#D6C7C9] rounded-xl focus:outline-none focus:border-[#780D22] text-[#1E1416]"
+                />
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="pt-3 border-t border-[#E6D7C3] flex items-center justify-between">
+              <button
+                type="button"
+                onClick={handleResetTile}
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-[#7A666B] hover:text-[#A61932] hover:bg-[#FAF3EB] flex items-center space-x-1.5 transition"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset to Default</span>
+              </button>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setTileEditorOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-[#5C494E] hover:bg-[#FAF3EB] transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveTile}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[#780D22] hover:bg-[#590919] text-[#FFF8F0] shadow-md transition flex items-center space-x-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Save &amp; Apply</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Success Toast */}
+      {tileSavedToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#780D22] text-[#FFF8F0] px-4 py-2.5 rounded-xl shadow-2xl border border-[#D6B36A] flex items-center space-x-2 text-xs font-bold animate-bounce">
+          <CheckCircle2 className="w-4 h-4 text-[#D6B36A]" />
+          <span>Tile successfully updated &amp; saved!</span>
+        </div>
+      )}
     </div>
   );
 }

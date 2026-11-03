@@ -2,8 +2,26 @@ RewriteEngine On
 RewriteBase /
 
 # Route API endpoints directly to PHP handlers on cPanel
+RewriteRule ^api/talents/([a-zA-Z0-9_.-]+)$ api/talents.php?id=$1 [L,QSA]
 RewriteRule ^api/talents(/.*)?$ api/talents.php [L,QSA]
 RewriteRule ^api/mailer(/.*)?$ api/mailer.php [L,QSA]
+
+# Configure high-capacity video and photo uploads up to 100MB
+<IfModule mod_php.c>
+  php_value upload_max_filesize 100M
+  php_value post_max_size 100M
+  php_value memory_limit 256M
+</IfModule>
+<IfModule mod_php7.c>
+  php_value upload_max_filesize 100M
+  php_value post_max_size 100M
+  php_value memory_limit 256M
+</IfModule>
+<IfModule mod_php8.c>
+  php_value upload_max_filesize 100M
+  php_value post_max_size 100M
+  php_value memory_limit 256M
+</IfModule>
 
 # If requesting a directory or file that exists, serve directly
 RewriteCond %{REQUEST_FILENAME} -d [OR]

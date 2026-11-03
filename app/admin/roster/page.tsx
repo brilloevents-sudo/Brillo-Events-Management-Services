@@ -36,6 +36,8 @@ import {
   broadcastTalentUpdate,
   subscribeToTalentUpdates,
   getIndexedDBTalents,
+  sanitizeTalentMedia,
+  cleanCorruptedStorage,
 } from "@/lib/talent-storage";
 
 // Real PA & Handler Directory from the Google Sheet ("Santa database" tab)
@@ -175,6 +177,8 @@ export default function UnifiedRosterPage() {
   // Photo & Video Upload states inside Tab 2 (Photo & Video Gallery)
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedMediaFile, setSelectedMediaFile] = useState<File | null>(null);
+  const [mediaFileSizeLabel, setMediaFileSizeLabel] = useState<string>("");
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string>("");
   const [photoFileName, setPhotoFileName] = useState<string>("");
   const [pickedIsVideo, setPickedIsVideo] = useState<boolean>(false);
@@ -263,19 +267,22 @@ export default function UnifiedRosterPage() {
 
   function loadRoster() {
     setLoading(true);
+    cleanCorruptedStorage();
     Promise.all([
       fetch("/api/talents").then((r) => r.json()).catch(() => ({ talents: [] })),
       fetch("/api/bookings").then((r) => r.json()).catch(() => ({ bookings: [] })),
       getIndexedDBTalents().catch(() => []),
     ])
       .then(([tData, bData, idbTalents]) => {
-        let talentList = tData?.talents || [];
+        let talentList = (tData?.talents || []).map((t: any) => sanitizeTalentMedia(t));
         if (Array.isArray(idbTalents) && idbTalents.length > 0) {
-          const idbMap = new Map<string, any>(idbTalents.map((t: any) => [t.id, t]));
+          const idbMap = new Map<string, any>(idbTalents.map((t: any) => [t.id, sanitizeTalentMedia(t)]));
           talentList = talentList.map((t: any) => {
             const idbT = idbMap.get(t.id) || (t.canonicalId ? idbMap.get(t.canonicalId) : null);
             if (!idbT) return t;
-            const images = Array.isArray(idbT.images) ? idbT.images : t.images;
+            const images = Array.isArray(idbT.images) && idbT.images.length > 0
+              ? idbT.images
+              : (Array.isArray(t.images) ? t.images : []);
             return { ...t, ...idbT, images };
           });
         }
@@ -420,6 +427,8 @@ export default function UnifiedRosterPage() {
 
       const bodyPayload = {
         ...editForm,
+        id: selectedTalent?.id,
+        talentId: selectedTalent?.id,
         images: selectedTalent?.images || [],
         pendingPhoto: pendingPhotoData,
         fileDataUrl: photoPreviewUrl || undefined,
@@ -435,17 +444,20 @@ export default function UnifiedRosterPage() {
         throw new Error(data.error || "Failed to save profile");
       }
       if (data.talent) {
-        const authoritativeImgs = Array.isArray(data.talent.images)
-          ? data.talent.images
+        const sanitized = sanitizeTalentMedia(data.talent);
+        const authoritativeImgs = Array.isArray(sanitized.images)
+          ? sanitized.images
           : (Array.isArray(selectedTalent?.images) ? selectedTalent.images : []);
-        const preservedTalent = { ...selectedTalent, ...data.talent, images: authoritativeImgs };
+        const preservedTalent = { ...selectedTalent, ...sanitized, images: authoritativeImgs };
         setSelectedTalent(preservedTalent);
         saveTalentToStorage(preservedTalent).catch(() => {});
         broadcastTalentUpdate(preservedTalent.id);
         setIsNewTalent(false);
-        setEditForm((prev: any) => ({ ...prev, id: data.talent.id, images: authoritativeImgs }));
+        setEditForm((prev: any) => ({ ...prev, id: sanitized.id, images: authoritativeImgs }));
+        setSelectedMediaFile(null);
         setPhotoPreviewUrl("");
         setPhotoFileName("");
+        setMediaFileSizeLabel("");
         setVideoExternalUrl("");
       }
       loadRoster();
@@ -462,7 +474,11 @@ export default function UnifiedRosterPage() {
 
   async function handleFilePicked(file: File | undefined) {
     if (!file) return;
+    setSelectedMediaFile(file);
     setPhotoFileName(file.name);
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+    setMediaFileSizeLabel(`${sizeMb} MB`);
+
     const isVid = file.type.startsWith("video/") || /\.(mp4|webm|mov|m4v)$/i.test(file.name);
     setPickedIsVideo(isVid);
     setVideoExternalUrl("");
@@ -472,70 +488,91 @@ export default function UnifiedRosterPage() {
       );
     }
     if (isVid) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === "string") {
-          setPhotoPreviewUrl(reader.result);
-        }
-      };
-      reader.readAsDataURL(file);
+      const blobUrl = URL.createObjectURL(file);
+      setPhotoPreviewUrl(blobUrl);
     } else {
       try {
-        const compressed = await compressImageFile(file, 1200, 0.85);
+        const compressed = await compressImageFile(file, 1400, 0.85);
         setPhotoPreviewUrl(compressed);
       } catch {
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (typeof reader.result === "string") {
-            setPhotoPreviewUrl(reader.result);
-          }
-        };
-        reader.readAsDataURL(file);
+        const blobUrl = URL.createObjectURL(file);
+        setPhotoPreviewUrl(blobUrl);
       }
     }
   }
 
   async function handleUploadPhotoSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const hasFile = Boolean(photoPreviewUrl);
+    const hasFile = Boolean(selectedMediaFile || photoPreviewUrl);
     const hasLink = Boolean(videoExternalUrl.trim());
     if (!selectedTalent?.id || (!hasFile && !hasLink)) return;
     setSaving(true);
     setFeedback(null);
     const isVid = pickedIsVideo || hasLink;
+
     try {
-      const res = await fetch(`/api/talents/${selectedTalent.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "ADD_PHOTO",
-          fileName:
-            photoFileName ||
-            (isVid
-              ? `santa_${selectedTalent.displayName}_video.mp4`
-              : `santa_${selectedTalent.displayName}.jpg`),
-          fileDataUrl: hasFile ? photoPreviewUrl : undefined,
-          publicUrl: hasLink ? videoExternalUrl.trim() : undefined,
-          caption:
-            photoCaption ||
-            `Santa ${selectedTalent.displayName} ${isVid ? "Video Clip" : "Portrait"}`,
-          setAsPrimary: isVid ? false : photoSetPrimary,
-          approvedForClient: photoPublicApproved,
-        }),
-      });
+      let res: Response;
+      // If we have an actual File object, send via multipart FormData (handles up to 100MB videos cleanly!)
+      if (selectedMediaFile) {
+        const formData = new FormData();
+        formData.append("action", "ADD_PHOTO");
+        formData.append("id", selectedTalent.id);
+        formData.append("talentId", selectedTalent.id);
+        formData.append("file", selectedMediaFile);
+        formData.append("fileName", photoFileName || selectedMediaFile.name);
+        formData.append(
+          "caption",
+          photoCaption || `Santa ${selectedTalent.displayName} ${isVid ? "Video Clip" : "Portrait"}`
+        );
+        formData.append("setAsPrimary", isVid ? "false" : String(photoSetPrimary));
+        formData.append("approvedForClient", String(photoPublicApproved));
+
+        res = await fetch(`/api/talents/${selectedTalent.id}`, {
+          method: "POST",
+          body: formData,
+        });
+      } else {
+        // Fallback or external video link (YouTube, Vimeo, Google Drive, direct MP4)
+        res = await fetch(`/api/talents/${selectedTalent.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "ADD_PHOTO",
+            id: selectedTalent.id,
+            talentId: selectedTalent.id,
+            fileName:
+              photoFileName ||
+              (isVid
+                ? `santa_${selectedTalent.displayName}_video.mp4`
+                : `santa_${selectedTalent.displayName}.jpg`),
+            fileDataUrl:
+              photoPreviewUrl && !photoPreviewUrl.startsWith("blob:") ? photoPreviewUrl : undefined,
+            publicUrl: hasLink ? videoExternalUrl.trim() : undefined,
+            caption:
+              photoCaption ||
+              `Santa ${selectedTalent.displayName} ${isVid ? "Video Clip" : "Portrait"}`,
+            setAsPrimary: isVid ? false : photoSetPrimary,
+            approvedForClient: photoPublicApproved,
+          }),
+        });
+      }
+
       const data = await res.json();
       if (!res.ok || data.success === false) {
         throw new Error(data.error || "Failed to upload media");
       }
       if (data.talent) {
-        setSelectedTalent(data.talent);
-        saveTalentToStorage(data.talent).catch(() => {});
-        broadcastTalentUpdate(data.talent.id);
+        const sanitized = sanitizeTalentMedia(data.talent);
+        setSelectedTalent(sanitized);
+        saveTalentToStorage(sanitized).catch(() => {});
+        broadcastTalentUpdate(sanitized.id);
       }
+      setSelectedMediaFile(null);
       setPhotoPreviewUrl("");
       setPhotoFileName("");
       setPickedIsVideo(false);
       setVideoExternalUrl("");
+      setMediaFileSizeLabel("");
       loadRoster();
       setFeedback({
         type: "success",
@@ -1386,7 +1423,29 @@ export default function UnifiedRosterPage() {
                           )}
                           <div className="text-[11px] font-mono font-bold text-[#1E7E48]">
                             {pickedIsVideo ? "🎬 VIDEO READY: " : "📷 PHOTO READY: "}
-                            {photoFileName} — Click to replace
+                            {photoFileName} {mediaFileSizeLabel ? `(${mediaFileSizeLabel})` : ""} — Click to replace
+                          </div>
+                        </div>
+                      ) : videoExternalUrl.trim() ? (
+                        <div className="space-y-1.5 w-full">
+                          {toEmbedVideoUrl(videoExternalUrl.trim()) ? (
+                            <iframe
+                              src={toEmbedVideoUrl(videoExternalUrl.trim())!}
+                              title="Video Link Preview"
+                              className="h-32 w-full max-w-[220px] rounded-lg mx-auto border border-[#D6C7C9] bg-black"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            />
+                          ) : (
+                            <div className="h-28 flex flex-col items-center justify-center bg-[#FAF7F5] rounded-lg border border-[#D6C7C9] p-3 text-xs">
+                              <span className="text-xl">🎬</span>
+                              <span className="font-bold text-[#1E1416] mt-1">Video Link Connected</span>
+                              <span className="font-mono text-[10px] text-[#6E5D5F] truncate max-w-[180px]">
+                                {videoExternalUrl.trim()}
+                              </span>
+                            </div>
+                          )}
+                          <div className="text-[11px] font-mono font-bold text-[#1E7E48]">
+                            🎬 VIDEO LINK READY: Ready to save to gallery
                           </div>
                         </div>
                       ) : (
@@ -1396,7 +1455,7 @@ export default function UnifiedRosterPage() {
                             Choose Photo or Video File (or Drag &amp; Drop Here)
                           </div>
                           <div className="text-[11px] text-[#6E5D5F]">
-                            Photos (JPG, PNG, WebP) &amp; Videos (MP4, WebM, MOV)
+                            Photos (JPG, PNG, WebP) &amp; Videos up to 100MB (MP4, WebM, MOV)
                           </div>
                           <div className="flex items-center justify-center gap-2 pt-1.5">
                             <button
@@ -1481,14 +1540,16 @@ export default function UnifiedRosterPage() {
                       </div>
 
                       <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E8DFE0]">
-                        {(photoPreviewUrl || videoExternalUrl.trim()) && (
+                        {(selectedMediaFile || photoPreviewUrl || videoExternalUrl.trim()) && (
                           <button
                             type="button"
                             onClick={() => {
+                              setSelectedMediaFile(null);
                               setPhotoPreviewUrl("");
                               setPhotoFileName("");
                               setPickedIsVideo(false);
                               setVideoExternalUrl("");
+                              setMediaFileSizeLabel("");
                             }}
                             className="px-3 py-2 rounded-lg border border-[#D6C7C9] bg-white text-[#3D2C2E] font-semibold"
                           >
@@ -1497,7 +1558,7 @@ export default function UnifiedRosterPage() {
                         )}
                         <button
                           type="submit"
-                          disabled={(!photoPreviewUrl && !videoExternalUrl.trim()) || saving}
+                          disabled={(!selectedMediaFile && !photoPreviewUrl && !videoExternalUrl.trim()) || saving}
                           className="btn-primary px-5 py-2 rounded-lg font-bold flex items-center gap-1.5 disabled:opacity-50"
                         >
                           <Upload className="w-3.5 h-3.5" />
@@ -1550,6 +1611,13 @@ export default function UnifiedRosterPage() {
                                   src={img.publicUrl}
                                   alt={img.caption || editForm.displayName}
                                   className="w-full h-full object-cover object-top"
+                                  onError={(e) => {
+                                    const target = e.currentTarget as HTMLImageElement;
+                                    if (!target.dataset.fallback) {
+                                      target.dataset.fallback = "true";
+                                      target.src = "/talents/Bob/bob_photo_1.jpg";
+                                    }
+                                  }}
                                 />
                               )}
 

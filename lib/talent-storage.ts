@@ -37,9 +37,53 @@ function openDB(): Promise<IDBDatabase | null> {
 }
 
 /**
- * Get all talent overrides stored in IndexedDB.
+ * Sanitize talent images to eliminate corrupted pseudo-URLs like "...[stored_in_idb]"
+ */
+export function sanitizeTalentMedia(talent: any): any {
+  if (!talent) return talent;
+  const sanitized = { ...talent };
+  if (Array.isArray(sanitized.images)) {
+    sanitized.images = sanitized.images
+      .filter((img: any) => {
+        const url = String(img.publicUrl || img.originalPath || "");
+        return !url.includes("[stored_in_idb]");
+      })
+      .map((img: any) => ({
+        ...img,
+        publicUrl: String(img.publicUrl || "").trim(),
+      }));
+  }
+  return sanitized;
+}
+
+/**
+ * Clean up legacy corrupted storage keys from localStorage on startup
+ */
+export function cleanCorruptedStorage(): void {
+  if (typeof localStorage === "undefined") return;
+  const keys = [LOCAL_STORAGE_EDITS_KEY, "brillo_talent_edits_v2", "brillo_talent_edits"];
+  for (const k of keys) {
+    try {
+      const raw = localStorage.getItem(k);
+      if (raw && raw.includes("[stored_in_idb]")) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed === "object" && parsed !== null) {
+          const cleaned: Record<string, any> = {};
+          for (const [id, t] of Object.entries(parsed)) {
+            cleaned[id] = sanitizeTalentMedia(t);
+          }
+          localStorage.setItem(k, JSON.stringify(cleaned));
+        }
+      }
+    } catch {}
+  }
+}
+
+/**
+ * Get all talent overrides stored in IndexedDB, sanitized of any corrupted data.
  */
 export async function getIndexedDBTalents(): Promise<any[]> {
+  cleanCorruptedStorage();
   const db = await openDB();
   if (!db) return [];
 
@@ -49,7 +93,10 @@ export async function getIndexedDBTalents(): Promise<any[]> {
       const store = tx.objectStore(STORE_NAME);
       const req = store.getAll();
 
-      req.onsuccess = () => resolve(req.result || []);
+      req.onsuccess = () => {
+        const list = req.result || [];
+        resolve(list.map((t: any) => sanitizeTalentMedia(t)));
+      };
       req.onerror = () => resolve([]);
     } catch {
       resolve([]);
@@ -60,10 +107,11 @@ export async function getIndexedDBTalents(): Promise<any[]> {
 /**
  * Save a single talent record into IndexedDB and update LocalStorage safely.
  */
-export async function saveTalentToStorage(talent: any): Promise<void> {
-  if (!talent || !talent.id) return;
+export async function saveTalentToStorage(talentInput: any): Promise<void> {
+  if (!talentInput || !talentInput.id) return;
+  const talent = sanitizeTalentMedia(talentInput);
 
-  // 1. Save full record (including large Base64 photos & videos) to IndexedDB
+  // 1. Save full record into IndexedDB
   const db = await openDB();
   if (db) {
     await new Promise<void>((resolve) => {
@@ -79,36 +127,32 @@ export async function saveTalentToStorage(talent: any): Promise<void> {
     });
   }
 
-  // 2. Also save to LocalStorage with safe truncation if payload is too big
+  // 2. Also save to LocalStorage safely (prevent QuotaExceededError without corrupting image URLs)
   if (typeof localStorage !== "undefined") {
     try {
       const currentRaw = localStorage.getItem(LOCAL_STORAGE_EDITS_KEY);
       const editsMap: Record<string, any> = currentRaw ? JSON.parse(currentRaw) : {};
-      
-      // Index by both ID and Canonical ID for foolproof matching
+
+      // Only save if total payload fits, otherwise save clean metadata without heavy base64 strings
       editsMap[talent.id] = talent;
       if (talent.canonicalId) {
         editsMap[talent.canonicalId] = talent;
       }
 
       localStorage.setItem(LOCAL_STORAGE_EDITS_KEY, JSON.stringify(editsMap));
-    } catch (err) {
-      // If full payload exceeds 5MB localStorage quota, save a lightweight version in localStorage
+    } catch {
       try {
         const currentRaw = localStorage.getItem(LOCAL_STORAGE_EDITS_KEY);
         const editsMap: Record<string, any> = currentRaw ? JSON.parse(currentRaw) : {};
-        
-        // Strip heavy base64 from images in localStorage while IndexedDB retains full quality
+
+        // In case of quota limit, keep only real file paths or lightweight images (never corrupt strings)
         const lightweightTalent = {
           ...talent,
           images: Array.isArray(talent.images)
-            ? talent.images.map((img: any) => ({
-                ...img,
-                publicUrl:
-                  img.publicUrl && img.publicUrl.length > 50000
-                    ? img.publicUrl.slice(0, 100) + "...[stored_in_idb]"
-                    : img.publicUrl,
-              }))
+            ? talent.images.filter((img: any) => {
+                const u = String(img.publicUrl || "");
+                return u.startsWith("/") || u.startsWith("http");
+              })
             : [],
         };
 

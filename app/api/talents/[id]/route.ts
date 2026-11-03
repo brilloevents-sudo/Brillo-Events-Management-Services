@@ -72,7 +72,28 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const body = await req.json();
+    let body: any = {};
+    let uploadedFile: File | null = null;
+    const contentType = req.headers.get("content-type") || "";
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      body.action = formData.get("action")?.toString();
+      body.imageId = formData.get("imageId")?.toString();
+      body.fileName = formData.get("fileName")?.toString();
+      body.publicUrl = formData.get("publicUrl")?.toString();
+      body.caption = formData.get("caption")?.toString();
+      body.setAsPrimary = formData.get("setAsPrimary") === "true";
+      body.approvedForClient = formData.get("approvedForClient") !== "false";
+      body.displayName = formData.get("displayName")?.toString();
+      const fileEntry = formData.get("file");
+      if (fileEntry instanceof File) {
+        uploadedFile = fileEntry;
+      }
+    } else {
+      body = await req.json().catch(() => ({}));
+    }
+
     const {
       action,
       imageId,
@@ -114,12 +135,25 @@ export async function PATCH(
     // 1. Handle Photo & Video Gallery Actions
     if (action === "ADD_PHOTO" || action === "ADD_MEDIA") {
       let resolvedUrl = customPublicUrl || "";
-      const safeName = (fileName || `santa_${existing.displayName}_${Date.now()}.jpg`).replace(
-        /[^a-zA-Z0-9._-]/g,
-        "_"
-      );
+      const safeName = (
+        uploadedFile?.name ||
+        fileName ||
+        `santa_${existing.displayName}_${Date.now()}.jpg`
+      ).replace(/[^a-zA-Z0-9._-]/g, "_");
 
-      if (
+      if (uploadedFile) {
+        try {
+          const bytes = await uploadedFile.arrayBuffer();
+          const buffer = Buffer.from(bytes);
+          const uploadDir = path.join(process.cwd(), "public", "talents", "uploads");
+          fs.mkdirSync(uploadDir, { recursive: true });
+          const uniqueFile = `${Date.now()}_${safeName}`;
+          fs.writeFileSync(path.join(uploadDir, uniqueFile), buffer);
+          resolvedUrl = `/talents/uploads/${uniqueFile}`;
+        } catch {
+          // fallback
+        }
+      } else if (
         fileDataUrl &&
         typeof fileDataUrl === "string" &&
         (fileDataUrl.startsWith("data:image/") || fileDataUrl.startsWith("data:video/"))
@@ -400,4 +434,11 @@ export async function PATCH(
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
+}
+
+export async function POST(
+  req: NextRequest,
+  ctx: { params: { id: string } }
+) {
+  return PATCH(req, ctx);
 }

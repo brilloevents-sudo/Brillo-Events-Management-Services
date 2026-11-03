@@ -46,8 +46,14 @@ if (empty($talents)) {
     }
 }
 
-// Helper to extract talent ID from URL / Query
+// Helper to extract talent ID from URL / Query / Server Request
 $talentId = isset($_GET['id']) ? trim($_GET['id']) : '';
+if (empty($talentId) && !empty($_SERVER['REQUEST_URI'])) {
+    $uriPath = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    if (preg_match('#/api/talents/([a-zA-Z0-9_.-]+)#', $uriPath, $m)) {
+        $talentId = trim($m[1]);
+    }
+}
 if (empty($talentId) && isset($_SERVER['PATH_INFO'])) {
     $parts = explode('/', trim($_SERVER['PATH_INFO'], '/'));
     if (!empty($parts[0])) {
@@ -93,64 +99,69 @@ if ($method === 'GET') {
     exit;
 }
 
-if ($method === 'POST') {
-    $rawInput = file_get_contents('php://input');
+if ($method === 'POST' || $method === 'PATCH') {
+    $rawInput = @file_get_contents('php://input');
     $input = json_decode($rawInput, true) ?: [];
-
-    $newId = 'tal_custom_' . round(microtime(true) * 1000);
-    $displayName = !empty($input['displayName']) ? $input['displayName'] : 'New Santa';
-    $canonicalId = 'TAL-' . substr(preg_replace('/[^A-Z0-9]/', '', strtoupper($displayName)), 0, 8);
-
-    $images = [];
-    if (!empty($input['fileDataUrl']) || !empty($input['publicUrl'])) {
-        $images[] = [
-            'id' => 'img_' . round(microtime(true) * 1000),
-            'talentId' => $newId,
-            'fileName' => !empty($input['fileName']) ? $input['fileName'] : 'portrait.jpg',
-            'publicUrl' => !empty($input['fileDataUrl']) ? $input['fileDataUrl'] : $input['publicUrl'],
-            'isPrimary' => true,
-            'caption' => $displayName . ' Portrait',
-            'approvedForClient' => true
-        ];
+    if (empty($input) && !empty($_POST)) {
+        $input = $_POST;
     }
 
-    $newTalent = [
-        'id' => $newId,
-        'canonicalId' => $canonicalId,
-        'sourceName' => !empty($input['sourceName']) ? $input['sourceName'] : $displayName,
-        'displayName' => $displayName,
-        'talentType' => !empty($input['talentType']) ? $input['talentType'] : 'REAL_BEARD',
-        'status' => 'ACTIVE',
-        'age' => !empty($input['age']) ? intval($input['age']) : 60,
-        'height' => !empty($input['height']) ? $input['height'] : "6'0\"",
-        'nationality' => !empty($input['nationality']) ? $input['nationality'] : 'International',
-        'phone' => !empty($input['phone']) ? $input['phone'] : '',
-        'baseTalentFee' => !empty($input['baseTalentFee']) ? floatval($input['baseTalentFee']) : 12000,
-        'metroManilaRate' => !empty($input['metroManilaRate']) ? floatval($input['metroManilaRate']) : 18000,
-        'provincialRate' => !empty($input['provincialRate']) ? floatval($input['provincialRate']) : 23400,
-        'holidayRate' => !empty($input['holidayRate']) ? floatval($input['holidayRate']) : 21000,
-        'specialRateNote' => !empty($input['specialRateNote']) ? $input['specialRateNote'] : '',
-        'bio' => !empty($input['bio']) ? $input['bio'] : '',
-        'approvedForPublicDisplay' => isset($input['approvedForPublicDisplay']) ? boolval($input['approvedForPublicDisplay']) : true,
-        'images' => $images,
-        'aliases' => [],
-        'assignments' => [],
-        'ledgerEntries' => []
-    ];
+    if (empty($talentId)) {
+        if (!empty($input['id'])) $talentId = trim($input['id']);
+        elseif (!empty($input['talentId'])) $talentId = trim($input['talentId']);
+        elseif (!empty($_POST['id'])) $talentId = trim($_POST['id']);
+        elseif (!empty($_POST['talentId'])) $talentId = trim($_POST['talentId']);
+    }
 
-    array_unshift($talents, $newTalent);
-    @file_put_contents($overrideFile, json_encode($talents, JSON_PRETTY_PRINT), LOCK_EX);
+    $isCreateNew = ($method === 'POST' && empty($talentId) && empty($input['action']) && empty($_POST['action']));
 
-    echo json_encode(['success' => true, 'talent' => $newTalent]);
-    exit;
-}
+    if ($isCreateNew) {
+        $newId = 'tal_custom_' . round(microtime(true) * 1000);
+        $displayName = !empty($input['displayName']) ? $input['displayName'] : 'New Santa';
+        $canonicalId = 'TAL-' . substr(preg_replace('/[^A-Z0-9]/', '', strtoupper($displayName)), 0, 8);
 
-if ($method === 'PATCH') {
-    $rawInput = file_get_contents('php://input');
-    $input = json_decode($rawInput, true) ?: [];
+        $images = [];
+        if (!empty($input['fileDataUrl']) || !empty($input['publicUrl'])) {
+            $images[] = [
+                'id' => 'img_' . round(microtime(true) * 1000),
+                'talentId' => $newId,
+                'fileName' => !empty($input['fileName']) ? $input['fileName'] : 'portrait.jpg',
+                'publicUrl' => !empty($input['fileDataUrl']) ? $input['fileDataUrl'] : $input['publicUrl'],
+                'isPrimary' => true,
+                'caption' => $displayName . ' Portrait',
+                'approvedForClient' => true
+            ];
+        }
 
-    if (empty($talentId) && !empty($input['id'])) {
-        $talentId = trim($input['id']);
+        $newTalent = [
+            'id' => $newId,
+            'canonicalId' => $canonicalId,
+            'sourceName' => !empty($input['sourceName']) ? $input['sourceName'] : $displayName,
+            'displayName' => $displayName,
+            'talentType' => !empty($input['talentType']) ? $input['talentType'] : 'REAL_BEARD',
+            'status' => 'ACTIVE',
+            'age' => !empty($input['age']) ? intval($input['age']) : 60,
+            'height' => !empty($input['height']) ? $input['height'] : "6'0\"",
+            'nationality' => !empty($input['nationality']) ? $input['nationality'] : 'International',
+            'phone' => !empty($input['phone']) ? $input['phone'] : '',
+            'baseTalentFee' => !empty($input['baseTalentFee']) ? floatval($input['baseTalentFee']) : 12000,
+            'metroManilaRate' => !empty($input['metroManilaRate']) ? floatval($input['metroManilaRate']) : 18000,
+            'provincialRate' => !empty($input['provincialRate']) ? floatval($input['provincialRate']) : 23400,
+            'holidayRate' => !empty($input['holidayRate']) ? floatval($input['holidayRate']) : 21000,
+            'specialRateNote' => !empty($input['specialRateNote']) ? $input['specialRateNote'] : '',
+            'bio' => !empty($input['bio']) ? $input['bio'] : '',
+            'approvedForPublicDisplay' => isset($input['approvedForPublicDisplay']) ? boolval($input['approvedForPublicDisplay']) : true,
+            'images' => $images,
+            'aliases' => [],
+            'assignments' => [],
+            'ledgerEntries' => []
+        ];
+
+        array_unshift($talents, $newTalent);
+        @file_put_contents($overrideFile, json_encode($talents, JSON_PRETTY_PRINT), LOCK_EX);
+
+        echo json_encode(['success' => true, 'talent' => $newTalent]);
+        exit;
     }
 
     $targetIndex = -1;
@@ -169,22 +180,78 @@ if ($method === 'PATCH') {
     }
 
     $current = $talents[$targetIndex];
-    $action = isset($input['action']) ? $input['action'] : '';
+    $action = isset($input['action']) ? $input['action'] : (isset($_POST['action']) ? $_POST['action'] : '');
 
     if ($action === 'ADD_PHOTO' || $action === 'ADD_MEDIA') {
-        $url = !empty($input['fileDataUrl']) ? $input['fileDataUrl'] : (!empty($input['publicUrl']) ? $input['publicUrl'] : '');
-        $fileName = !empty($input['fileName']) ? $input['fileName'] : '';
-        $isVideo = preg_match('/\.(mp4|webm|mov|m4v)(\?|$)/i', $url) ||
-                   preg_match('/\.(mp4|webm|mov|m4v)$/i', $fileName) ||
-                   strpos($url, 'data:video/') === 0 ||
-                   preg_match('/youtube\.com|youtu\.be|vimeo\.com|drive\.google\.com/i', $url);
+        $uploadsDir = $rootDir . '/talents/uploads';
+        if (!is_dir($uploadsDir)) {
+            @mkdir($uploadsDir, 0755, true);
+        }
 
-        $setPrimary = !empty($input['setAsPrimary']) && !$isVideo;
+        $url = '';
+        $fileName = !empty($input['fileName']) ? $input['fileName'] : (!empty($_POST['fileName']) ? $_POST['fileName'] : '');
+        $isVideo = false;
+
+        // 1. Direct file upload from multipart FormData
+        if (!empty($_FILES['file']['tmp_name']) && is_uploaded_file($_FILES['file']['tmp_name'])) {
+            $orig = basename($_FILES['file']['name']);
+            $ext = strtolower(pathinfo($orig, PATHINFO_EXTENSION) ?: 'jpg');
+            $safeBase = preg_replace('/[^a-zA-Z0-9_-]/', '_', pathinfo($orig, PATHINFO_FILENAME));
+            $uniqueFile = time() . '_' . $safeBase . '.' . $ext;
+            $dest = $uploadsDir . '/' . $uniqueFile;
+            if (@move_uploaded_file($_FILES['file']['tmp_name'], $dest)) {
+                $url = '/talents/uploads/' . $uniqueFile;
+                $fileName = $fileName ?: $orig;
+            }
+            $mime = !empty($_FILES['file']['type']) ? $_FILES['file']['type'] : '';
+            if (in_array($ext, ['mp4', 'webm', 'mov', 'm4v']) || strpos($mime, 'video/') === 0) {
+                $isVideo = true;
+            }
+        }
+        // 2. Base64 fileDataUrl -> write to physical file on disk
+        elseif (!empty($input['fileDataUrl']) && preg_match('#^data:(image|video)/([a-zA-Z0-9+.-]+);base64,(.+)$#s', $input['fileDataUrl'], $b64Matches)) {
+            $mediaKind = $b64Matches[1];
+            $ext = strtolower($b64Matches[2]);
+            if ($ext === 'jpeg') $ext = 'jpg';
+            if ($ext === 'quicktime') $ext = 'mov';
+            if ($mediaKind === 'video' || in_array($ext, ['mp4', 'webm', 'mov', 'm4v'])) {
+                $isVideo = true;
+            }
+            $bin = base64_decode($b64Matches[3]);
+            if ($bin !== false) {
+                $safeBase = preg_replace('/[^a-zA-Z0-9_-]/', '_', pathinfo($fileName ?: "santa_{$current['displayName']}", PATHINFO_FILENAME));
+                $uniqueFile = time() . '_' . $safeBase . '.' . $ext;
+                $dest = $uploadsDir . '/' . $uniqueFile;
+                if (@file_put_contents($dest, $bin) !== false) {
+                    $url = '/talents/uploads/' . $uniqueFile;
+                }
+            }
+        }
+        // 3. Cloud / External link (YouTube, Vimeo, Google Drive, direct MP4)
+        elseif (!empty($input['publicUrl']) || !empty($_POST['publicUrl'])) {
+            $url = trim(!empty($input['publicUrl']) ? $input['publicUrl'] : $_POST['publicUrl']);
+        }
+
+        if (empty($url) && !empty($input['fileDataUrl'])) {
+            $url = $input['fileDataUrl'];
+        }
+
+        if (!$isVideo) {
+            $isVideo = preg_match('/\.(mp4|webm|mov|m4v)(\?|$)/i', $url) ||
+                       preg_match('/\.(mp4|webm|mov|m4v)$/i', $fileName) ||
+                       strpos($url, 'data:video/') === 0 ||
+                       preg_match('/youtube\.com|youtu\.be|vimeo\.com|drive\.google\.com/i', $url);
+        }
+
+        $setPrimary = (!empty($input['setAsPrimary']) || !empty($_POST['setAsPrimary'])) && !$isVideo;
         if ($setPrimary && !empty($current['images'])) {
             foreach ($current['images'] as &$img) {
                 $img['isPrimary'] = false;
             }
         }
+
+        $caption = !empty($input['caption']) ? $input['caption'] : (!empty($_POST['caption']) ? $_POST['caption'] : ('Santa ' . $current['displayName'] . ' ' . ($isVideo ? 'Video Clip' : 'Portrait')));
+        $approvedForClient = isset($input['approvedForClient']) ? boolval($input['approvedForClient']) : (isset($_POST['approvedForClient']) ? boolval($_POST['approvedForClient']) : true);
 
         $newMedia = [
             'id' => 'img_' . round(microtime(true) * 1000),
@@ -194,8 +261,8 @@ if ($method === 'PATCH') {
             'originalPath' => $url,
             'isPrimary' => $setPrimary,
             'mediaType' => $isVideo ? 'VIDEO' : 'IMAGE',
-            'caption' => !empty($input['caption']) ? $input['caption'] : ('Santa ' . $current['displayName'] . ' Media'),
-            'approvedForClient' => isset($input['approvedForClient']) ? boolval($input['approvedForClient']) : true
+            'caption' => $caption,
+            'approvedForClient' => $approvedForClient
         ];
 
         if (!isset($current['images']) || !is_array($current['images'])) {
@@ -207,6 +274,7 @@ if ($method === 'PATCH') {
         } else {
             $current['images'][] = $newMedia;
         }
+    }
     } elseif ($action === 'SET_PRIMARY_PHOTO' && !empty($input['imageId'])) {
         $targetImgId = $input['imageId'];
         if (!empty($current['images']) && is_array($current['images'])) {

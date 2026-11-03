@@ -31,6 +31,8 @@ import {
 import {
   subscribeToTalentUpdates,
   getIndexedDBTalents,
+  sanitizeTalentMedia,
+  cleanCorruptedStorage,
 } from "@/lib/talent-storage";
 import { motion } from "framer-motion";
 import { SnowfallCanvas } from "@/components/visual-effects/snowfall-canvas";
@@ -468,6 +470,7 @@ export default function BrilloLuxuryLandingPage() {
   };
 
   const loadPublicTalents = useCallback(() => {
+    cleanCorruptedStorage();
     Promise.all([
       fetch("/api/talents?publicOnly=true")
         .then((res) => res.json())
@@ -475,13 +478,18 @@ export default function BrilloLuxuryLandingPage() {
       getIndexedDBTalents().catch(() => []),
     ])
       .then(([data, idbTalents]) => {
-        let list: any[] = data.talents && Array.isArray(data.talents) ? data.talents : [];
+        let list: any[] = data.talents && Array.isArray(data.talents)
+          ? data.talents.map((t: any) => sanitizeTalentMedia(t))
+          : [];
         if (Array.isArray(idbTalents) && idbTalents.length > 0) {
-          const idbMap = new Map<string, any>(idbTalents.map((t: any) => [t.id, t]));
+          const idbMap = new Map<string, any>(idbTalents.map((t: any) => [t.id, sanitizeTalentMedia(t)]));
           list = list.map((t: any) => {
             const idbT = idbMap.get(t.id) || (t.canonicalId ? idbMap.get(t.canonicalId) : null);
             if (!idbT) return t;
-            const images = Array.isArray(idbT.images) ? idbT.images : t.images;
+            const images =
+              Array.isArray(idbT.images) && idbT.images.length > 0
+                ? idbT.images
+                : (Array.isArray(t.images) ? t.images : []);
             return { ...t, ...idbT, images };
           });
         }
@@ -1506,6 +1514,13 @@ export default function BrilloLuxuryLandingPage() {
                         src={primaryImg}
                         alt={`Santa ${t.displayName}`}
                         className="w-full h-full object-cover object-top group-hover/img:scale-105 transition-transform duration-500"
+                        onError={(e) => {
+                          const target = e.currentTarget as HTMLImageElement;
+                          if (!target.dataset.fallback) {
+                            target.dataset.fallback = "true";
+                            target.src = "/talents/Bob/bob_photo_1.jpg";
+                          }
+                        }}
                       />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center text-[#D6B36A] p-4 text-center">
@@ -2528,6 +2543,13 @@ export default function BrilloLuxuryLandingPage() {
                         `Santa ${gallerySanta.displayName}`
                       }
                       className="w-full max-h-[56vh] object-contain rounded-xl"
+                      onError={(e) => {
+                        const target = e.currentTarget as HTMLImageElement;
+                        if (!target.dataset.fallback) {
+                          target.dataset.fallback = "true";
+                          target.src = "/talents/Bob/bob_photo_1.jpg";
+                        }
+                      }}
                     />
                   )}
 

@@ -1380,21 +1380,8 @@ export function StaticApiFallback() {
             seen.add(t.id);
             const edit = editsMap[t.id] || (t.canonicalId ? editsMap[t.canonicalId] : undefined);
             if (edit) {
-              // Ensure images are safely merged and never discarded
-              const baseImgs = Array.isArray(t.images) ? t.images : [];
-              const editImgs = Array.isArray(edit.images) ? edit.images : [];
-              const mergedImgs = [
-                ...editImgs,
-                ...baseImgs.filter(
-                  (bImg: any) =>
-                    !editImgs.some(
-                      (eImg: any) =>
-                        (eImg.id && bImg.id && eImg.id === bImg.id) ||
-                        (eImg.publicUrl && bImg.publicUrl && eImg.publicUrl === bImg.publicUrl)
-                    )
-                ),
-              ];
-              result.push({ ...t, ...edit, images: mergedImgs });
+              const images = Array.isArray(edit.images) ? edit.images : (Array.isArray(t.images) ? t.images : []);
+              result.push({ ...t, ...edit, images });
             } else {
               result.push(t);
             }
@@ -1489,21 +1476,12 @@ export function StaticApiFallback() {
           ) ||
           merged[0];
         if (target) {
-          const baseImgs = Array.isArray(target.images) ? target.images : [];
-          const incomingImgs = Array.isArray(parsedBody.images) ? parsedBody.images : [];
-          const combinedImgs = [
-            ...incomingImgs,
-            ...baseImgs.filter(
-              (b: any) =>
-                !incomingImgs.some(
-                  (inc: any) =>
-                    (inc.id && b.id && inc.id === b.id) ||
-                    (inc.publicUrl && b.publicUrl && inc.publicUrl === b.publicUrl)
-                )
-            ),
-          ];
-          const updated = { ...target, images: combinedImgs.length > 0 ? combinedImgs : baseImgs };
           const action = parsedBody.action;
+          const targetImgs = Array.isArray(target.images) ? target.images : [];
+          const updated = {
+            ...target,
+            images: Array.isArray(parsedBody.images) ? parsedBody.images : [...targetImgs],
+          };
 
           if (action === "ADD_PHOTO" || action === "ADD_MEDIA") {
             const url = parsedBody.fileDataUrl || parsedBody.publicUrl || "";
@@ -1544,12 +1522,12 @@ export function StaticApiFallback() {
             updated.images = updated.images
               .map((img: any) => ({
                 ...img,
-                isPrimary: img.id === parsedBody.imageId,
+                isPrimary: img.id === parsedBody.imageId || img.publicUrl === parsedBody.imageId,
               }))
               .sort((a: any, b: any) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
           } else if (action === "UPDATE_PHOTO" && parsedBody.imageId) {
             updated.images = updated.images.map((img: any) =>
-              img.id === parsedBody.imageId
+              img.id === parsedBody.imageId || img.publicUrl === parsedBody.imageId
                 ? {
                     ...img,
                     caption: parsedBody.caption !== undefined ? parsedBody.caption : img.caption,
@@ -1562,12 +1540,16 @@ export function StaticApiFallback() {
             );
           } else if (action === "DELETE_PHOTO" && parsedBody.imageId) {
             const wasPrimary = updated.images.find(
-              (img: any) => img.id === parsedBody.imageId
+              (img: any) => img.id === parsedBody.imageId || img.publicUrl === parsedBody.imageId
             )?.isPrimary;
-            updated.images = updated.images.filter((img: any) => img.id !== parsedBody.imageId);
+            updated.images = updated.images.filter(
+              (img: any) => img.id !== parsedBody.imageId && img.publicUrl !== parsedBody.imageId
+            );
             if (wasPrimary && updated.images.length > 0) {
               updated.images[0] = { ...updated.images[0], isPrimary: true };
             }
+          } else if (action === "REORDER_PHOTOS" && Array.isArray(parsedBody.images)) {
+            updated.images = parsedBody.images;
           } else {
             if (parsedBody.displayName !== undefined) updated.displayName = parsedBody.displayName;
             if (parsedBody.sourceName !== undefined) updated.sourceName = parsedBody.sourceName;

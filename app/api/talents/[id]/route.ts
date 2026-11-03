@@ -231,8 +231,13 @@ export async function PATCH(
     }
 
     if (action === "DELETE_PHOTO" && imageId) {
-      const targetImg = existing.images.find((i) => i.id === imageId);
-      await prisma.talentImage.delete({ where: { id: imageId } });
+      const targetImg = existing.images.find((i) => i.id === imageId || i.publicUrl === imageId);
+      await prisma.talentImage.deleteMany({
+        where: {
+          talentId: existing.id,
+          OR: [{ id: imageId }, { publicUrl: imageId }],
+        },
+      });
 
       if (targetImg?.isPrimary) {
         const remaining = await prisma.talentImage.findMany({
@@ -243,6 +248,38 @@ export async function PATCH(
           await prisma.talentImage.update({
             where: { id: remaining[0].id },
             data: { isPrimary: true },
+          });
+        }
+      }
+
+      const refreshed = await prisma.talent.findUnique({
+        where: { id: existing.id },
+        include: {
+          images: { orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }] },
+          aliases: true,
+        },
+      });
+      return NextResponse.json({ success: true, talent: refreshed });
+    }
+
+    if (action === "REORDER_PHOTOS" && Array.isArray(body.images)) {
+      const reorderedList = body.images;
+      const baseNow = Date.now();
+      for (let idx = 0; idx < reorderedList.length; idx++) {
+        const imgItem = reorderedList[idx];
+        const matchCond: any[] = [];
+        if (imgItem.id) matchCond.push({ id: imgItem.id });
+        if (imgItem.publicUrl) matchCond.push({ publicUrl: imgItem.publicUrl });
+        if (matchCond.length > 0) {
+          await prisma.talentImage.updateMany({
+            where: {
+              talentId: existing.id,
+              OR: matchCond,
+            },
+            data: {
+              isPrimary: Boolean(imgItem.isPrimary),
+              createdAt: new Date(baseNow - idx * 1000),
+            },
           });
         }
       }

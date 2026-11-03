@@ -25,6 +25,10 @@ import {
   FileText,
   Lock,
   Wallet,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 
 import {
@@ -271,21 +275,8 @@ export default function UnifiedRosterPage() {
           talentList = talentList.map((t: any) => {
             const idbT = idbMap.get(t.id) || (t.canonicalId ? idbMap.get(t.canonicalId) : null);
             if (!idbT) return t;
-            // Merge images
-            const baseImgs = Array.isArray(t.images) ? t.images : [];
-            const idbImgs = Array.isArray(idbT.images) ? idbT.images : [];
-            const mergedImgs = [
-              ...idbImgs,
-              ...baseImgs.filter(
-                (bImg: any) =>
-                  !idbImgs.some(
-                    (iImg: any) =>
-                      (iImg.id && bImg.id && iImg.id === bImg.id) ||
-                      (iImg.publicUrl && bImg.publicUrl && iImg.publicUrl === bImg.publicUrl)
-                  )
-              ),
-            ];
-            return { ...t, ...idbT, images: mergedImgs };
+            const images = Array.isArray(idbT.images) ? idbT.images : t.images;
+            return { ...t, ...idbT, images };
           });
         }
         if (talentList.length > 0) {
@@ -296,20 +287,8 @@ export default function UnifiedRosterPage() {
               (t: any) => t.id === curr.id || t.canonicalId === curr.canonicalId
             );
             if (!updatedFromList) return curr;
-            const baseImgs = Array.isArray(curr.images) ? curr.images : [];
-            const listImgs = Array.isArray(updatedFromList.images) ? updatedFromList.images : [];
-            const mergedImgs = [
-              ...listImgs,
-              ...baseImgs.filter(
-                (cImg: any) =>
-                  !listImgs.some(
-                    (uImg: any) =>
-                      (uImg.id && cImg.id && uImg.id === cImg.id) ||
-                      (uImg.publicUrl && cImg.publicUrl && uImg.publicUrl === cImg.publicUrl)
-                  )
-              ),
-            ];
-            return { ...curr, ...updatedFromList, images: mergedImgs };
+            const images = Array.isArray(updatedFromList.images) ? updatedFromList.images : curr.images;
+            return { ...curr, ...updatedFromList, images };
           });
         }
         if (bData?.bookings) setBookings(bData.bookings);
@@ -456,25 +435,15 @@ export default function UnifiedRosterPage() {
         throw new Error(data.error || "Failed to save profile");
       }
       if (data.talent) {
-        const baseImgs = Array.isArray(selectedTalent?.images) ? selectedTalent.images : [];
-        const returnedImgs = Array.isArray(data.talent.images) ? data.talent.images : [];
-        const mergedImgs = [
-          ...returnedImgs,
-          ...baseImgs.filter(
-            (sImg: any) =>
-              !returnedImgs.some(
-                (dImg: any) =>
-                  (dImg.id && sImg.id && dImg.id === sImg.id) ||
-                  (dImg.publicUrl && sImg.publicUrl && dImg.publicUrl === sImg.publicUrl)
-              )
-          ),
-        ];
-        const preservedTalent = { ...selectedTalent, ...data.talent, images: mergedImgs };
+        const authoritativeImgs = Array.isArray(data.talent.images)
+          ? data.talent.images
+          : (Array.isArray(selectedTalent?.images) ? selectedTalent.images : []);
+        const preservedTalent = { ...selectedTalent, ...data.talent, images: authoritativeImgs };
         setSelectedTalent(preservedTalent);
         saveTalentToStorage(preservedTalent).catch(() => {});
         broadcastTalentUpdate(preservedTalent.id);
         setIsNewTalent(false);
-        setEditForm((prev: any) => ({ ...prev, id: data.talent.id, images: mergedImgs }));
+        setEditForm((prev: any) => ({ ...prev, id: data.talent.id, images: authoritativeImgs }));
         setPhotoPreviewUrl("");
         setPhotoFileName("");
         setVideoExternalUrl("");
@@ -630,6 +599,21 @@ export default function UnifiedRosterPage() {
 
   async function handleDeletePhoto(imageId: string) {
     if (!selectedTalent?.id) return;
+    if (typeof window !== "undefined" && !window.confirm("Are you sure you want to delete this photo/video from the gallery?")) {
+      return;
+    }
+    const currentImgs = Array.isArray(selectedTalent.images) ? [...selectedTalent.images] : [];
+    const updatedImgs = currentImgs.filter((img: any) => img.id !== imageId && img.publicUrl !== imageId);
+    const wasPrimary = currentImgs.find((img: any) => img.id === imageId || img.publicUrl === imageId)?.isPrimary;
+    if (wasPrimary && updatedImgs.length > 0 && !updatedImgs.some((img: any) => img.isPrimary)) {
+      updatedImgs[0] = { ...updatedImgs[0], isPrimary: true };
+    }
+    const updatedTalent = { ...selectedTalent, images: updatedImgs };
+    setSelectedTalent(updatedTalent);
+    setEditForm((prev: any) => ({ ...prev, images: updatedImgs }));
+    await saveTalentToStorage(updatedTalent).catch(() => {});
+    broadcastTalentUpdate(updatedTalent.id);
+
     try {
       const res = await fetch(`/api/talents/${selectedTalent.id}`, {
         method: "PATCH",
@@ -641,12 +625,58 @@ export default function UnifiedRosterPage() {
         setSelectedTalent(data.talent);
         saveTalentToStorage(data.talent).catch(() => {});
         broadcastTalentUpdate(data.talent.id);
-        loadRoster();
-        setFeedback({ type: "success", text: "Photo deleted from gallery." });
       }
+      loadRoster();
+      setFeedback({ type: "success", text: "Photo deleted permanently from gallery." });
     } catch (err: any) {
-      setFeedback({ type: "error", text: err.message });
+      setFeedback({ type: "error", text: err.message || "Failed to delete photo" });
     }
+  }
+
+  async function handleReorderPhotos(newImages: any[]) {
+    if (!selectedTalent?.id) return;
+    const updatedTalent = { ...selectedTalent, images: newImages };
+    setSelectedTalent(updatedTalent);
+    setEditForm((prev: any) => ({ ...prev, images: newImages }));
+    await saveTalentToStorage(updatedTalent).catch(() => {});
+    broadcastTalentUpdate(updatedTalent.id);
+
+    try {
+      const res = await fetch(`/api/talents/${selectedTalent.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "REORDER_PHOTOS", images: newImages }),
+      });
+      const data = await res.json();
+      if (data.talent) {
+        setSelectedTalent(data.talent);
+        saveTalentToStorage(data.talent).catch(() => {});
+        broadcastTalentUpdate(data.talent.id);
+      }
+      loadRoster();
+      setFeedback({ type: "success", text: "Gallery order updated and saved!" });
+    } catch (err: any) {
+      setFeedback({ type: "error", text: err.message || "Failed to reorder photos" });
+    }
+  }
+
+  function handleMovePhoto(fromIndex: number, toIndex: number) {
+    const imgs = Array.isArray(selectedTalent?.images) ? [...selectedTalent.images] : [];
+    if (fromIndex < 0 || fromIndex >= imgs.length || toIndex < 0 || toIndex >= imgs.length || fromIndex === toIndex) return;
+    const [moved] = imgs.splice(fromIndex, 1);
+    imgs.splice(toIndex, 0, moved);
+    handleReorderPhotos(imgs);
+  }
+
+  function handleMovePhotoToStart(index: number) {
+    if (index === 0) return;
+    handleMovePhoto(index, 0);
+  }
+
+  function handleMovePhotoToEnd(index: number) {
+    const imgs = Array.isArray(selectedTalent?.images) ? selectedTalent.images : [];
+    if (index === imgs.length - 1) return;
+    handleMovePhoto(index, imgs.length - 1);
   }
 
   // Bookings for the currently opened Santa in the 8-Tab Modal
@@ -1485,15 +1515,15 @@ export default function UnifiedRosterPage() {
 
                   {/* Existing Photos & Videos Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {(selectedTalent?.images || []).map((img: any) => {
+                    {(selectedTalent?.images || []).map((img: any, idx: number) => {
                       const isVid = isVideoMedia(img);
                       const embedUrl = isVid ? toEmbedVideoUrl(img.publicUrl) : null;
 
                       return (
                         <div
-                          key={img.id}
-                          className={`rounded-xl overflow-hidden border flex flex-col justify-between bg-white ${
-                            img.isPrimary ? "border-2 border-[#C68A12]" : "border-[#E8DFE0]"
+                          key={img.id || img.publicUrl || `img-${idx}`}
+                          className={`rounded-xl overflow-hidden border flex flex-col justify-between bg-white shadow-xs ${
+                            img.isPrimary ? "border-2 border-[#C68A12] ring-2 ring-[#C68A12]/20" : "border-[#E8DFE0]"
                           }`}
                         >
                           <div>
@@ -1528,7 +1558,7 @@ export default function UnifiedRosterPage() {
                                   <span>🎬 Video Clip</span>
                                 </span>
                               ) : img.isPrimary ? (
-                                <span className="absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#C68A12] text-white flex items-center gap-1">
+                                <span className="absolute top-2 left-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#C68A12] text-white flex items-center gap-1 shadow-xs">
                                   <Star className="w-3 h-3 fill-white" />
                                   <span>Primary Portrait</span>
                                 </span>
@@ -1536,11 +1566,78 @@ export default function UnifiedRosterPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleSetPrimaryPhoto(img.id)}
-                                  className="absolute top-2 left-2 px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/95 hover:bg-[#9B1B30] text-[#1E1416] hover:text-white border border-[#D6C7C9] transition"
+                                  className="absolute top-2 left-2 px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/95 hover:bg-[#9B1B30] text-[#1E1416] hover:text-white border border-[#D6C7C9] transition shadow-xs"
                                 >
                                   ★ Set Primary
                                 </button>
                               )}
+
+                              <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-black/60 text-white backdrop-blur-xs">
+                                #{idx + 1}
+                              </span>
+                            </div>
+
+                            {/* Reorder / Organize Bar: Unahan, Prev, Next, Dulo */}
+                            <div className="px-2.5 py-1.5 bg-[#FAF7F5] border-b border-[#E8DFE0] flex items-center justify-between text-[11px]">
+                              <span className="font-mono text-[10px] font-bold text-[#6E5D5F]">
+                                Pos: {idx + 1}/{selectedTalent.images.length}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  title="Lipat sa Unahan (Move to Front)"
+                                  disabled={idx === 0}
+                                  onClick={() => handleMovePhotoToStart(idx)}
+                                  className={`px-1.5 py-0.5 rounded flex items-center gap-0.5 text-[10px] font-bold border transition ${
+                                    idx === 0
+                                      ? "opacity-30 cursor-not-allowed bg-transparent border-transparent text-[#9E8E90]"
+                                      : "bg-white hover:bg-[#9B1B30] hover:text-white border-[#D6C7C9] text-[#1E1416]"
+                                  }`}
+                                >
+                                  <ChevronsLeft className="w-3.5 h-3.5" />
+                                  <span>Unahan</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Lipat pakaliwa (Move Left)"
+                                  disabled={idx === 0}
+                                  onClick={() => handleMovePhoto(idx, idx - 1)}
+                                  className={`p-1 rounded flex items-center justify-center border transition ${
+                                    idx === 0
+                                      ? "opacity-30 cursor-not-allowed bg-transparent border-transparent text-[#9E8E90]"
+                                      : "bg-white hover:bg-[#9B1B30] hover:text-white border-[#D6C7C9] text-[#1E1416]"
+                                  }`}
+                                >
+                                  <ChevronLeft className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Lipat pakanan (Move Right)"
+                                  disabled={idx === selectedTalent.images.length - 1}
+                                  onClick={() => handleMovePhoto(idx, idx + 1)}
+                                  className={`p-1 rounded flex items-center justify-center border transition ${
+                                    idx === selectedTalent.images.length - 1
+                                      ? "opacity-30 cursor-not-allowed bg-transparent border-transparent text-[#9E8E90]"
+                                      : "bg-white hover:bg-[#9B1B30] hover:text-white border-[#D6C7C9] text-[#1E1416]"
+                                  }`}
+                                >
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Lipat sa Dulo (Move to End)"
+                                  disabled={idx === selectedTalent.images.length - 1}
+                                  onClick={() => handleMovePhotoToEnd(idx)}
+                                  className={`px-1.5 py-0.5 rounded flex items-center gap-0.5 text-[10px] font-bold border transition ${
+                                    idx === selectedTalent.images.length - 1
+                                      ? "opacity-30 cursor-not-allowed bg-transparent border-transparent text-[#9E8E90]"
+                                      : "bg-white hover:bg-[#9B1B30] hover:text-white border-[#D6C7C9] text-[#1E1416]"
+                                  }`}
+                                >
+                                  <span>Dulo</span>
+                                  <ChevronsRight className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
 
                             <div className="p-2.5">
@@ -1571,7 +1668,7 @@ export default function UnifiedRosterPage() {
                                 </div>
                               ) : (
                                 <div className="flex items-center justify-between gap-1">
-                                  <span className="font-semibold text-[#1E1416] truncate">
+                                  <span className="font-semibold text-[#1E1416] truncate text-xs">
                                     {img.caption || img.fileName}
                                   </span>
                                   <button
@@ -1596,7 +1693,7 @@ export default function UnifiedRosterPage() {
                             <button
                               type="button"
                               onClick={() => handleDeletePhoto(img.id)}
-                              className="text-[#B91C1C] hover:underline font-bold flex items-center gap-0.5"
+                              className="text-[#B91C1C] hover:text-white hover:bg-[#B91C1C] px-2 py-1 rounded border border-[#B91C1C]/40 hover:border-[#B91C1C] font-bold flex items-center gap-1 transition shadow-2xs"
                             >
                               <Trash2 className="w-3 h-3" />
                               <span>Delete</span>

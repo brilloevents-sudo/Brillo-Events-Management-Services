@@ -217,10 +217,26 @@ if ($method === 'PATCH') {
     } elseif ($action === 'DELETE_PHOTO' && !empty($input['imageId'])) {
         $targetImgId = $input['imageId'];
         if (!empty($current['images']) && is_array($current['images'])) {
+            $wasPrimary = false;
+            foreach ($current['images'] as $img) {
+                if (((isset($img['id']) && $img['id'] === $targetImgId) ||
+                     (isset($img['publicUrl']) && $img['publicUrl'] === $targetImgId)) &&
+                    !empty($img['isPrimary'])) {
+                    $wasPrimary = true;
+                    break;
+                }
+            }
             $current['images'] = array_values(array_filter($current['images'], function($img) use ($targetImgId) {
-                return !isset($img['id']) || $img['id'] !== $targetImgId;
+                $matchId = isset($img['id']) && $img['id'] === $targetImgId;
+                $matchUrl = isset($img['publicUrl']) && $img['publicUrl'] === $targetImgId;
+                return !($matchId || $matchUrl);
             }));
+            if ($wasPrimary && !empty($current['images'])) {
+                $current['images'][0]['isPrimary'] = true;
+            }
         }
+    } elseif ($action === 'REORDER_PHOTOS' && !empty($input['images']) && is_array($input['images'])) {
+        $current['images'] = $input['images'];
     } else {
         // Direct field updates
         $fields = [

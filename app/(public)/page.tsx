@@ -481,20 +481,8 @@ export default function BrilloLuxuryLandingPage() {
           list = list.map((t: any) => {
             const idbT = idbMap.get(t.id) || (t.canonicalId ? idbMap.get(t.canonicalId) : null);
             if (!idbT) return t;
-            const baseImgs = Array.isArray(t.images) ? t.images : [];
-            const idbImgs = Array.isArray(idbT.images) ? idbT.images : [];
-            const mergedImgs = [
-              ...idbImgs,
-              ...baseImgs.filter(
-                (bImg: any) =>
-                  !idbImgs.some(
-                    (iImg: any) =>
-                      (iImg.id && bImg.id && iImg.id === bImg.id) ||
-                      (iImg.publicUrl && bImg.publicUrl && iImg.publicUrl === bImg.publicUrl)
-                  )
-              ),
-            ];
-            return { ...t, ...idbT, images: mergedImgs };
+            const images = Array.isArray(idbT.images) ? idbT.images : t.images;
+            return { ...t, ...idbT, images };
           });
         }
         setPublicTalents(

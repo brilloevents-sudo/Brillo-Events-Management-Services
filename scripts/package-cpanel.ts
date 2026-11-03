@@ -36,6 +36,7 @@ const includeDirs = [
   "talents",
   "terms",
   "api",
+  "data",
 ];
 
 console.log("Packaging folders...");

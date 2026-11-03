@@ -27,6 +27,13 @@ import {
   Wallet,
 } from "lucide-react";
 
+import {
+  saveTalentToStorage,
+  broadcastTalentUpdate,
+  subscribeToTalentUpdates,
+  getIndexedDBTalents,
+} from "@/lib/talent-storage";
+
 // Real PA & Handler Directory from the Google Sheet ("Santa database" tab)
 const PA_CREW_DIRECTORY = [
   {
@@ -253,15 +260,39 @@ export default function UnifiedRosterPage() {
   function loadRoster() {
     setLoading(true);
     Promise.all([
-      fetch("/api/talents").then((r) => r.json()),
-      fetch("/api/bookings").then((r) => r.json()),
+      fetch("/api/talents").then((r) => r.json()).catch(() => ({ talents: [] })),
+      fetch("/api/bookings").then((r) => r.json()).catch(() => ({ bookings: [] })),
+      getIndexedDBTalents().catch(() => []),
     ])
-      .then(([tData, bData]) => {
-        if (tData?.talents) {
-          setTalents(tData.talents);
+      .then(([tData, bData, idbTalents]) => {
+        let talentList = tData?.talents || [];
+        if (Array.isArray(idbTalents) && idbTalents.length > 0) {
+          const idbMap = new Map<string, any>(idbTalents.map((t: any) => [t.id, t]));
+          talentList = talentList.map((t: any) => {
+            const idbT = idbMap.get(t.id) || (t.canonicalId ? idbMap.get(t.canonicalId) : null);
+            if (!idbT) return t;
+            // Merge images
+            const baseImgs = Array.isArray(t.images) ? t.images : [];
+            const idbImgs = Array.isArray(idbT.images) ? idbT.images : [];
+            const mergedImgs = [
+              ...idbImgs,
+              ...baseImgs.filter(
+                (bImg: any) =>
+                  !idbImgs.some(
+                    (iImg: any) =>
+                      (iImg.id && bImg.id && iImg.id === bImg.id) ||
+                      (iImg.publicUrl && bImg.publicUrl && iImg.publicUrl === bImg.publicUrl)
+                  )
+              ),
+            ];
+            return { ...t, ...idbT, images: mergedImgs };
+          });
+        }
+        if (talentList.length > 0) {
+          setTalents(talentList);
           setSelectedTalent((curr: any) => {
             if (!curr?.id) return curr;
-            const updatedFromList = tData.talents.find(
+            const updatedFromList = talentList.find(
               (t: any) => t.id === curr.id || t.canonicalId === curr.canonicalId
             );
             if (!updatedFromList) return curr;
@@ -289,18 +320,37 @@ export default function UnifiedRosterPage() {
 
   useEffect(() => {
     loadRoster();
+    const unsub = subscribeToTalentUpdates(() => {
+      loadRoster();
+    });
+    return () => unsub();
   }, []);
 
   async function togglePublicApproval(talentId: string, current: boolean) {
+    const nextVal = !current;
+    // Optimistic UI state flip
+    setTalents((prev: any[]) =>
+      prev.map((t: any) =>
+        t.id === talentId || t.canonicalId === talentId
+          ? { ...t, approvedForPublicDisplay: nextVal }
+          : t
+      )
+    );
     try {
-      await fetch(`/api/talents/${talentId}`, {
+      const res = await fetch(`/api/talents/${talentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ approvedForPublicDisplay: !current }),
+        body: JSON.stringify({ approvedForPublicDisplay: nextVal }),
       });
+      const data = await res.json();
+      if (data?.talent) {
+        saveTalentToStorage(data.talent).catch(() => {});
+        broadcastTalentUpdate(data.talent.id);
+      }
       loadRoster();
     } catch (err) {
       console.error(err);
+      loadRoster();
     }
   }
 
@@ -421,6 +471,8 @@ export default function UnifiedRosterPage() {
         ];
         const preservedTalent = { ...selectedTalent, ...data.talent, images: mergedImgs };
         setSelectedTalent(preservedTalent);
+        saveTalentToStorage(preservedTalent).catch(() => {});
+        broadcastTalentUpdate(preservedTalent.id);
         setIsNewTalent(false);
         setEditForm((prev: any) => ({ ...prev, id: data.talent.id, images: mergedImgs }));
         setPhotoPreviewUrl("");
@@ -508,6 +560,8 @@ export default function UnifiedRosterPage() {
       }
       if (data.talent) {
         setSelectedTalent(data.talent);
+        saveTalentToStorage(data.talent).catch(() => {});
+        broadcastTalentUpdate(data.talent.id);
       }
       setPhotoPreviewUrl("");
       setPhotoFileName("");
@@ -538,6 +592,8 @@ export default function UnifiedRosterPage() {
       const data = await res.json();
       if (data.talent) {
         setSelectedTalent(data.talent);
+        saveTalentToStorage(data.talent).catch(() => {});
+        broadcastTalentUpdate(data.talent.id);
         loadRoster();
         setFeedback({ type: "success", text: "Primary portrait updated!" });
       }
@@ -561,6 +617,8 @@ export default function UnifiedRosterPage() {
       const data = await res.json();
       if (data.talent) {
         setSelectedTalent(data.talent);
+        saveTalentToStorage(data.talent).catch(() => {});
+        broadcastTalentUpdate(data.talent.id);
         loadRoster();
       }
       setEditingPhotoId(null);
@@ -581,6 +639,8 @@ export default function UnifiedRosterPage() {
       const data = await res.json();
       if (data.talent) {
         setSelectedTalent(data.talent);
+        saveTalentToStorage(data.talent).catch(() => {});
+        broadcastTalentUpdate(data.talent.id);
         loadRoster();
         setFeedback({ type: "success", text: "Photo deleted from gallery." });
       }

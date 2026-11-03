@@ -21,7 +21,17 @@ import {
   Upload,
   X,
   RotateCcw,
+  Play,
+  Video,
+  Image as ImageIcon,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
 } from "lucide-react";
+import {
+  subscribeToTalentUpdates,
+  getIndexedDBTalents,
+} from "@/lib/talent-storage";
 import { motion } from "framer-motion";
 import { SnowfallCanvas } from "@/components/visual-effects/snowfall-canvas";
 import { BookingModal } from "@/components/funnel/booking-modal";
@@ -221,6 +231,8 @@ export default function BrilloLuxuryLandingPage() {
   const [publicTalents, setPublicTalents] = useState<any[]>([]);
   const [selectedTalent, setSelectedTalent] = useState<any | null>(null);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
+  const [gallerySanta, setGallerySanta] = useState<any | null>(null);
+  const [activeMediaIndex, setActiveMediaIndex] = useState<number>(0);
 
   // Embedded Homepage Inquiry Form State (Connected Live to CRM, Calendar & Dashboard)
   const [eventTypeLabel, setEventTypeLabel] = useState(
@@ -424,26 +436,85 @@ export default function BrilloLuxuryLandingPage() {
     }
   };
 
+  const isVideoItem = (img: any): boolean => {
+    if (!img) return false;
+    const url = String(img.publicUrl || img.originalPath || "");
+    const fName = String(img.fileName || "");
+    return (
+      img.mediaType === "VIDEO" ||
+      url.startsWith("data:video/") ||
+      /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url) ||
+      /\.(mp4|webm|mov|m4v)$/i.test(fName) ||
+      /youtube\.com|youtu\.be|vimeo\.com|drive\.google\.com/i.test(url)
+    );
+  };
+
+  const toEmbedUrl = (url: string): string | null => {
+    if (!url) return null;
+    const ytMatch = url.match(
+      /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/
+    );
+    if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1`;
+    const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+    if (vimeoMatch) return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1`;
+    const driveMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+    if (driveMatch) return `https://drive.google.com/file/d/${driveMatch[1]}/preview`;
+    return null;
+  };
+
+  const openSantaGallery = (santa: any, initialIndex = 0) => {
+    setGallerySanta(santa);
+    setActiveMediaIndex(initialIndex);
+  };
+
   const loadPublicTalents = useCallback(() => {
-    fetch("/api/talents?publicOnly=true")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.talents && Array.isArray(data.talents)) {
-          setPublicTalents(
-            data.talents.filter((t: any) => Boolean(t.approvedForPublicDisplay))
-          );
+    Promise.all([
+      fetch("/api/talents?publicOnly=true")
+        .then((res) => res.json())
+        .catch(() => ({ talents: [] })),
+      getIndexedDBTalents().catch(() => []),
+    ])
+      .then(([data, idbTalents]) => {
+        let list: any[] = data.talents && Array.isArray(data.talents) ? data.talents : [];
+        if (Array.isArray(idbTalents) && idbTalents.length > 0) {
+          const idbMap = new Map<string, any>(idbTalents.map((t: any) => [t.id, t]));
+          list = list.map((t: any) => {
+            const idbT = idbMap.get(t.id) || (t.canonicalId ? idbMap.get(t.canonicalId) : null);
+            if (!idbT) return t;
+            const baseImgs = Array.isArray(t.images) ? t.images : [];
+            const idbImgs = Array.isArray(idbT.images) ? idbT.images : [];
+            const mergedImgs = [
+              ...idbImgs,
+              ...baseImgs.filter(
+                (bImg: any) =>
+                  !idbImgs.some(
+                    (iImg: any) =>
+                      (iImg.id && bImg.id && iImg.id === bImg.id) ||
+                      (iImg.publicUrl && bImg.publicUrl && iImg.publicUrl === bImg.publicUrl)
+                  )
+              ),
+            ];
+            return { ...t, ...idbT, images: mergedImgs };
+          });
         }
+        setPublicTalents(
+          list.filter((t: any) => Boolean(t.approvedForPublicDisplay))
+        );
       })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
     loadPublicTalents();
+    const unsub = subscribeToTalentUpdates(() => {
+      loadPublicTalents();
+    });
     const onFocus = () => loadPublicTalents();
     const onStorage = () => loadPublicTalents();
     window.addEventListener("focus", onFocus);
     window.addEventListener("storage", onStorage);
     return () => {
+      unsub();
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("storage", onStorage);
     };
@@ -1415,18 +1486,38 @@ export default function BrilloLuxuryLandingPage() {
               const subtitle =
                 t.bio ||
                 `${t.nationality || "International"} Real-Beard Santa Performer`;
+              const mediaList =
+                Array.isArray(t.images) && t.images.length > 0
+                  ? t.images
+                  : primaryImg
+                  ? [
+                      {
+                        id: "primary",
+                        publicUrl: primaryImg,
+                        isPrimary: true,
+                        caption: `Santa ${t.displayName}`,
+                      },
+                    ]
+                  : [];
+              const mediaCount = mediaList.length;
+              const videoCount = mediaList.filter(isVideoItem).length;
 
               return (
                 <div
                   key={t.id}
                   className="rounded-2xl bg-white border border-[#D6B36A]/60 hover:border-[#A61932] overflow-hidden shadow-luxury-card group flex flex-col justify-between transition"
                 >
-                  <div className="h-64 overflow-hidden bg-[#211619] relative">
+                  {/* Portrait with Click-to-Open Gallery */}
+                  <div
+                    onClick={() => openSantaGallery(t)}
+                    className="h-64 overflow-hidden bg-[#211619] relative cursor-pointer group/img"
+                    title={`Click to view Santa ${t.displayName}'s photo gallery & videos`}
+                  >
                     {primaryImg ? (
                       <img
                         src={primaryImg}
                         alt={`Santa ${t.displayName}`}
-                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
+                        className="w-full h-full object-cover object-top group-hover/img:scale-105 transition-transform duration-500"
                       />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center text-[#D6B36A] p-4 text-center">
@@ -1436,13 +1527,32 @@ export default function BrilloLuxuryLandingPage() {
                         </span>
                       </div>
                     )}
+
                     <span className="absolute top-3 left-3 px-2.5 py-0.5 rounded-full bg-[#211619]/85 text-[#D6B36A] border border-[#D6B36A]/50 text-[10px] font-semibold">
                       {t.talentType === "REGULAR_SANTA"
                         ? "Classic Santa"
                         : "Real-Beard Santa"}
                     </span>
+
+                    {mediaCount > 1 && (
+                      <span className="absolute top-3 right-3 px-2.5 py-0.5 rounded-full bg-[#780D22]/90 text-[#FFF8F0] border border-[#D6B36A]/60 text-[10px] font-bold flex items-center gap-1 shadow-md">
+                        {videoCount > 0 && (
+                          <Play className="w-2.5 h-2.5 fill-current text-[#D6B36A]" />
+                        )}
+                        <span>{mediaCount} items</span>
+                      </span>
+                    )}
+
+                    {/* Hover Visual Cue Overlay */}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center p-3 text-center">
+                      <span className="px-3.5 py-2 rounded-xl bg-[#780D22]/95 border border-[#D6B36A] text-[#FFF8F0] text-xs font-bold flex items-center gap-1.5 shadow-xl">
+                        <Eye className="w-4 h-4 text-[#D6B36A]" />
+                        <span>View Photos &amp; Videos</span>
+                      </span>
+                    </div>
                   </div>
 
+                  {/* Card Body */}
                   <div className="p-5 space-y-3 flex-1 flex flex-col justify-between">
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
@@ -1463,13 +1573,33 @@ export default function BrilloLuxuryLandingPage() {
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => scrollToInquiryWithPackage("REAL_BEARD", t)}
-                      className="w-full py-2.5 rounded-xl bg-[#FFF8F0] hover:bg-[#780D22] text-[#780D22] hover:text-[#FFF8F0] border border-[#780D22]/40 text-xs font-bold uppercase tracking-wider transition"
-                    >
-                      Inquire Santa {t.displayName}
-                    </button>
+                    {/* Action Buttons: View Button + Inquire Button */}
+                    <div className="grid grid-cols-2 gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => openSantaGallery(t)}
+                        className="w-full py-2.5 px-2 rounded-xl bg-[#FFF8F0] hover:bg-[#D6B36A] text-[#780D22] hover:text-[#211619] border border-[#D6B36A]/70 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-xs"
+                        title={`View ${t.displayName}'s photo gallery and videos`}
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>View</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          scrollToInquiryWithPackage(
+                            t.talentType === "REGULAR_SANTA"
+                              ? "FAKE_BEARD"
+                              : "REAL_BEARD",
+                            t
+                          )
+                        }
+                        className="w-full py-2.5 px-2 rounded-xl bg-[#780D22] hover:bg-[#5E0A1B] text-[#FFF8F0] text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition shadow-xs"
+                      >
+                        <span>Inquire</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -2276,6 +2406,283 @@ export default function BrilloLuxuryLandingPage() {
           <span>Tile successfully updated &amp; saved!</span>
         </div>
       )}
+
+      {/* =====================================================================
+          SANTA PHOTO & VIDEO GALLERY LIGHTBOX MODAL
+         ===================================================================== */}
+      {gallerySanta && (() => {
+        const mediaItems: any[] =
+          Array.isArray(gallerySanta.images) && gallerySanta.images.length > 0
+            ? gallerySanta.images
+            : [
+                {
+                  id: "fallback_img",
+                  publicUrl:
+                    (gallerySanta.images?.find((i: any) => i.isPrimary) ||
+                      gallerySanta.images?.[0])?.publicUrl ||
+                    "/talents/Bob/bob_photo_1.jpg",
+                  caption: `Santa ${gallerySanta.displayName} Portrait`,
+                  isPrimary: true,
+                },
+              ];
+
+        const activeIndex = Math.min(
+          Math.max(0, activeMediaIndex),
+          mediaItems.length - 1
+        );
+        const currentMedia = mediaItems[activeIndex] || mediaItems[0] || {};
+        const currentUrl = currentMedia.publicUrl || currentMedia.originalPath || "";
+        const isVid = isVideoItem(currentMedia);
+        const embedUrl = isVid ? toEmbedUrl(currentUrl) : null;
+        const isDirectVid =
+          isVid &&
+          (currentUrl.startsWith("data:video/") ||
+            /\.(mp4|webm|mov|m4v)(\?|$)/i.test(currentUrl));
+
+        const prevMedia = () => {
+          setActiveMediaIndex((prev) =>
+            prev > 0 ? prev - 1 : mediaItems.length - 1
+          );
+        };
+
+        const nextMedia = () => {
+          setActiveMediaIndex((prev) =>
+            prev < mediaItems.length - 1 ? prev + 1 : 0
+          );
+        };
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-fade-in font-body"
+            onClick={() => setGallerySanta(null)}
+          >
+            <div
+              className="bg-[#211619] border-2 border-[#D6B36A] rounded-3xl max-w-4xl w-full text-[#FFF8F0] shadow-2xl overflow-hidden flex flex-col max-h-[94vh]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Top Bar */}
+              <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[#D6B36A]/30 bg-[#181012]">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-[#780D22] border border-[#D6B36A] flex items-center justify-center text-[#D6B36A]">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-display font-bold text-xl sm:text-2xl text-[#FFF8F0]">
+                        Santa {gallerySanta.displayName}
+                      </h3>
+                      <span className="px-2.5 py-0.5 rounded-full bg-[#780D22] text-[#D6B36A] border border-[#D6B36A]/50 text-[10px] font-bold">
+                        {gallerySanta.talentType === "REGULAR_SANTA"
+                          ? "Classic Santa"
+                          : "Real-Beard Santa"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#D6B36A]">
+                      {gallerySanta.nationality || "International"} •{" "}
+                      {gallerySanta.height || "Vetted Performer"} • Verified Cast
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setGallerySanta(null)}
+                  className="p-2 rounded-full bg-white/10 hover:bg-[#780D22] text-[#FFF8F0] border border-white/20 transition cursor-pointer"
+                  title="Close Gallery"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Main Viewport */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+                <div className="relative rounded-2xl bg-black border border-[#D6B36A]/40 overflow-hidden flex items-center justify-center min-h-[300px] sm:min-h-[420px] max-h-[58vh]">
+                  {isVid ? (
+                    isDirectVid ? (
+                      <video
+                        key={currentUrl}
+                        src={currentUrl}
+                        controls
+                        autoPlay
+                        className="w-full max-h-[56vh] object-contain rounded-xl bg-black"
+                      />
+                    ) : embedUrl ? (
+                      <iframe
+                        key={embedUrl}
+                        src={embedUrl}
+                        title={
+                          currentMedia.caption ||
+                          `Santa ${gallerySanta.displayName} Video`
+                        }
+                        className="w-full aspect-video max-h-[56vh] rounded-xl border-0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    ) : (
+                      <div className="p-8 text-center text-[#D6B36A] space-y-2">
+                        <Video className="w-12 h-12 mx-auto opacity-60" />
+                        <p className="text-sm">External video clip:</p>
+                        <a
+                          href={currentUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-block px-4 py-2 rounded-lg bg-[#780D22] text-[#FFF8F0] text-xs font-bold underline"
+                        >
+                          Open Video Stream ↗
+                        </a>
+                      </div>
+                    )
+                  ) : (
+                    <img
+                      key={currentUrl}
+                      src={currentUrl}
+                      alt={
+                        currentMedia.caption ||
+                        `Santa ${gallerySanta.displayName}`
+                      }
+                      className="w-full max-h-[56vh] object-contain rounded-xl"
+                    />
+                  )}
+
+                  {/* Left & Right Chevron Navigators */}
+                  {mediaItems.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={prevMedia}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-[#780D22] text-white border border-white/20 backdrop-blur-sm transition shadow-lg cursor-pointer"
+                        title="Previous Media"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={nextMedia}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-[#780D22] text-white border border-white/20 backdrop-blur-sm transition shadow-lg cursor-pointer"
+                        title="Next Media"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </>
+                  )}
+
+                  {/* Caption & Counter Overlay */}
+                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-3 sm:p-4 flex items-center justify-between text-xs">
+                    <span className="font-semibold text-[#FFF8F0] truncate max-w-[70%]">
+                      {currentMedia.caption || `Santa ${gallerySanta.displayName}`}
+                    </span>
+                    <span className="font-mono text-[11px] text-[#D6B36A] bg-black/70 px-2 py-0.5 rounded border border-[#D6B36A]/40">
+                      {activeIndex + 1} / {mediaItems.length}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Thumbnail Carousel Strip */}
+                {mediaItems.length > 1 && (
+                  <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
+                    {mediaItems.map((item: any, idx: number) => {
+                      const itemIsVid = isVideoItem(item);
+                      const thumbUrl = item.publicUrl || item.originalPath || "";
+                      return (
+                        <button
+                          key={item.id || idx}
+                          type="button"
+                          onClick={() => setActiveMediaIndex(idx)}
+                          className={`relative w-20 h-16 rounded-xl overflow-hidden shrink-0 border-2 transition cursor-pointer ${
+                            activeIndex === idx
+                              ? "border-[#D6B36A] ring-2 ring-[#D6B36A]/50 scale-105"
+                              : "border-white/20 hover:border-white/60 opacity-65 hover:opacity-100"
+                          }`}
+                        >
+                          {itemIsVid ? (
+                            <div className="w-full h-full bg-[#181012] flex items-center justify-center text-[#D6B36A]">
+                              <Play className="w-5 h-5 fill-current" />
+                            </div>
+                          ) : (
+                            <img
+                              src={thumbUrl}
+                              alt="thumbnail"
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                          {itemIsVid && (
+                            <span className="absolute bottom-1 right-1 p-0.5 rounded bg-black/80 text-[8px] text-[#D6B36A] font-bold">
+                              VID
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Performer Details Dossier & Quick Facts */}
+                <div className="p-4 rounded-2xl bg-[#181012] border border-[#D6B36A]/30 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      {gallerySanta.height && (
+                        <span className="px-2.5 py-1 rounded-md bg-[#211619] border border-[#D6B36A]/40 text-[#D6B36A] font-semibold">
+                          Height:{" "}
+                          <strong className="text-white">
+                            {gallerySanta.height}
+                          </strong>
+                        </span>
+                      )}
+                      {gallerySanta.age && (
+                        <span className="px-2.5 py-1 rounded-md bg-[#211619] border border-[#D6B36A]/40 text-[#D6B36A] font-semibold">
+                          Age:{" "}
+                          <strong className="text-white">
+                            {gallerySanta.age} yrs
+                          </strong>
+                        </span>
+                      )}
+                      <span className="px-2.5 py-1 rounded-md bg-[#211619] border border-[#D6B36A]/40 text-[#D6B36A] font-semibold">
+                        Nationality:{" "}
+                        <strong className="text-white">
+                          {gallerySanta.nationality || "International"}
+                        </strong>
+                      </span>
+                      <span className="px-2.5 py-1 rounded-md bg-emerald-950/70 border border-emerald-500/50 text-emerald-300 font-semibold flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Vetted &amp; Cleared</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {gallerySanta.bio && (
+                    <p className="text-xs sm:text-sm text-[#FFF8F0]/85 leading-relaxed">
+                      {gallerySanta.bio}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Bottom Action Bar */}
+              <div className="px-5 sm:px-6 py-4 border-t border-[#D6B36A]/30 bg-[#181012] flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="text-xs text-[#D6B36A]">
+                  ✨ Ready to make your Christmas event unforgettable?
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = gallerySanta;
+                    setGallerySanta(null);
+                    scrollToInquiryWithPackage(
+                      target.talentType === "REGULAR_SANTA"
+                        ? "FAKE_BEARD"
+                        : "REAL_BEARD",
+                      target
+                    );
+                  }}
+                  className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-[#780D22] via-[#9B1B30] to-[#780D22] hover:opacity-95 text-[#FFF8F0] font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-xl border border-[#D6B36A]/50 transition cursor-pointer"
+                >
+                  <span>Book Santa {gallerySanta.displayName}</span>
+                  <ArrowRight className="w-4 h-4 text-[#D6B36A]" />
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

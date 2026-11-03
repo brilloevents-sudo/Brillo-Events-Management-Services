@@ -15,6 +15,7 @@ import {
   normalizeAppRole,
   SessionUser,
 } from "@/lib/auth-shared";
+import { saveTalentToStorage, broadcastTalentUpdate } from "@/lib/talent-storage";
 
 const STATIC_SESSION_KEY = "brillo_auth_session_v3";
 const STATIC_USERS_KEY = "brillo_users_v3";
@@ -1377,8 +1378,8 @@ export function StaticApiFallback() {
           for (const t of combined) {
             if (seen.has(t.id)) continue;
             seen.add(t.id);
-            if (editsMap[t.id]) {
-              const edit = editsMap[t.id];
+            const edit = editsMap[t.id] || (t.canonicalId ? editsMap[t.canonicalId] : undefined);
+            if (edit) {
               // Ensure images are safely merged and never discarded
               const baseImgs = Array.isArray(t.images) ? t.images : [];
               const editImgs = Array.isArray(edit.images) ? edit.images : [];
@@ -1450,6 +1451,15 @@ export function StaticApiFallback() {
             localStorage.setItem("brillo_custom_talents_v3", JSON.stringify([newTalent, ...prev]));
           } catch {}
         }
+        saveTalentToStorage(newTalent).catch(() => {});
+        broadcastTalentUpdate(newTalent.id);
+        try {
+          origFetch("/api/talents.php", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newTalent),
+          }).catch(() => {});
+        } catch {}
         if (snap.talents?.talents) {
           snap.talents.talents.unshift(newTalent);
         }
@@ -1631,16 +1641,30 @@ export function StaticApiFallback() {
                 localStorage.getItem("brillo_talent_edits_v3") || "{}"
               );
               editsMap[updated.id] = updated;
+              if (updated.canonicalId) editsMap[updated.canonicalId] = updated;
               localStorage.setItem("brillo_talent_edits_v3", JSON.stringify(editsMap));
             } catch {
               // If localStorage is full, save current talent cleanly
               try {
                 const minimalMap: Record<string, any> = {};
                 minimalMap[updated.id] = updated;
+                if (updated.canonicalId) minimalMap[updated.canonicalId] = updated;
                 localStorage.setItem("brillo_talent_edits_v3", JSON.stringify(minimalMap));
               } catch {}
             }
           }
+          // Persist full multi-MB payload into IndexedDB & broadcast across windows
+          saveTalentToStorage(updated).catch(() => {});
+          broadcastTalentUpdate(updated.id);
+
+          // Background sync to cPanel PHP API endpoint
+          try {
+            origFetch(`/api/talents.php?id=${encodeURIComponent(updated.id)}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(updated),
+            }).catch(() => {});
+          } catch {}
           const idx = snap.talents?.talents?.findIndex((t: any) => t.id === updated.id);
           if (idx !== undefined && idx >= 0) {
             snap.talents.talents[idx] = updated;

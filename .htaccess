@@ -1,6 +1,10 @@
 RewriteEngine On
 RewriteBase /
 
+# Route API endpoints directly to PHP handlers on cPanel
+RewriteRule ^api/talents(/.*)?$ api/talents.php [L,QSA]
+RewriteRule ^api/mailer(/.*)?$ api/mailer.php [L,QSA]
+
 # If requesting a directory or file that exists, serve directly
 RewriteCond %{REQUEST_FILENAME} -d [OR]
 RewriteCond %{REQUEST_FILENAME} -f

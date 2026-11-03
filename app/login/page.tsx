@@ -74,8 +74,13 @@ function DashboardLoginInner() {
           "This is a customer account. Please use the Customer Portal to track your booking."
         );
       }
+      if (typeof localStorage !== "undefined" && data.user) {
+        try {
+          localStorage.setItem("brillo_auth_session_v3", JSON.stringify(data.user));
+        } catch {}
+      }
       await refreshSession();
-      router.replace(safeAdminNext(searchParams.get("next")));
+      window.location.href = safeAdminNext(searchParams.get("next"));
     } catch (err: any) {
       setError(err?.message || "Sign-in failed.");
     } finally {

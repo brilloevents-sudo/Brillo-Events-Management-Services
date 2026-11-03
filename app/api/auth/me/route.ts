@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureSeedUsers, getSessionFromRequest } from "@/lib/auth-server";
-import { getPermissionsForRole } from "@/lib/auth-shared";
+import { getPermissionsForRole, SESSION_COOKIE_NAME } from "@/lib/auth-shared";
 
 export async function GET(req: NextRequest) {
   await ensureSeedUsers();

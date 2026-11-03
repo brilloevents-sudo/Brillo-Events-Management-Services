@@ -32,15 +32,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshSession = useCallback(async (): Promise<SessionUser | null> => {
     try {
-      const res = await fetch("/api/auth/me", { cache: "no-store" });
+      const res = await fetch("/api/auth/me", { cache: "no-store", credentials: "include" });
       const data = await res.json();
       if (data?.authenticated && data?.user) {
         setUser(data.user);
+        if (typeof localStorage !== "undefined") {
+          try {
+            localStorage.setItem("brillo_auth_session_v3", JSON.stringify(data.user));
+          } catch {}
+        }
         return data.user as SessionUser;
+      }
+      // Fallback to localStorage session for static cPanel / offline modes
+      if (typeof localStorage !== "undefined") {
+        const raw = localStorage.getItem("brillo_auth_session_v3");
+        if (raw) {
+          try {
+            const fallbackUser = JSON.parse(raw);
+            if (fallbackUser && fallbackUser.email && fallbackUser.role) {
+              setUser(fallbackUser);
+              return fallbackUser as SessionUser;
+            }
+          } catch {}
+        }
       }
       setUser(null);
       return null;
     } catch {
+      if (typeof localStorage !== "undefined") {
+        const raw = localStorage.getItem("brillo_auth_session_v3");
+        if (raw) {
+          try {
+            const fallbackUser = JSON.parse(raw);
+            if (fallbackUser && fallbackUser.email && fallbackUser.role) {
+              setUser(fallbackUser);
+              return fallbackUser as SessionUser;
+            }
+          } catch {}
+        }
+      }
       setUser(null);
       return null;
     } finally {

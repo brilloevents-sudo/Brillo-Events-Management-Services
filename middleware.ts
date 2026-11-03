@@ -39,8 +39,8 @@ async function verifyEdgeSessionCookie(token?: string) {
     const valid = await crypto.subtle.verify(
       "HMAC",
       key,
-      sigBytes.buffer as ArrayBuffer,
-      dataBytes.buffer as ArrayBuffer
+      sigBytes as unknown as BufferSource,
+      dataBytes as unknown as BufferSource
     );
     if (!valid) return null;
 

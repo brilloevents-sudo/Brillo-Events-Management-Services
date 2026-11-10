@@ -192,10 +192,16 @@ if ($method === 'POST' || $method === 'PATCH') {
         $fileName = !empty($input['fileName']) ? $input['fileName'] : (!empty($_POST['fileName']) ? $_POST['fileName'] : '');
         $isVideo = false;
 
-        // 1. Direct file upload from multipart FormData
+        // 1. Direct file upload from multipart FormData (Restricted to safe image/video extensions)
+        $allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'webm', 'mov', 'm4v'];
         if (!empty($_FILES['file']['tmp_name']) && is_uploaded_file($_FILES['file']['tmp_name'])) {
             $orig = basename($_FILES['file']['name']);
             $ext = strtolower(pathinfo($orig, PATHINFO_EXTENSION) ?: 'jpg');
+            if (!in_array($ext, $allowedExts, true)) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'error' => 'Invalid file extension. Only JPG, PNG, WebP, MP4, WebM, and MOV are allowed.']);
+                exit;
+            }
             $safeBase = preg_replace('/[^a-zA-Z0-9_-]/', '_', pathinfo($orig, PATHINFO_FILENAME));
             $uniqueFile = time() . '_' . $safeBase . '.' . $ext;
             $dest = $uploadsDir . '/' . $uniqueFile;
@@ -214,6 +220,9 @@ if ($method === 'POST' || $method === 'PATCH') {
             $ext = strtolower($b64Matches[2]);
             if ($ext === 'jpeg') $ext = 'jpg';
             if ($ext === 'quicktime') $ext = 'mov';
+            if (!in_array($ext, $allowedExts, true)) {
+                $ext = ($mediaKind === 'video') ? 'mp4' : 'jpg';
+            }
             if ($mediaKind === 'video' || in_array($ext, ['mp4', 'webm', 'mov', 'm4v'])) {
                 $isVideo = true;
             }

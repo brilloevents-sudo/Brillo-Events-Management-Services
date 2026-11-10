@@ -1,8 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
+import { uploadToSupabaseGallery } from "@/lib/supabase";
 import fs from "fs";
 import path from "path";
+
+const ALLOWED_MEDIA_EXTENSIONS = new Set([
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "gif",
+  "mp4",
+  "webm",
+  "mov",
+  "m4v",
+]);
 
 export async function GET(
   req: NextRequest,
@@ -135,21 +148,33 @@ export async function PATCH(
     // 1. Handle Photo & Video Gallery Actions
     if (action === "ADD_PHOTO" || action === "ADD_MEDIA") {
       let resolvedUrl = customPublicUrl || "";
-      const safeName = (
+      const rawName = (
         uploadedFile?.name ||
         fileName ||
         `santa_${existing.displayName}_${Date.now()}.jpg`
       ).replace(/[^a-zA-Z0-9._-]/g, "_");
+      const rawExt = (rawName.split(".").pop() || "jpg").toLowerCase();
+      const safeExt = ALLOWED_MEDIA_EXTENSIONS.has(rawExt) ? rawExt : "jpg";
+      const safeName = rawName.replace(/\.[^.]+$/, "") + "." + safeExt;
 
       if (uploadedFile) {
         try {
           const bytes = await uploadedFile.arrayBuffer();
           const buffer = Buffer.from(bytes);
-          const uploadDir = path.join(process.cwd(), "public", "talents", "uploads");
-          fs.mkdirSync(uploadDir, { recursive: true });
           const uniqueFile = `${Date.now()}_${safeName}`;
-          fs.writeFileSync(path.join(uploadDir, uniqueFile), buffer);
-          resolvedUrl = `/talents/uploads/${uniqueFile}`;
+          const sbUrl = await uploadToSupabaseGallery(
+            `${existing.id}/${uniqueFile}`,
+            buffer,
+            uploadedFile.type || "image/jpeg"
+          );
+          if (sbUrl) {
+            resolvedUrl = sbUrl;
+          } else {
+            const uploadDir = path.join(process.cwd(), "public", "talents", "uploads");
+            fs.mkdirSync(uploadDir, { recursive: true });
+            fs.writeFileSync(path.join(uploadDir, uniqueFile), buffer);
+            resolvedUrl = `/talents/uploads/${uniqueFile}`;
+          }
         } catch {
           // fallback
         }
@@ -162,11 +187,24 @@ export async function PATCH(
           const matches = fileDataUrl.match(/^data:(image|video)\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
           if (matches) {
             const buffer = Buffer.from(matches[3], "base64");
-            const uploadDir = path.join(process.cwd(), "public", "talents", "uploads");
-            fs.mkdirSync(uploadDir, { recursive: true });
             const uniqueFile = `${Date.now()}_${safeName}`;
-            fs.writeFileSync(path.join(uploadDir, uniqueFile), buffer);
-            resolvedUrl = `/talents/uploads/${uniqueFile}`;
+            const sbUrl = await uploadToSupabaseGallery(
+              `${existing.id}/${uniqueFile}`,
+              buffer,
+              `${matches[1]}/${matches[2]}`
+            );
+            if (sbUrl) {
+              resolvedUrl = sbUrl;
+            } else {
+              try {
+                const uploadDir = path.join(process.cwd(), "public", "talents", "uploads");
+                fs.mkdirSync(uploadDir, { recursive: true });
+                fs.writeFileSync(path.join(uploadDir, uniqueFile), buffer);
+                resolvedUrl = `/talents/uploads/${uniqueFile}`;
+              } catch {
+                resolvedUrl = fileDataUrl;
+              }
+            }
           } else {
             resolvedUrl = fileDataUrl;
           }

@@ -19,7 +19,7 @@ const seedStaff = [
     name: "Finance Specialist",
     email: "finance@brilloevents.com",
     role: "FINANCE",
-    scope: "Payment verification, receivables, expenses, Paluwal advances, talent payouts.",
+    scope: "Payment verification, receivables, expenses, talent cash advances, talent payouts.",
   },
   {
     name: "Corporate Sales Lead",

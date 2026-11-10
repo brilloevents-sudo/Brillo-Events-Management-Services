@@ -358,7 +358,7 @@ function LoginGatewayInner() {
                       <span>Operations Admin</span>
                     </div>
                     <p className="text-[10px] text-[#5C494E] leading-snug">
-                      CRM, Calendar, Bookings &amp; Roster. Profit margins, Paluwal, Settings &amp; Delete are restricted.
+                      CRM, Calendar, Bookings &amp; Roster. Profit margins, Cash Advances, Settings &amp; Delete are restricted.
                     </p>
                   </div>
                   <div className="p-3 rounded-2xl bg-[#211619] text-[#FFF8F0] border border-[#D6B36A]/50 space-y-1">
@@ -367,7 +367,7 @@ function LoginGatewayInner() {
                       <span>Master Creator</span>
                     </div>
                     <p className="text-[10px] text-[#FFF8F0]/80 leading-snug">
-                      Full executive access: Net Profit, Talent Payouts, Paluwal, Users, Settings &amp; Audit.
+                      Full executive access: Net Profit, Talent Payouts, Cash Advances, Users, Settings &amp; Audit.
                     </p>
                   </div>
                 </div>

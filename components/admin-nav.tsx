@@ -97,7 +97,7 @@ export function AdminNav({ onOpenQuickAction }: AdminNavProps) {
         {
           href: "/admin/expenses",
           matchPaths: ["/admin/expenses", "/admin/paluwal"],
-          label: "Expenses & Paluwal Ledger",
+          label: "Expenses & Advances Ledger",
           icon: Wallet,
         },
       ],

@@ -674,7 +674,7 @@ export default function TalentDetailPage() {
             <div className="dashboard-card p-5 space-y-3">
               <h2 className="text-sm font-bold text-[#1E1416] flex items-center">
                 <Wallet className="w-4 h-4 mr-1.5 text-[#C68A12]" />
-                Paluwal Active Balance
+                Cash Advance Active Balance
               </h2>
               <div className="space-y-2 font-mono text-xs pt-1">
                 <div className="flex justify-between">
@@ -1270,13 +1270,13 @@ export default function TalentDetailPage() {
             </h2>
           </div>
           <p className="text-[#6E5D5F]">
-            Managed via Finance. Paluwal cash advances are reconciled before final performance balance payout.
+            Managed via Finance. Talent cash advances are reconciled before final performance balance payout.
           </p>
           <Link
             href={`/admin/expenses`}
             className="btn-primary inline-flex items-center px-4 py-2 rounded-lg font-bold transition"
           >
-            Open Expenses &amp; Paluwal Ledger →
+            Open Expenses &amp; Cash Advances Ledger →
           </Link>
         </div>
       )}

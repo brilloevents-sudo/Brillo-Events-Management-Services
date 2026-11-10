@@ -43,11 +43,11 @@ export default function UnifiedExpensesAndPaluwalPage() {
               STAGE 3 • IMMUTABLE LEDGER
             </span>
             <h1 className="page-title text-2xl font-serif tracking-tight">
-              Expenses &amp; Paluwal Ledger
+              Expenses &amp; Cash Advances Ledger
             </h1>
           </div>
           <p className="page-subtitle text-xs mt-1">
-            Append-only operational expenses, logistics outflows, and Santa pre-event cash advances (Paluwal).
+            Append-only operational expenses, logistics outflows, and Santa pre-event cash advances.
           </p>
         </div>
 
@@ -78,7 +78,7 @@ export default function UnifiedExpensesAndPaluwalPage() {
               activeTab === "PALUWAL" ? "bg-[#9B1B30] text-white" : "text-[#4A3A3D]"
             }`}
           >
-            Paluwal Advances ({paluwalEntries.length})
+            Cash Advances ({paluwalEntries.length})
           </button>
         </div>
       </div>
@@ -99,7 +99,7 @@ export default function UnifiedExpensesAndPaluwalPage() {
 
         <div className="dashboard-card p-4">
           <span className="text-xs text-[#4A3A3D] font-semibold">
-            Total Paluwal Advances Released
+            Total Cash Advances Released
           </span>
           <div className="text-2xl font-serif font-bold text-[#C68A12] mt-1">
             ₱{paluwalReleased.toLocaleString()}
@@ -111,7 +111,7 @@ export default function UnifiedExpensesAndPaluwalPage() {
 
         <div className="dashboard-card p-4">
           <span className="text-xs text-[#4A3A3D] font-semibold">
-            Net Outstanding Paluwal (To Offset)
+            Net Outstanding Cash Advances (To Offset)
           </span>
           <div className="text-2xl font-serif font-bold text-[#1E1416] mt-1">
             ₱{paluwalOutstanding.toLocaleString()}
@@ -180,18 +180,18 @@ export default function UnifiedExpensesAndPaluwalPage() {
             </div>
           )}
 
-          {/* Talent Advances / Paluwal Immutable Ledger Table */}
+          {/* Talent Cash Advances Immutable Ledger Table */}
           {(activeTab === "ALL" || activeTab === "PALUWAL") && (
             <div className="dashboard-card overflow-hidden">
               <div className="p-4 border-b border-[#E8DFE0] flex items-center justify-between">
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#1E1416] flex items-center">
                   <Wallet className="w-4 h-4 mr-2 text-[#C68A12]" />
-                  Talent Advances &amp; Paluwal Immutable Ledger ({paluwalEntries.length})
+                  Talent Cash Advances Immutable Ledger ({paluwalEntries.length})
                 </span>
               </div>
               {paluwalEntries.length === 0 ? (
                 <div className="p-8 text-center text-xs text-[#756568]">
-                  No Paluwal advance entries recorded.
+                  No cash advance entries recorded.
                 </div>
               ) : (
                 <div className="overflow-x-auto">

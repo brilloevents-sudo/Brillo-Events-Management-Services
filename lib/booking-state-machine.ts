@@ -76,7 +76,7 @@ export const LIFECYCLE_METADATA: Record<
     step: 9,
     label: "Financially Settled",
     badgeClass: "bg-stone-100 text-stone-800 border-stone-300",
-    description: "All client receivables, expenses, and Paluwal advances cleared.",
+    description: "All client receivables, expenses, and talent cash advances cleared.",
   },
   CANCELLED: {
     step: 0,

@@ -17,6 +17,7 @@ import {
 } from "@/lib/auth-shared";
 import {
   saveTalentToStorage,
+  getIndexedDBTalents,
   broadcastTalentUpdate,
   sanitizeTalentMedia,
   cleanCorruptedStorage,
@@ -196,6 +197,27 @@ export function StaticApiFallback() {
         } catch {
           parsedBody = {};
         }
+      } else if (typeof FormData !== "undefined" && init?.body instanceof FormData) {
+        try {
+          const fd = init.body as FormData;
+          for (const [k, v] of Array.from(fd.entries())) {
+            if (typeof File !== "undefined" && v instanceof File) {
+              parsedBody.fileName = parsedBody.fileName || v.name;
+              const dataUrl = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ""));
+                reader.onerror = () => resolve("");
+                reader.readAsDataURL(v);
+              });
+              if (dataUrl) parsedBody.fileDataUrl = dataUrl;
+            } else {
+              const strVal = String(v);
+              if (strVal === "true") parsedBody[k] = true;
+              else if (strVal === "false") parsedBody[k] = false;
+              else parsedBody[k] = strVal;
+            }
+          }
+        } catch {}
       }
 
       // =========================================================================
@@ -1369,7 +1391,7 @@ export function StaticApiFallback() {
         return jsonResponse({ success: true });
       }
 
-      const getMergedTalents = (): any[] => {
+      const getMergedTalents = async (): Promise<any[]> => {
         cleanCorruptedStorage();
         const baseTalents: any[] = snap.talents?.talents || [];
         if (typeof localStorage === "undefined") return baseTalents;
@@ -1378,24 +1400,44 @@ export function StaticApiFallback() {
           const editsRaw = localStorage.getItem("brillo_talent_edits_v3");
           const customList: any[] = customRaw ? JSON.parse(customRaw) : [];
           const editsMap: Record<string, any> = editsRaw ? JSON.parse(editsRaw) : {};
-          const combined = [...customList, ...baseTalents];
+          const idbList: any[] = await getIndexedDBTalents().catch(() => []);
+          const idbMap: Record<string, any> = {};
+          for (const item of idbList) {
+            if (item && item.id) idbMap[item.id] = item;
+            if (item && item.canonicalId) idbMap[item.canonicalId] = item;
+          }
+          const combined = [...idbList, ...customList, ...baseTalents];
           const seen = new Set<string>();
           const result: any[] = [];
           for (const t of combined) {
-            if (seen.has(t.id)) continue;
+            if (!t || !t.id || seen.has(t.id)) continue;
             seen.add(t.id);
-            const edit = editsMap[t.id] || (t.canonicalId ? editsMap[t.canonicalId] : undefined);
+            const lsEdit = editsMap[t.id] || (t.canonicalId ? editsMap[t.canonicalId] : undefined);
+            const idbEdit = idbMap[t.id] || (t.canonicalId ? idbMap[t.canonicalId] : undefined);
+            const edit = idbEdit || lsEdit ? { ...(lsEdit || {}), ...(idbEdit || {}) } : null;
             if (edit) {
               const sanitizedEdit = sanitizeTalentMedia(edit);
+              const idbImages = idbEdit && Array.isArray(idbEdit.images) ? idbEdit.images : null;
+              const lsImages =
+                lsEdit && !lsEdit._imagesInIdbOnly && Array.isArray(lsEdit.images)
+                  ? lsEdit.images
+                  : null;
+              const bestEditImages =
+                idbImages && (idbImages.length > 0 || idbEdit.explicitlyClearedImages)
+                  ? idbImages
+                  : lsImages && (lsImages.length > 0 || lsEdit.explicitlyClearedImages)
+                  ? lsImages
+                  : sanitizedEdit.images;
               const images =
-                Array.isArray(sanitizedEdit.images) && sanitizedEdit.images.length > 0
-                  ? sanitizedEdit.images
+                Array.isArray(bestEditImages) &&
+                (bestEditImages.length > 0 || sanitizedEdit.explicitlyClearedImages)
+                  ? bestEditImages
                   : Array.isArray(t.images)
                   ? t.images
                   : [];
-              result.push({ ...t, ...sanitizedEdit, images });
+              result.push(sanitizeTalentMedia({ ...t, ...sanitizedEdit, images }));
             } else {
-              result.push(t);
+              result.push(sanitizeTalentMedia(t));
             }
           }
           return result;
@@ -1465,11 +1507,11 @@ export function StaticApiFallback() {
         return jsonResponse({ success: true, talent: newTalent });
       }
 
-      // Handle Talent Profile Edit & Photo Upload in Static Mode (PATCH /api/talents/[id])
-      if (pathname.startsWith("/api/talents/") && method === "PATCH") {
+      // Handle Talent Profile Edit & Photo Upload in Static Mode (PATCH or POST /api/talents/[id])
+      if (pathname.startsWith("/api/talents/") && (method === "PATCH" || method === "POST")) {
         const cleanPath = pathname.replace(/\/+$/, "");
         const id = cleanPath.split("/").pop() || "";
-        const merged = getMergedTalents();
+        const merged = await getMergedTalents();
         const baseTalents: any[] = snap.talents?.talents || [];
         const target =
           merged.find(
@@ -1530,6 +1572,7 @@ export function StaticApiFallback() {
             updated.images = shouldBePrimary
               ? [newImg, ...updated.images]
               : [...updated.images, newImg];
+            updated.explicitlyClearedImages = false;
           } else if (action === "SET_PRIMARY_PHOTO" && parsedBody.imageId) {
             updated.images = updated.images
               .map((img: any) => ({
@@ -1559,6 +1602,9 @@ export function StaticApiFallback() {
             );
             if (wasPrimary && updated.images.length > 0) {
               updated.images[0] = { ...updated.images[0], isPrimary: true };
+            }
+            if (updated.images.length === 0) {
+              updated.explicitlyClearedImages = true;
             }
           } else if (action === "REORDER_PHOTOS" && Array.isArray(parsedBody.images)) {
             updated.images = parsedBody.images;
@@ -1632,7 +1678,7 @@ export function StaticApiFallback() {
           const sanitizedUpdated = sanitizeTalentMedia(updated);
 
           // Persist full payload into IndexedDB & broadcast across windows
-          saveTalentToStorage(sanitizedUpdated).catch(() => {});
+          await saveTalentToStorage(sanitizedUpdated).catch(() => {});
           broadcastTalentUpdate(sanitizedUpdated.id);
 
           // Background sync to cPanel PHP API endpoint
@@ -1648,7 +1694,6 @@ export function StaticApiFallback() {
             snap.talents.talents[idx] = sanitizedUpdated;
           }
           return jsonResponse({ success: true, talent: sanitizedUpdated });
-          return jsonResponse({ success: true, talent: updated });
         }
       }
 
@@ -1819,12 +1864,12 @@ export function StaticApiFallback() {
         const allB = getMergedBookings();
         const booking =
           allB.find((b: any) => b.id === id || b.bookingNumber === id) || allB[0];
-        return jsonResponse({ success: true, booking, talents: getMergedTalents() });
+        return jsonResponse({ success: true, booking, talents: await getMergedTalents() });
       }
       if (pathname === "/api/individual-bookings") return jsonResponse(snap.individualBookings);
       if (pathname === "/api/talents") {
         const publicOnly = urlObj.searchParams.get("publicOnly") === "true";
-        let allT = getMergedTalents();
+        let allT = await getMergedTalents();
         if (publicOnly) {
           allT = allT.filter((t: any) => Boolean(t.approvedForPublicDisplay));
         }
@@ -1833,7 +1878,7 @@ export function StaticApiFallback() {
       if (pathname.startsWith("/api/talents/")) {
         const cleanPath = pathname.replace(/\/+$/, "");
         const id = cleanPath.split("/").pop() || "";
-        const allT = getMergedTalents();
+        const allT = await getMergedTalents();
         const talent =
           allT.find(
             (t: any) =>

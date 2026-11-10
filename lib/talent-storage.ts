@@ -37,7 +37,7 @@ function openDB(): Promise<IDBDatabase | null> {
 }
 
 /**
- * Sanitize talent images to eliminate corrupted pseudo-URLs like "...[stored_in_idb]"
+ * Sanitize talent images to eliminate corrupted pseudo-URLs like "...[stored_in_idb]" or dead blob: URLs
  */
 export function sanitizeTalentMedia(talent: any): any {
   if (!talent) return talent;
@@ -45,13 +45,20 @@ export function sanitizeTalentMedia(talent: any): any {
   if (Array.isArray(sanitized.images)) {
     sanitized.images = sanitized.images
       .filter((img: any) => {
-        const url = String(img.publicUrl || img.originalPath || "");
-        return !url.includes("[stored_in_idb]");
+        if (!img) return false;
+        const url = String(img.publicUrl || img.originalPath || "").trim();
+        if (!url) return false;
+        if (url.includes("[stored_in_idb]")) return false;
+        return true;
       })
-      .map((img: any) => ({
-        ...img,
-        publicUrl: String(img.publicUrl || "").trim(),
-      }));
+      .map((img: any) => {
+        const cleanUrl = String(img.publicUrl || img.originalPath || "").trim();
+        return {
+          ...img,
+          publicUrl: cleanUrl,
+          originalPath: cleanUrl,
+        };
+      });
   }
   return sanitized;
 }
@@ -105,13 +112,14 @@ export async function getIndexedDBTalents(): Promise<any[]> {
 }
 
 /**
- * Save a single talent record into IndexedDB and update LocalStorage safely.
+ * Save a single talent record into IndexedDB and update LocalStorage metadata safely.
+ * IndexedDB holds the full multi-megabyte base64 photos & videos for all Santas without a 5MB cap.
  */
 export async function saveTalentToStorage(talentInput: any): Promise<void> {
   if (!talentInput || !talentInput.id) return;
   const talent = sanitizeTalentMedia(talentInput);
 
-  // 1. Save full record into IndexedDB
+  // 1. Save full record (with all base64 photos & videos) into IndexedDB
   const db = await openDB();
   if (db) {
     await new Promise<void>((resolve) => {
@@ -127,40 +135,33 @@ export async function saveTalentToStorage(talentInput: any): Promise<void> {
     });
   }
 
-  // 2. Also save to LocalStorage safely (prevent QuotaExceededError without corrupting image URLs)
+  // 2. Also save non-bloated metadata to LocalStorage (keyed only by talent.id to avoid 2x duplication)
   if (typeof localStorage !== "undefined") {
     try {
       const currentRaw = localStorage.getItem(LOCAL_STORAGE_EDITS_KEY);
       const editsMap: Record<string, any> = currentRaw ? JSON.parse(currentRaw) : {};
 
-      // Only save if total payload fits, otherwise save clean metadata without heavy base64 strings
-      editsMap[talent.id] = talent;
-      if (talent.canonicalId) {
-        editsMap[talent.canonicalId] = talent;
+      // Remove duplicate canonicalId keys to save 50% space
+      if (talent.canonicalId && editsMap[talent.canonicalId] && talent.canonicalId !== talent.id) {
+        delete editsMap[talent.canonicalId];
       }
 
+      editsMap[talent.id] = talent;
       localStorage.setItem(LOCAL_STORAGE_EDITS_KEY, JSON.stringify(editsMap));
     } catch {
+      // If localStorage hits 5MB quota because of many base64 photos, store profile metadata in localStorage
+      // and mark `_imagesInIdbOnly: true` so readers know to use IndexedDB for the images array!
       try {
         const currentRaw = localStorage.getItem(LOCAL_STORAGE_EDITS_KEY);
         const editsMap: Record<string, any> = currentRaw ? JSON.parse(currentRaw) : {};
-
-        // In case of quota limit, keep only real file paths or lightweight images (never corrupt strings)
-        const lightweightTalent = {
-          ...talent,
-          images: Array.isArray(talent.images)
-            ? talent.images.filter((img: any) => {
-                const u = String(img.publicUrl || "");
-                return u.startsWith("/") || u.startsWith("http");
-              })
-            : [],
-        };
-
-        editsMap[talent.id] = lightweightTalent;
-        if (talent.canonicalId) {
-          editsMap[talent.canonicalId] = lightweightTalent;
+        if (talent.canonicalId && editsMap[talent.canonicalId] && talent.canonicalId !== talent.id) {
+          delete editsMap[talent.canonicalId];
         }
-
+        const { images: _omittedImages, ...metadataOnly } = talent;
+        editsMap[talent.id] = {
+          ...metadataOnly,
+          _imagesInIdbOnly: true,
+        };
         localStorage.setItem(LOCAL_STORAGE_EDITS_KEY, JSON.stringify(editsMap));
       } catch {}
     }

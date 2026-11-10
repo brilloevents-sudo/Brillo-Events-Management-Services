@@ -29,7 +29,7 @@ export default function ReportsPage() {
           Executive Financial &amp; Deployment Reports
         </h1>
         <p className="text-xs text-[#6B706C] mt-1">
-          Separates verified cash receipts, outstanding receivables, recorded expenses, and Paluwal advances.
+          Separates verified cash receipts, outstanding receivables, recorded expenses, and talent cash advances.
         </p>
       </div>
 
@@ -62,7 +62,7 @@ export default function ReportsPage() {
           </div>
 
           <div className="p-5 rounded-xl bg-[#FFFEFB] border border-[#E2DED4] shadow-sm">
-            <span className="text-xs text-[#6B706C]">Paluwal Advances</span>
+            <span className="text-xs text-[#6B706C]">Talent Cash Advances</span>
             <div className="text-2xl font-serif font-bold text-[#B99A5B] mt-1">
               ₱{Number(metrics.totalPaluwalAdvances || 0).toLocaleString()}
             </div>

@@ -72,7 +72,7 @@ export function QuickActionsDrawer({
     { id: "generate_contract", label: "Generate Contract", icon: FileCheck2, group: "Sales" },
     { id: "upload_signed_contract", label: "Upload Signed Contract", icon: Upload, group: "Sales" },
     { id: "record_payment", label: "Record Payment", icon: Receipt, group: "Finance" },
-    { id: "record_paluwal", label: "Record Talent Advance (Paluwal)", icon: Wallet, group: "Finance" },
+    { id: "record_paluwal", label: "Record Talent Cash Advance", icon: Wallet, group: "Finance" },
     { id: "record_payout", label: "Record Payout", icon: Wallet, group: "Finance" },
     { id: "create_expense", label: "Create Expense", icon: Receipt, group: "Finance" },
     { id: "send_email", label: "Send Email", icon: Mail, group: "Communications" },
@@ -137,7 +137,7 @@ export function QuickActionsDrawer({
         });
         const data = await res.json();
         if (!data.success) throw new Error(data.error);
-        setFeedback({ type: "success", message: "Talent advance (Paluwal) recorded in ledger!" });
+        setFeedback({ type: "success", message: "Talent cash advance recorded in ledger!" });
       } else if (selectedAction === "create_expense") {
         const res = await fetch("/api/expenses", {
           method: "POST",

@@ -448,9 +448,16 @@ export default function UnifiedRosterPage() {
         const authoritativeImgs = Array.isArray(sanitized.images)
           ? sanitized.images
           : (Array.isArray(selectedTalent?.images) ? selectedTalent.images : []);
-        const preservedTalent = { ...selectedTalent, ...sanitized, images: authoritativeImgs };
+        const preservedTalent = sanitizeTalentMedia({
+          ...selectedTalent,
+          ...sanitized,
+          images: authoritativeImgs,
+        });
         setSelectedTalent(preservedTalent);
-        saveTalentToStorage(preservedTalent).catch(() => {});
+        setTalents((prev) =>
+          prev.map((t) => (t.id === preservedTalent.id ? preservedTalent : t))
+        );
+        await saveTalentToStorage(preservedTalent).catch(() => {});
         broadcastTalentUpdate(preservedTalent.id);
         setIsNewTalent(false);
         setEditForm((prev: any) => ({ ...prev, id: sanitized.id, images: authoritativeImgs }));
@@ -460,7 +467,7 @@ export default function UnifiedRosterPage() {
         setMediaFileSizeLabel("");
         setVideoExternalUrl("");
       }
-      loadRoster();
+      await loadRoster();
       setFeedback({
         type: "success",
         text: `Santa ${editForm.displayName}'s profile and rate card have been saved!`,
@@ -470,6 +477,15 @@ export default function UnifiedRosterPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function readFileAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Failed to read file"));
+      reader.readAsDataURL(file);
+    });
   }
 
   async function handleFilePicked(file: File | undefined) {
@@ -488,15 +504,25 @@ export default function UnifiedRosterPage() {
       );
     }
     if (isVid) {
-      const blobUrl = URL.createObjectURL(file);
-      setPhotoPreviewUrl(blobUrl);
-    } else {
       try {
-        const compressed = await compressImageFile(file, 1400, 0.85);
-        setPhotoPreviewUrl(compressed);
+        const dataUrl = await readFileAsDataUrl(file);
+        setPhotoPreviewUrl(dataUrl);
       } catch {
         const blobUrl = URL.createObjectURL(file);
         setPhotoPreviewUrl(blobUrl);
+      }
+    } else {
+      try {
+        const compressed = await compressImageFile(file, 1200, 0.82);
+        setPhotoPreviewUrl(compressed);
+      } catch {
+        try {
+          const dataUrl = await readFileAsDataUrl(file);
+          setPhotoPreviewUrl(dataUrl);
+        } catch {
+          const blobUrl = URL.createObjectURL(file);
+          setPhotoPreviewUrl(blobUrl);
+        }
       }
     }
   }
@@ -511,60 +537,88 @@ export default function UnifiedRosterPage() {
     const isVid = pickedIsVideo || hasLink;
 
     try {
-      let res: Response;
-      // If we have an actual File object, send via multipart FormData (handles up to 100MB videos cleanly!)
-      if (selectedMediaFile) {
-        const formData = new FormData();
-        formData.append("action", "ADD_PHOTO");
-        formData.append("id", selectedTalent.id);
-        formData.append("talentId", selectedTalent.id);
-        formData.append("file", selectedMediaFile);
-        formData.append("fileName", photoFileName || selectedMediaFile.name);
-        formData.append(
-          "caption",
-          photoCaption || `Santa ${selectedTalent.displayName} ${isVid ? "Video Clip" : "Portrait"}`
-        );
-        formData.append("setAsPrimary", isVid ? "false" : String(photoSetPrimary));
-        formData.append("approvedForClient", String(photoPublicApproved));
-
-        res = await fetch(`/api/talents/${selectedTalent.id}`, {
-          method: "POST",
-          body: formData,
-        });
-      } else {
-        // Fallback or external video link (YouTube, Vimeo, Google Drive, direct MP4)
-        res = await fetch(`/api/talents/${selectedTalent.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "ADD_PHOTO",
-            id: selectedTalent.id,
-            talentId: selectedTalent.id,
-            fileName:
-              photoFileName ||
-              (isVid
-                ? `santa_${selectedTalent.displayName}_video.mp4`
-                : `santa_${selectedTalent.displayName}.jpg`),
-            fileDataUrl:
-              photoPreviewUrl && !photoPreviewUrl.startsWith("blob:") ? photoPreviewUrl : undefined,
-            publicUrl: hasLink ? videoExternalUrl.trim() : undefined,
-            caption:
-              photoCaption ||
-              `Santa ${selectedTalent.displayName} ${isVid ? "Video Clip" : "Portrait"}`,
-            setAsPrimary: isVid ? false : photoSetPrimary,
-            approvedForClient: photoPublicApproved,
-          }),
-        });
+      let finalDataUrl = photoPreviewUrl;
+      if (selectedMediaFile && (!finalDataUrl || finalDataUrl.startsWith("blob:"))) {
+        if (isVid) {
+          finalDataUrl = await readFileAsDataUrl(selectedMediaFile);
+        } else {
+          try {
+            finalDataUrl = await compressImageFile(selectedMediaFile, 1200, 0.82);
+          } catch {
+            finalDataUrl = await readFileAsDataUrl(selectedMediaFile);
+          }
+        }
       }
+
+      const resolvedFileName =
+        photoFileName ||
+        selectedMediaFile?.name ||
+        (isVid
+          ? `santa_${selectedTalent.displayName}_video.mp4`
+          : `santa_${selectedTalent.displayName}.jpg`);
+      const resolvedCaption =
+        photoCaption ||
+        `Santa ${selectedTalent.displayName} ${isVid ? "Video Clip" : "Portrait"}`;
+      const shouldBePrimary = Boolean(!isVid && photoSetPrimary);
+
+      const res = await fetch(`/api/talents/${selectedTalent.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "ADD_PHOTO",
+          id: selectedTalent.id,
+          talentId: selectedTalent.id,
+          fileName: resolvedFileName,
+          fileDataUrl: finalDataUrl && !finalDataUrl.startsWith("blob:") ? finalDataUrl : undefined,
+          publicUrl: hasLink ? videoExternalUrl.trim() : undefined,
+          caption: resolvedCaption,
+          setAsPrimary: shouldBePrimary,
+          approvedForClient: photoPublicApproved,
+        }),
+      });
 
       const data = await res.json();
       if (!res.ok || data.success === false) {
         throw new Error(data.error || "Failed to upload media");
       }
-      if (data.talent) {
-        const sanitized = sanitizeTalentMedia(data.talent);
+
+      let updatedTalentObj = data.talent;
+      const mediaUrl = hasLink ? videoExternalUrl.trim() : finalDataUrl;
+      if (
+        mediaUrl &&
+        (!updatedTalentObj ||
+          !Array.isArray(updatedTalentObj.images) ||
+          !updatedTalentObj.images.some((img: any) => img.publicUrl === mediaUrl))
+      ) {
+        const baseImgs = Array.isArray(selectedTalent.images) ? [...selectedTalent.images] : [];
+        const clearedImgs = shouldBePrimary
+          ? baseImgs.map((img: any) => ({ ...img, isPrimary: false }))
+          : baseImgs;
+        const newImgObj = {
+          id: `img_${Date.now()}`,
+          talentId: selectedTalent.id,
+          fileName: resolvedFileName,
+          publicUrl: mediaUrl,
+          originalPath: mediaUrl,
+          isPrimary: shouldBePrimary || clearedImgs.length === 0,
+          mediaType: isVid ? "VIDEO" : "IMAGE",
+          caption: resolvedCaption,
+          approvedForClient: Boolean(photoPublicApproved),
+        };
+        updatedTalentObj = {
+          ...selectedTalent,
+          ...(updatedTalentObj || {}),
+          images: shouldBePrimary ? [newImgObj, ...clearedImgs] : [...clearedImgs, newImgObj],
+          explicitlyClearedImages: false,
+        };
+      }
+
+      if (updatedTalentObj) {
+        const sanitized = sanitizeTalentMedia(updatedTalentObj);
         setSelectedTalent(sanitized);
-        saveTalentToStorage(sanitized).catch(() => {});
+        setEditForm((prev: any) => ({ ...prev, images: sanitized.images }));
+        setTalents((prev) => prev.map((t) => (t.id === sanitized.id ? sanitized : t)));
+        await saveTalentToStorage(sanitized).catch(() => {});
         broadcastTalentUpdate(sanitized.id);
       }
       setSelectedMediaFile(null);
@@ -573,7 +627,7 @@ export default function UnifiedRosterPage() {
       setPickedIsVideo(false);
       setVideoExternalUrl("");
       setMediaFileSizeLabel("");
-      loadRoster();
+      await loadRoster();
       setFeedback({
         type: "success",
         text: isVid
@@ -1645,7 +1699,7 @@ export default function UnifiedRosterPage() {
                               </span>
                             </div>
 
-                            {/* Reorder / Organize Bar: Unahan, Prev, Next, Dulo */}
+                            {/* Reorder / Organize Bar: First, Prev, Next, Last */}
                             <div className="px-2.5 py-1.5 bg-[#FAF7F5] border-b border-[#E8DFE0] flex items-center justify-between text-[11px]">
                               <span className="font-mono text-[10px] font-bold text-[#6E5D5F]">
                                 Pos: {idx + 1}/{selectedTalent.images.length}
@@ -1653,7 +1707,7 @@ export default function UnifiedRosterPage() {
                               <div className="flex items-center gap-1">
                                 <button
                                   type="button"
-                                  title="Lipat sa Unahan (Move to Front)"
+                                  title="Move to First"
                                   disabled={idx === 0}
                                   onClick={() => handleMovePhotoToStart(idx)}
                                   className={`px-1.5 py-0.5 rounded flex items-center gap-0.5 text-[10px] font-bold border transition ${
@@ -1663,11 +1717,11 @@ export default function UnifiedRosterPage() {
                                   }`}
                                 >
                                   <ChevronsLeft className="w-3.5 h-3.5" />
-                                  <span>Unahan</span>
+                                  <span>First</span>
                                 </button>
                                 <button
                                   type="button"
-                                  title="Lipat pakaliwa (Move Left)"
+                                  title="Move Left"
                                   disabled={idx === 0}
                                   onClick={() => handleMovePhoto(idx, idx - 1)}
                                   className={`p-1 rounded flex items-center justify-center border transition ${
@@ -1680,7 +1734,7 @@ export default function UnifiedRosterPage() {
                                 </button>
                                 <button
                                   type="button"
-                                  title="Lipat pakanan (Move Right)"
+                                  title="Move Right"
                                   disabled={idx === selectedTalent.images.length - 1}
                                   onClick={() => handleMovePhoto(idx, idx + 1)}
                                   className={`p-1 rounded flex items-center justify-center border transition ${
@@ -1693,7 +1747,7 @@ export default function UnifiedRosterPage() {
                                 </button>
                                 <button
                                   type="button"
-                                  title="Lipat sa Dulo (Move to End)"
+                                  title="Move to Last"
                                   disabled={idx === selectedTalent.images.length - 1}
                                   onClick={() => handleMovePhotoToEnd(idx)}
                                   className={`px-1.5 py-0.5 rounded flex items-center gap-0.5 text-[10px] font-bold border transition ${
@@ -1702,7 +1756,7 @@ export default function UnifiedRosterPage() {
                                       : "bg-white hover:bg-[#9B1B30] hover:text-white border-[#D6C7C9] text-[#1E1416]"
                                   }`}
                                 >
-                                  <span>Dulo</span>
+                                  <span>Last</span>
                                   <ChevronsRight className="w-3.5 h-3.5" />
                                 </button>
                               </div>
@@ -2007,7 +2061,7 @@ export default function UnifiedRosterPage() {
                   <div className="flex items-center space-x-2">
                     <Wallet className="w-4 h-4 text-[#C68A12]" />
                     <h3 className="text-sm font-bold text-[#1E1416]">
-                      Disbursements, Talent Fees &amp; Paluwal Cash Advance Ledger
+                      Disbursements, Talent Fees &amp; Cash Advance Ledger
                     </h3>
                   </div>
                   <div className="p-4 rounded-xl bg-[#FAF7F5] border border-[#E8DFE0] grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono">
@@ -2037,7 +2091,7 @@ export default function UnifiedRosterPage() {
                     href="/admin/expenses"
                     className="btn-primary inline-flex items-center px-4 py-2 rounded-lg font-bold"
                   >
-                    Open Expenses &amp; Paluwal Ledger →
+                    Open Expenses &amp; Cash Advances Ledger →
                   </Link>
                 </div>
               )}

@@ -1985,7 +1985,7 @@ export default function CalendarPage() {
               {/* Row 5: Talent Fee / Cash Advance / Transpo Allowance Notes */}
               <div>
                 <label className="block text-xs font-bold mb-1">
-                  Talent Fee, Cash Advance (Paluwal) & Transpo Allowance Notes
+                  Talent Fee, Cash Advance &amp; Transport Allowance Notes
                 </label>
                 <input
                   type="text"

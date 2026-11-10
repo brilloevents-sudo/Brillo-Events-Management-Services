@@ -304,7 +304,7 @@ export default function AdminDashboardPage() {
 
           <div className="dashboard-card p-4">
             <span className="text-xs text-[#4A3A3D] font-semibold">
-              Paluwal (Talent Advances)
+              Talent Cash Advances
             </span>
             <div className="text-2xl font-serif font-bold text-[#C68A12] mt-1.5">
               ₱{Number(metrics.totalPaluwalAdvances || 0).toLocaleString()}

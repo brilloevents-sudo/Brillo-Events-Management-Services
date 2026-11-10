@@ -58,7 +58,7 @@ export default function PaluwalPage() {
               IMMUTABLE LEDGER
             </span>
             <h1 className="text-2xl font-bold text-white tracking-tight flex items-center">
-              Talent Advances &amp; Paluwal Ledger
+              Talent Cash Advances Ledger
             </h1>
           </div>
           <p className="text-xs text-slate-400 mt-1">
@@ -70,7 +70,7 @@ export default function PaluwalPage() {
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-4 rounded-xl bg-obsidian-900 border border-slate-800">
-          <span className="text-xs text-slate-400">Total Paluwal Released</span>
+          <span className="text-xs text-slate-400">Total Cash Advances Released</span>
           <div className="text-2xl font-bold text-amber-400 mt-1">
             ₱{Number(summary.totalAdvances || 0).toLocaleString()}
           </div>
@@ -119,7 +119,7 @@ export default function PaluwalPage() {
           </div>
         ) : entries.length === 0 ? (
           <div className="p-12 text-center text-xs text-slate-500">
-            No Paluwal advance entries recorded for this filter.
+            No cash advance entries recorded for this filter.
           </div>
         ) : (
           <div className="overflow-x-auto">

@@ -133,6 +133,65 @@ export function computeSha256Hex(input: string | Buffer): string {
   return crypto.createHash("sha256").update(input).digest("hex");
 }
 
+export const ALLOWED_MEDIA_EXTENSIONS = new Set([
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "gif",
+  "mp4",
+  "webm",
+  "mov",
+  "m4v",
+]);
+
+export function sanitizeAndValidateMediaFileName(
+  rawName: string,
+  fallbackExt = "jpg"
+): {
+  valid: boolean;
+  safeName: string;
+  ext: string;
+  error?: string;
+} {
+  const base =
+    String(rawName || `media.${fallbackExt}`)
+      .split(/[\\/]/)
+      .pop() || `media.${fallbackExt}`;
+  const clean = base.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.{2,}/g, "_");
+  const parts = clean.split(".");
+  const ext = parts.length > 1 ? parts.pop()!.toLowerCase() : fallbackExt;
+  if (!ALLOWED_MEDIA_EXTENSIONS.has(ext)) {
+    return {
+      valid: false,
+      safeName: "",
+      ext,
+      error: `Disallowed file extension '.${ext}'. Only JPG, PNG, WebP, GIF, MP4, WebM, and MOV are permitted.`,
+    };
+  }
+  const stem = parts.join("_").slice(0, 80) || "santa_media";
+  return {
+    valid: true,
+    safeName: `${stem}.${ext}`,
+    ext,
+  };
+}
+
+export function verifyWebhookTokenTimingSafe(
+  providedToken: string | null | undefined,
+  expectedToken: string | null | undefined
+): boolean {
+  if (!providedToken || !expectedToken) return false;
+  try {
+    const a = Buffer.from(String(providedToken));
+    const b = Buffer.from(String(expectedToken));
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
 const ALLOWED_FRAMEWORKS = ["WITH_DP", "NO_DP", "SM_CUSTOM"] as const;
 
 export interface ValidatedContractInput {

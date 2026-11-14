@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { authorizeAdminRequest, verifyWebhookTokenTimingSafe } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,26 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: NextRequest) {
   try {
+    const documensoSecret =
+      request.headers.get("x-documenso-secret") ||
+      request.headers.get("x-webhook-secret");
+    const expectedSecret = process.env.DOCUMENSO_WEBHOOK_SECRET;
+    const adminAuth = authorizeAdminRequest(request, ["CREATOR", "ADMIN"]);
+
+    const isWebhookVerified = expectedSecret
+      ? verifyWebhookTokenTimingSafe(documensoSecret, expectedSecret)
+      : false;
+
+    if (!isWebhookVerified && !adminAuth.authorized) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Unauthorized Documenso webhook invocation. Valid webhook secret or staff session required.",
+        },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { event, data } = body;
 

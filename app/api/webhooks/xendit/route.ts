@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
+import { authorizeAdminRequest, verifyWebhookTokenTimingSafe } from "@/lib/security";
 
 /**
  * Official Xendit Webhook Receiver (/api/webhooks/xendit)
@@ -10,10 +11,15 @@ export async function POST(req: NextRequest) {
   try {
     const callbackToken = req.headers.get("x-callback-token");
     const expectedToken = process.env.XENDIT_WEBHOOK_TOKEN;
+    const adminAuth = authorizeAdminRequest(req, ["CREATOR", "ADMIN"]);
 
-    if (expectedToken && callbackToken !== expectedToken) {
+    const isTokenVerified = expectedToken
+      ? verifyWebhookTokenTimingSafe(callbackToken, expectedToken)
+      : false;
+
+    if (!isTokenVerified && !adminAuth.authorized) {
       return NextResponse.json(
-        { success: false, error: "Invalid Xendit callback verification token" },
+        { success: false, error: "Invalid or missing Xendit callback verification token" },
         { status: 401 }
       );
     }

@@ -37,6 +37,7 @@ import {
 import { motion } from "framer-motion";
 import { SnowfallCanvas } from "@/components/visual-effects/snowfall-canvas";
 import { BookingModal } from "@/components/funnel/booking-modal";
+import { useAuth } from "@/components/auth-context";
 import {
   calculateSantaPackageQuote,
   SantaBeardTier,
@@ -229,6 +230,11 @@ const FAQS = [
 ];
 
 export default function BrilloLuxuryLandingPage() {
+  const { user, permissions } = useAuth();
+  const isCreatorAuthenticated = Boolean(
+    user && user.role === "CREATOR" && permissions?.isCreator
+  );
+
   const [modalOpen, setModalOpen] = useState(false);
   const [publicTalents, setPublicTalents] = useState<any[]>([]);
   const [selectedTalent, setSelectedTalent] = useState<any | null>(null);
@@ -287,6 +293,7 @@ export default function BrilloLuxuryLandingPage() {
   }, []);
 
   const openTileEditor = (type: "EVENT" | "PACKAGE", idx: number) => {
+    if (!isCreatorAuthenticated) return;
     setTileEditorType(type);
     setTileEditorIndex(idx);
     if (type === "EVENT") {
@@ -372,6 +379,7 @@ export default function BrilloLuxuryLandingPage() {
   };
 
   const handleSaveTile = async () => {
+    if (!isCreatorAuthenticated) return;
     let finalImage = tileFormImage;
     // If a massive raw base64 data URL was uploaded or pasted, auto-compress it so localStorage quota is protected
     if (finalImage && finalImage.startsWith("data:image/") && finalImage.length > 200000) {
@@ -420,6 +428,7 @@ export default function BrilloLuxuryLandingPage() {
   };
 
   const handleResetTile = () => {
+    if (!isCreatorAuthenticated) return;
     if (tileEditorType === "EVENT") {
       const original = SPECIALIZED_EVENTS[tileEditorIndex];
       if (original) {
@@ -950,18 +959,20 @@ export default function BrilloLuxuryLandingPage() {
                   <span className="absolute top-4 left-4 px-3.5 py-1 rounded-full bg-[#780D22] text-[#D6B36A] border border-[#D6B36A]/60 text-[11px] font-bold uppercase tracking-wider">
                     {packageTiles[0]?.badge || "Premium Experience"}
                   </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openTileEditor("PACKAGE", 0);
-                    }}
-                    className="absolute top-4 right-4 px-3 py-1.5 rounded-full bg-white/95 hover:bg-white text-[#780D22] hover:text-[#590919] text-xs font-bold shadow-md border border-[#D6B36A] flex items-center space-x-1.5 transition z-20 backdrop-blur-sm hover:scale-105"
-                    title="Edit this tile"
-                  >
-                    <Pencil className="w-3.5 h-3.5 text-[#780D22]" />
-                    <span>Edit</span>
-                  </button>
+                  {isCreatorAuthenticated && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openTileEditor("PACKAGE", 0);
+                      }}
+                      className="absolute top-4 right-4 px-3 py-1.5 rounded-full bg-white/95 hover:bg-white text-[#780D22] hover:text-[#590919] text-xs font-bold shadow-md border border-[#D6B36A] flex items-center space-x-1.5 transition z-20 backdrop-blur-sm hover:scale-105"
+                      title="Master Creator Only: Edit this tile"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-[#780D22]" />
+                      <span>Edit</span>
+                    </button>
+                  )}
                 </div>
                 <div className="p-7 space-y-4">
                   <h3 className="font-display font-bold text-3xl text-[#211619]">
@@ -1009,18 +1020,20 @@ export default function BrilloLuxuryLandingPage() {
                   <span className="absolute top-4 left-4 px-3.5 py-1 rounded-full bg-[#211619]/85 text-[#FFF8F0] border border-[#D6B36A]/50 text-[11px] font-bold uppercase tracking-wider">
                     {packageTiles[1]?.badge || "Festive Favorite"}
                   </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openTileEditor("PACKAGE", 1);
-                    }}
-                    className="absolute top-4 right-4 px-3 py-1.5 rounded-full bg-white/95 hover:bg-white text-[#780D22] hover:text-[#590919] text-xs font-bold shadow-md border border-[#D6B36A] flex items-center space-x-1.5 transition z-20 backdrop-blur-sm hover:scale-105"
-                    title="Edit this tile"
-                  >
-                    <Pencil className="w-3.5 h-3.5 text-[#780D22]" />
-                    <span>Edit</span>
-                  </button>
+                  {isCreatorAuthenticated && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openTileEditor("PACKAGE", 1);
+                      }}
+                      className="absolute top-4 right-4 px-3 py-1.5 rounded-full bg-white/95 hover:bg-white text-[#780D22] hover:text-[#590919] text-xs font-bold shadow-md border border-[#D6B36A] flex items-center space-x-1.5 transition z-20 backdrop-blur-sm hover:scale-105"
+                      title="Master Creator Only: Edit this tile"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-[#780D22]" />
+                      <span>Edit</span>
+                    </button>
+                  )}
                 </div>
                 <div className="p-7 space-y-4">
                   <h3 className="font-display font-bold text-3xl text-[#211619]">
@@ -1067,18 +1080,20 @@ export default function BrilloLuxuryLandingPage() {
                   <span className="absolute top-4 left-4 px-3.5 py-1 rounded-full bg-[#A61932] text-[#FFF8F0] border border-[#D6B36A]/60 text-[11px] font-bold uppercase tracking-wider">
                     {packageTiles[2]?.badge || "Complete Character Package"}
                   </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openTileEditor("PACKAGE", 2);
-                    }}
-                    className="absolute top-4 right-4 px-3 py-1.5 rounded-full bg-white/95 hover:bg-white text-[#780D22] hover:text-[#590919] text-xs font-bold shadow-md border border-[#D6B36A] flex items-center space-x-1.5 transition z-20 backdrop-blur-sm hover:scale-105"
-                    title="Edit this tile"
-                  >
-                    <Pencil className="w-3.5 h-3.5 text-[#780D22]" />
-                    <span>Edit</span>
-                  </button>
+                  {isCreatorAuthenticated && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openTileEditor("PACKAGE", 2);
+                      }}
+                      className="absolute top-4 right-4 px-3 py-1.5 rounded-full bg-white/95 hover:bg-white text-[#780D22] hover:text-[#590919] text-xs font-bold shadow-md border border-[#D6B36A] flex items-center space-x-1.5 transition z-20 backdrop-blur-sm hover:scale-105"
+                      title="Master Creator Only: Edit this tile"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-[#780D22]" />
+                      <span>Edit</span>
+                    </button>
+                  )}
                 </div>
                 <div className="p-7 space-y-4">
                   <h3 className="font-display font-bold text-3xl text-[#211619]">
@@ -1394,19 +1409,21 @@ export default function BrilloLuxuryLandingPage() {
                       alt={ev.title}
                       className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-700"
                     />
-                    {/* Interactive Edit Button for Easy Customization */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openTileEditor("EVENT", idx);
-                      }}
-                      className="absolute top-3 right-3 px-3 py-1.5 rounded-full bg-white/95 hover:bg-white text-[#780D22] hover:text-[#590919] text-xs font-bold shadow-md border border-[#D6B36A] flex items-center space-x-1.5 transition z-20 backdrop-blur-sm hover:scale-105"
-                      title="Edit this tile"
-                    >
-                      <Pencil className="w-3.5 h-3.5 text-[#780D22]" />
-                      <span>Edit</span>
-                    </button>
+                    {/* Interactive Edit Button — STRICTLY Master Creator Only */}
+                    {isCreatorAuthenticated && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openTileEditor("EVENT", idx);
+                        }}
+                        className="absolute top-3 right-3 px-3 py-1.5 rounded-full bg-white/95 hover:bg-white text-[#780D22] hover:text-[#590919] text-xs font-bold shadow-md border border-[#D6B36A] flex items-center space-x-1.5 transition z-20 backdrop-blur-sm hover:scale-105"
+                        title="Master Creator Only: Edit this tile"
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-[#780D22]" />
+                        <span>Edit</span>
+                      </button>
+                    )}
                   </div>
                   <div className="p-6 space-y-2.5">
                     <h3 className="font-display font-bold text-2xl sm:text-[28px] text-[#211619] leading-snug">
@@ -2216,8 +2233,8 @@ export default function BrilloLuxuryLandingPage() {
         publicTalents={publicTalents}
       />
 
-      {/* Interactive Tile Customization Modal */}
-      {tileEditorOpen && (
+      {/* Interactive Tile Customization Modal — Master Creator Only */}
+      {isCreatorAuthenticated && tileEditorOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-white border-2 border-[#D6B36A] rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto font-body">
             {/* Header */}

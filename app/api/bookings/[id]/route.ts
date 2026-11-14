@@ -11,6 +11,10 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = authorizeAdminRequest(req, ["CREATOR", "ADMIN"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
     const booking = await prisma.booking.findUnique({
       where: { id: params.id },
       include: {
@@ -26,7 +30,7 @@ export async function GET(
         quotes: { orderBy: { version: "desc" } },
         contracts: { orderBy: { version: "desc" } },
         payments: { orderBy: { paymentDate: "desc" } },
-        expenses: true,
+        expenses: auth.role === "CREATOR",
         checklistItems: true,
         statusHistory: { orderBy: { createdAt: "desc" } },
       },
@@ -36,7 +40,17 @@ export async function GET(
       return NextResponse.json({ success: false, error: "Booking not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, booking });
+    const sanitizedBooking =
+      auth.role === "CREATOR"
+        ? booking
+        : {
+            ...booking,
+            projectedGrossProfit: 0,
+            totalDirectCost: 0,
+            expenses: [],
+          };
+
+    return NextResponse.json({ success: true, booking: sanitizedBooking });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

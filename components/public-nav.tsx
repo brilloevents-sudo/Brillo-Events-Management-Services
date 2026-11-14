@@ -21,9 +21,13 @@ export function PublicNav() {
     { href: "/availability", label: "Check Dates" },
   ];
 
-  const portalHref = !user ? "/login" : user.role === "CLIENT" ? "/portal" : "/admin";
+  const portalHref = !user
+    ? "/client-login"
+    : user.role === "CLIENT"
+    ? "/portal"
+    : "/admin";
   const portalLabel = !user
-    ? "Login"
+    ? "Client Portal"
     : user.role === "CLIENT"
     ? "My Portal"
     : user.role === "CREATOR"

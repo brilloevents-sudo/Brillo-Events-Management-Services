@@ -342,10 +342,10 @@ export function StaticApiFallback() {
 
           const isCreatorAuthorized =
             email === "creator@brilloevent.com" &&
-            ["creator123", "brillocreator2026!", "creator", "brillo2026", "admin123", "brilloadmin2026!"].includes(password.toLowerCase());
+            ["brillocreator2026!"].includes(password.toLowerCase());
           const isAdminAuthorized =
             email === "admin@brilloevent.com" &&
-            ["admin123", "brilloadmin2026!", "admin", "brillo2026", "creator123", "brillocreator2026!"].includes(password.toLowerCase());
+            ["brilloadmin2026!"].includes(password.toLowerCase());
           const isStaffAuthorized = isCreatorAuthorized || isAdminAuthorized;
 
           let found = usersList.find((u) => String(u.email).toLowerCase() === email);

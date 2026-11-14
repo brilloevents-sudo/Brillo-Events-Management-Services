@@ -128,57 +128,21 @@ function LoginGatewayInner() {
         <div className="max-w-3xl mx-auto text-center space-y-3">
           <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#211619]/70 text-[#D6B36A] border border-[#D6B36A]/40 text-[11px] font-bold uppercase tracking-[0.18em]">
             <Lock className="w-3.5 h-3.5" />
-            Protected Role-Based Portal
+            Protected Client Booking Portal
           </span>
           <h1 className="font-display text-4xl sm:text-5xl font-semibold text-[#FFF8F0] leading-tight">
-            Sign In to Brillo Events
+            Customer Booking &amp; Quote Portal
           </h1>
           <p className="text-xs sm:text-sm text-[#FFF8F0]/80 max-w-xl mx-auto leading-relaxed">
-            Dedicated access separation for{" "}
-            <strong className="text-[#F3D899]">Customers &amp; Clients</strong>,{" "}
-            <strong className="text-[#F3D899]">Operations Admins</strong>, and{" "}
-            <strong className="text-[#F3D899]">Master Creator</strong>.
+            Track your official Santa quotation, reservation hold status, contracts, and verified payment receipts using your{" "}
+            <strong className="text-[#F3D899]">Booking Reference #</strong> or{" "}
+            <strong className="text-[#F3D899]">Client Account</strong>.
           </p>
         </div>
       </section>
 
       <div className="max-w-xl mx-auto px-4 sm:px-6 -mt-8">
         <div className="rounded-3xl bg-white border-2 border-[#D6B36A]/60 shadow-2xl overflow-hidden">
-          {/* Primary Role Gate Switcher */}
-          <div className="grid grid-cols-2 bg-[#FAF3EB] border-b border-[#E8DCD0] p-1.5 gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                setPortalTab("CLIENT");
-                setError(null);
-              }}
-              className={`py-3 px-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition ${
-                portalTab === "CLIENT"
-                  ? "bg-[#780D22] text-[#FFF8F0] shadow-md"
-                  : "text-[#5C494E] hover:text-[#211619]"
-              }`}
-            >
-              <User className="w-4 h-4 text-[#D6B36A]" />
-              <span>Customer / Client</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setPortalTab("STAFF");
-                setError(null);
-              }}
-              className={`py-3 px-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition ${
-                portalTab === "STAFF"
-                  ? "bg-[#211619] text-[#FFF8F0] shadow-md"
-                  : "text-[#5C494E] hover:text-[#211619]"
-              }`}
-            >
-              <ShieldCheck className="w-4 h-4 text-[#D6B36A]" />
-              <span>Admin &amp; Creator</span>
-            </button>
-          </div>
-
           <div className="p-6 sm:p-9 space-y-6 text-xs">
             {error && (
               <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-900 flex items-start gap-2.5">
@@ -187,231 +151,155 @@ function LoginGatewayInner() {
               </div>
             )}
 
-            {portalTab === "CLIENT" ? (
-              <>
-                <div className="space-y-1">
-                  <h2 className="font-display text-2xl sm:text-3xl font-bold text-[#211619]">
-                    Customer Booking &amp; Quote Portal
-                  </h2>
-                  <p className="text-[#5C494E] leading-relaxed">
-                    View your official Santa quotations, reservation hold status, contracts, and Xendit / GCash payment links.
-                  </p>
+            <div className="space-y-1">
+              <h2 className="font-display text-2xl sm:text-3xl font-bold text-[#211619]">
+                Access Your Event Booking
+              </h2>
+              <p className="text-[#5C494E] leading-relaxed">
+                View your official Santa quotations, reservation hold status, contracts, and Xendit / GCash payment links.
+              </p>
+            </div>
+
+            {/* Client Sub-Modes */}
+            <div className="grid grid-cols-3 gap-1.5 bg-[#FFF8F0] p-1 rounded-xl border border-[#E8DCD0]">
+              <button
+                type="button"
+                onClick={() => {
+                  setClientMode("BOOKING_REF");
+                  setError(null);
+                }}
+                className={`py-2 px-2 rounded-lg font-bold text-[11px] transition ${
+                  clientMode === "BOOKING_REF"
+                    ? "bg-white text-[#780D22] shadow-sm border border-[#D6B36A]/50"
+                    : "text-[#7A666B] hover:text-[#211619]"
+                }`}
+              >
+                Booking Ref #
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setClientMode("ACCOUNT");
+                  setError(null);
+                }}
+                className={`py-2 px-2 rounded-lg font-bold text-[11px] transition ${
+                  clientMode === "ACCOUNT"
+                    ? "bg-white text-[#780D22] shadow-sm border border-[#D6B36A]/50"
+                    : "text-[#7A666B] hover:text-[#211619]"
+                }`}
+              >
+                Client Password
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setClientMode("REGISTER");
+                  setError(null);
+                }}
+                className={`py-2 px-2 rounded-lg font-bold text-[11px] transition ${
+                  clientMode === "REGISTER"
+                    ? "bg-white text-[#780D22] shadow-sm border border-[#D6B36A]/50"
+                    : "text-[#7A666B] hover:text-[#211619]"
+                }`}
+              >
+                Create Account
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {clientMode === "REGISTER" && (
+                <div>
+                  <label className="block font-bold text-[#211619] mb-1.5">
+                    Your Name / Company *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Maria Clara Santos / Ayala Malls"
+                    className="w-full px-3.5 py-3 rounded-xl bg-[#FFF8F0] border border-[#D8C9BA] text-[#211619] focus:outline-none focus:border-[#780D22]"
+                  />
                 </div>
+              )}
 
-                {/* Client Sub-Modes */}
-                <div className="grid grid-cols-3 gap-1.5 bg-[#FFF8F0] p-1 rounded-xl border border-[#E8DCD0]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setClientMode("BOOKING_REF");
-                      setError(null);
-                    }}
-                    className={`py-2 px-2 rounded-lg font-bold text-[11px] transition ${
-                      clientMode === "BOOKING_REF"
-                        ? "bg-white text-[#780D22] shadow-sm border border-[#D6B36A]/50"
-                        : "text-[#7A666B] hover:text-[#211619]"
-                    }`}
-                  >
-                    Booking Ref #
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setClientMode("ACCOUNT");
-                      setError(null);
-                    }}
-                    className={`py-2 px-2 rounded-lg font-bold text-[11px] transition ${
-                      clientMode === "ACCOUNT"
-                        ? "bg-white text-[#780D22] shadow-sm border border-[#D6B36A]/50"
-                        : "text-[#7A666B] hover:text-[#211619]"
-                    }`}
-                  >
-                    Client Password
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setClientMode("REGISTER");
-                      setError(null);
-                    }}
-                    className={`py-2 px-2 rounded-lg font-bold text-[11px] transition ${
-                      clientMode === "REGISTER"
-                        ? "bg-white text-[#780D22] shadow-sm border border-[#D6B36A]/50"
-                        : "text-[#7A666B] hover:text-[#211619]"
-                    }`}
-                  >
-                    Create Account
-                  </button>
+              <div>
+                <label className="block font-bold text-[#211619] mb-1.5 flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-[#780D22]" />
+                  <span>Client Email Address *</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter the email used on your quotation inquiry"
+                  className="w-full px-3.5 py-3 rounded-xl bg-[#FFF8F0] border border-[#D8C9BA] text-[#211619] focus:outline-none focus:border-[#780D22]"
+                />
+              </div>
+
+              {clientMode === "BOOKING_REF" ? (
+                <div>
+                  <label className="block font-bold text-[#211619] mb-1.5 flex items-center gap-1.5">
+                    <Ticket className="w-3.5 h-3.5 text-[#780D22]" />
+                    <span>Booking Reference # *</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={bookingReference}
+                    onChange={(e) => setBookingReference(e.target.value)}
+                    placeholder="e.g. BR-2026-Q001"
+                    className="w-full px-3.5 py-3 rounded-xl bg-[#FFF8F0] border border-[#D8C9BA] text-[#211619] font-mono focus:outline-none focus:border-[#780D22]"
+                  />
                 </div>
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  {clientMode === "REGISTER" && (
-                    <div>
-                      <label className="block font-bold text-[#211619] mb-1.5">
-                        Your Name / Company *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="e.g. Maria Clara Santos / Ayala Malls"
-                        className="w-full px-3.5 py-3 rounded-xl bg-[#FFF8F0] border border-[#D8C9BA] text-[#211619] focus:outline-none focus:border-[#780D22]"
-                      />
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block font-bold text-[#211619] mb-1.5 flex items-center gap-1.5">
-                      <Mail className="w-3.5 h-3.5 text-[#780D22]" />
-                      <span>Client Email Address *</span>
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Enter the email used on your quotation inquiry"
-                      className="w-full px-3.5 py-3 rounded-xl bg-[#FFF8F0] border border-[#D8C9BA] text-[#211619] focus:outline-none focus:border-[#780D22]"
-                    />
-                  </div>
-
-                  {clientMode === "BOOKING_REF" ? (
-                    <div>
-                      <label className="block font-bold text-[#211619] mb-1.5 flex items-center gap-1.5">
-                        <Ticket className="w-3.5 h-3.5 text-[#780D22]" />
-                        <span>Booking Reference # *</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={bookingReference}
-                        onChange={(e) => setBookingReference(e.target.value)}
-                        placeholder="e.g. BR-2026-Q001"
-                        className="w-full px-3.5 py-3 rounded-xl bg-[#FFF8F0] border border-[#D8C9BA] text-[#211619] font-mono focus:outline-none focus:border-[#780D22]"
-                      />
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="block font-bold text-[#211619] mb-1.5 flex items-center gap-1.5">
-                        <KeyRound className="w-3.5 h-3.5 text-[#780D22]" />
-                        <span>
-                          {clientMode === "REGISTER"
-                            ? "Create Password (min 6 chars) *"
-                            : "Password *"}
-                        </span>
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        minLength={6}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••••••"
-                        className="w-full px-3.5 py-3 rounded-xl bg-[#FFF8F0] border border-[#D8C9BA] text-[#211619] focus:outline-none focus:border-[#780D22]"
-                      />
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="w-full py-4 rounded-full bg-gradient-to-r from-[#780D22] to-[#B82038] hover:from-[#8C1028] hover:to-[#C92640] text-white font-bold uppercase tracking-[0.15em] shadow-lg transition flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
+              ) : (
+                <div>
+                  <label className="block font-bold text-[#211619] mb-1.5 flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-[#780D22]" />
                     <span>
-                      {submitting
-                        ? "Verifying Access..."
-                        : clientMode === "REGISTER"
-                        ? "Create Client Portal Account"
-                        : "Enter Client Portal"}
+                      {clientMode === "REGISTER"
+                        ? "Create Password (min 6 chars) *"
+                        : "Password *"}
                     </span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </form>
-
-                <div className="pt-3 border-t border-[#EFE5DA] flex items-center justify-between text-[11px] text-[#7A666B]">
-                  <span>Don&apos;t have a quotation yet?</span>
-                  <Link
-                    href="/request-quote"
-                    className="font-bold text-[#780D22] hover:underline"
-                  >
-                    Request a Santa Quotation →
-                  </Link>
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full px-3.5 py-3 rounded-xl bg-[#FFF8F0] border border-[#D8C9BA] text-[#211619] focus:outline-none focus:border-[#780D22]"
+                  />
                 </div>
-              </>
-            ) : (
-              <>
-                <div className="space-y-1">
-                  <h2 className="font-display text-2xl sm:text-3xl font-bold text-[#211619]">
-                    Admin &amp; Master Creator Sign In
-                  </h2>
-                  <p className="text-[#5C494E] leading-relaxed">
-                    Authorized Brillo Events personnel only. Role boundaries are automatically enforced upon sign-in.
-                  </p>
-                </div>
+              )}
 
-                {/* Role Boundary Summary Pills */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div className="p-3 rounded-2xl bg-[#FFF8F0] border border-[#E8DCD0] space-y-1">
-                    <div className="flex items-center gap-1.5 font-bold text-[#780D22]">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>Operations Admin</span>
-                    </div>
-                    <p className="text-[10px] text-[#5C494E] leading-snug">
-                      CRM, Calendar, Bookings &amp; Roster. Profit margins, Cash Advances, Settings &amp; Delete are restricted.
-                    </p>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-[#211619] text-[#FFF8F0] border border-[#D6B36A]/50 space-y-1">
-                    <div className="flex items-center gap-1.5 font-bold text-[#D6B36A]">
-                      <Crown className="w-3.5 h-3.5" />
-                      <span>Master Creator</span>
-                    </div>
-                    <p className="text-[10px] text-[#FFF8F0]/80 leading-snug">
-                      Full executive access: Net Profit, Talent Payouts, Cash Advances, Users, Settings &amp; Audit.
-                    </p>
-                  </div>
-                </div>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full py-4 rounded-full bg-gradient-to-r from-[#780D22] to-[#B82038] hover:from-[#8C1028] hover:to-[#C92640] text-white font-bold uppercase tracking-[0.15em] shadow-lg transition flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <span>
+                  {submitting
+                    ? "Verifying Access..."
+                    : clientMode === "REGISTER"
+                    ? "Create Client Portal Account"
+                    : "Enter Client Portal"}
+                </span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label className="block font-bold text-[#211619] mb-1.5">
-                      Authorized Email *
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="admin@brilloevent.com or creator@brilloevent.com"
-                      className="w-full px-3.5 py-3 rounded-xl bg-[#FFF8F0] border border-[#D8C9BA] text-[#211619] focus:outline-none focus:border-[#211619]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-[#211619] mb-1.5">
-                      Password *
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••••••"
-                      className="w-full px-3.5 py-3 rounded-xl bg-[#FFF8F0] border border-[#D8C9BA] text-[#211619] focus:outline-none focus:border-[#211619]"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="w-full py-4 rounded-full bg-[#211619] hover:bg-[#780D22] border border-[#D6B36A]/50 text-[#FFF8F0] font-bold uppercase tracking-[0.15em] shadow-lg transition flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    <Sparkles className="w-4 h-4 text-[#D6B36A]" />
-                    <span>{submitting ? "Authenticating..." : "Sign In to Operations Hub"}</span>
-                  </button>
-                </form>
-              </>
-            )}
+            <div className="pt-3 border-t border-[#EFE5DA] flex items-center justify-between text-[11px] text-[#7A666B]">
+              <span>Don&apos;t have a quotation yet?</span>
+              <Link
+                href="/request-quote"
+                className="font-bold text-[#780D22] hover:underline"
+              >
+                Request a Santa Quotation →
+              </Link>
+            </div>
           </div>
         </div>
       </div>

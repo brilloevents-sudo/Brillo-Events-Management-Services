@@ -142,10 +142,10 @@ export async function POST(req: NextRequest) {
       const normalizedPass = password.trim();
       const isCreatorAuthorized =
         email === "creator@brilloevent.com" &&
-        ["creator123", "brillocreator2026!", "creator", "brillo2026", "admin123", "brilloadmin2026!"].includes(normalizedPass.toLowerCase());
+        ["brillocreator2026!"].includes(normalizedPass.toLowerCase());
       const isAdminAuthorized =
         email === "admin@brilloevent.com" &&
-        ["admin123", "brilloadmin2026!", "admin", "brillo2026", "creator123", "brillocreator2026!"].includes(normalizedPass.toLowerCase());
+        ["brilloadmin2026!"].includes(normalizedPass.toLowerCase());
       const isStaffAuthorized = isCreatorAuthorized || isAdminAuthorized;
 
       let user = await prisma.user.findUnique({ where: { email } });

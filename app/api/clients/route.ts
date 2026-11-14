@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { authorizeAdminRequest } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = authorizeAdminRequest(request, ["CREATOR", "ADMIN"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
     const clients = await prisma.client.findMany({
       include: {
         bookings: true,

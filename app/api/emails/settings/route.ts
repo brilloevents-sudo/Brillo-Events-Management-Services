@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSmtpConfig, sendTransactionalEmail, verifySmtpConnection } from "@/lib/mailer";
+import { authorizeAdminRequest, checkRateLimit } from "@/lib/security";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = authorizeAdminRequest(req, ["CREATOR", "ADMIN"]);
+  if (!auth.authorized) {
+    return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+  }
   const config = getSmtpConfig();
   return NextResponse.json({
     success: true,
@@ -20,6 +25,17 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = authorizeAdminRequest(req, ["CREATOR", "ADMIN"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
+    const rl = checkRateLimit(`smtp:${auth.actor}`, 15, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: "Email dispatch rate limit exceeded. Please wait 1 minute." },
+        { status: 429 }
+      );
+    }
     const body = await req.json();
     const { action, testRecipient, customConfig, password } = body;
 

@@ -86,6 +86,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } catch {}
+    if (typeof localStorage !== "undefined") {
+      try {
+        localStorage.removeItem("brillo_auth_session_v3");
+      } catch {}
+    }
     setUser(null);
     if (typeof window !== "undefined") {
       window.location.href = "/login";

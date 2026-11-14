@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
+import { authorizeAdminRequest } from "@/lib/security";
 
 export async function GET(req: NextRequest) {
   try {
+    const auth = authorizeAdminRequest(req, ["CREATOR"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
     const status = searchParams.get("status") || "PENDING_REVIEW";
@@ -25,8 +30,13 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const auth = authorizeAdminRequest(req, ["CREATOR"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
     const body = await req.json();
-    const { conflictId, status = "RESOLVED", resolvedResolution, actor = "STAFF_USER" } = body;
+    const { conflictId, status = "RESOLVED", resolvedResolution } = body;
+    const actor = auth.actor;
 
     if (!conflictId) {
       return NextResponse.json({ success: false, error: "Conflict ID required" }, { status: 400 });

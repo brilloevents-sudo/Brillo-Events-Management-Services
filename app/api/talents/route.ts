@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
+import { authorizeAdminRequest } from "@/lib/security";
 
 export async function GET(req: NextRequest) {
   try {
+    const auth = authorizeAdminRequest(req, ["CREATOR", "ADMIN"]);
     const { searchParams } = new URL(req.url);
-    const publicOnly = searchParams.get("publicOnly") === "true";
+    const publicOnly = searchParams.get("publicOnly") === "true" || !auth.authorized;
     const status = searchParams.get("status");
 
     const where: any = {};
@@ -21,25 +23,44 @@ export async function GET(req: NextRequest) {
       include: {
         images: true,
         aliases: true,
-        assignments: {
-          include: {
-            booking: {
-              select: {
-                id: true,
-                bookingNumber: true,
-                eventName: true,
-                eventDate: true,
-                mallOrVenue: true,
-                status: true,
+        assignments: auth.authorized
+          ? {
+              include: {
+                booking: {
+                  select: {
+                    id: true,
+                    bookingNumber: true,
+                    eventName: true,
+                    eventDate: true,
+                    mallOrVenue: true,
+                    status: true,
+                  },
+                },
               },
-            },
-          },
-        },
+            }
+          : false,
       },
       orderBy: { displayName: "asc" },
     });
 
-    return NextResponse.json({ success: true, count: talents.length, talents });
+    const sanitizedTalents = auth.authorized
+      ? talents.map((t) =>
+          auth.role === "CREATOR"
+            ? t
+            : { ...t, baseTalentFee: 0 }
+        )
+      : talents.map((t) => ({
+          ...t,
+          baseTalentFee: 0,
+          phone: "",
+          assignments: [],
+        }));
+
+    return NextResponse.json({
+      success: true,
+      count: sanitizedTalents.length,
+      talents: sanitizedTalents,
+    });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -47,6 +68,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = authorizeAdminRequest(req, ["CREATOR", "ADMIN"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
     const body = await req.json();
     const {
       sourceName,

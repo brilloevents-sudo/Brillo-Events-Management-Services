@@ -192,14 +192,15 @@ if ($method === 'POST' || $method === 'PATCH') {
         $fileName = !empty($input['fileName']) ? $input['fileName'] : (!empty($_POST['fileName']) ? $_POST['fileName'] : '');
         $isVideo = false;
 
-        // 1. Direct file upload from multipart FormData (Restricted to safe image/video extensions)
         $allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'webm', 'mov', 'm4v'];
+
+        // 1. Direct file upload from multipart FormData
         if (!empty($_FILES['file']['tmp_name']) && is_uploaded_file($_FILES['file']['tmp_name'])) {
             $orig = basename($_FILES['file']['name']);
             $ext = strtolower(pathinfo($orig, PATHINFO_EXTENSION) ?: 'jpg');
             if (!in_array($ext, $allowedExts, true)) {
                 http_response_code(400);
-                echo json_encode(['success' => false, 'error' => 'Invalid file extension. Only JPG, PNG, WebP, MP4, WebM, and MOV are allowed.']);
+                echo json_encode(['success' => false, 'error' => 'Disallowed file extension. Only JPG, PNG, WebP, GIF, MP4, WebM, and MOV are permitted.']);
                 exit;
             }
             $safeBase = preg_replace('/[^a-zA-Z0-9_-]/', '_', pathinfo($orig, PATHINFO_FILENAME));
@@ -210,7 +211,7 @@ if ($method === 'POST' || $method === 'PATCH') {
                 $fileName = $fileName ?: $orig;
             }
             $mime = !empty($_FILES['file']['type']) ? $_FILES['file']['type'] : '';
-            if (in_array($ext, ['mp4', 'webm', 'mov', 'm4v']) || strpos($mime, 'video/') === 0) {
+            if (in_array($ext, ['mp4', 'webm', 'mov', 'm4v'], true) || strpos($mime, 'video/') === 0) {
                 $isVideo = true;
             }
         }
@@ -223,7 +224,7 @@ if ($method === 'POST' || $method === 'PATCH') {
             if (!in_array($ext, $allowedExts, true)) {
                 $ext = ($mediaKind === 'video') ? 'mp4' : 'jpg';
             }
-            if ($mediaKind === 'video' || in_array($ext, ['mp4', 'webm', 'mov', 'm4v'])) {
+            if ($mediaKind === 'video' || in_array($ext, ['mp4', 'webm', 'mov', 'm4v'], true)) {
                 $isVideo = true;
             }
             $bin = base64_decode($b64Matches[3]);

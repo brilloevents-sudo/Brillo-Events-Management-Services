@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getEmailProviderStatus, sendEmail } from "@/lib/email-service";
 import { logAudit } from "@/lib/audit";
+import { authorizeAdminRequest } from "@/lib/security";
 
 export async function GET(req: NextRequest) {
   try {
+    const auth = authorizeAdminRequest(req, ["CREATOR", "ADMIN"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
     const { searchParams } = new URL(req.url);
     const threadId = searchParams.get("threadId");
     const status = searchParams.get("status") || "ACTIVE";

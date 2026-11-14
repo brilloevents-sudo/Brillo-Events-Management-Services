@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
+import { authorizeAdminRequest, checkRateLimit } from "@/lib/security";
 
 export async function GET(req: NextRequest) {
   try {
+    const auth = authorizeAdminRequest(req, ["CREATOR", "ADMIN"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
     const { searchParams } = new URL(req.url);
     const bookingId = searchParams.get("bookingId");
     const status = searchParams.get("status");
@@ -33,6 +38,13 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const rl = checkRateLimit("payments:post", 20, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: "Rate limit exceeded. Please wait before submitting another payment." },
+        { status: 429 }
+      );
+    }
     const body = await req.json();
     const {
       bookingId,
@@ -90,14 +102,18 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const auth = authorizeAdminRequest(req, ["CREATOR", "ADMIN"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
     const body = await req.json();
     const {
       paymentId,
       status: targetStatus, // VERIFIED or REJECTED
       verificationNotes,
       verifiedByUserId,
-      actor = "STAFF_USER",
     } = body;
+    const actor = auth.actor;
 
     if (!paymentId || !targetStatus) {
       return NextResponse.json(

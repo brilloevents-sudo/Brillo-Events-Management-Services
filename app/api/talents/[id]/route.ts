@@ -1,27 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
-import { uploadToSupabaseGallery } from "@/lib/supabase";
+import {
+  authorizeAdminRequest,
+  sanitizeAndValidateMediaFileName,
+} from "@/lib/security";
 import fs from "fs";
 import path from "path";
-
-const ALLOWED_MEDIA_EXTENSIONS = new Set([
-  "jpg",
-  "jpeg",
-  "png",
-  "webp",
-  "gif",
-  "mp4",
-  "webm",
-  "mov",
-  "m4v",
-]);
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = authorizeAdminRequest(req, ["CREATOR", "ADMIN"]);
     const talent = await prisma.talent.findFirst({
       where: {
         OR: [{ id: params.id }, { canonicalId: params.id }],
@@ -65,15 +57,32 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      talent: {
-        ...talent,
-        financeSummary: {
-          totalAdvances,
-          totalDeductions,
-          netAdvanceBalance,
-          totalPayouts,
-        },
-      },
+      talent: auth.authorized
+        ? {
+            ...talent,
+            baseTalentFee: auth.role === "CREATOR" ? talent.baseTalentFee : 0,
+            financeSummary:
+              auth.role === "CREATOR"
+                ? {
+                    totalAdvances,
+                    totalDeductions,
+                    netAdvanceBalance,
+                    totalPayouts,
+                  }
+                : undefined,
+          }
+        : {
+            id: talent.id,
+            canonicalId: talent.canonicalId,
+            displayName: talent.displayName,
+            talentType: talent.talentType,
+            age: talent.age,
+            height: talent.height,
+            nationality: talent.nationality,
+            bio: talent.bio,
+            approvedForPublicDisplay: talent.approvedForPublicDisplay,
+            images: talent.images,
+          },
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -85,6 +94,10 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const auth = authorizeAdminRequest(req, ["CREATOR", "ADMIN"]);
+    if (!auth.authorized) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 403 });
+    }
     let body: any = {};
     let uploadedFile: File | null = null;
     const contentType = req.headers.get("content-type") || "";
@@ -148,33 +161,28 @@ export async function PATCH(
     // 1. Handle Photo & Video Gallery Actions
     if (action === "ADD_PHOTO" || action === "ADD_MEDIA") {
       let resolvedUrl = customPublicUrl || "";
-      const rawName = (
+      const validation = sanitizeAndValidateMediaFileName(
         uploadedFile?.name ||
-        fileName ||
-        `santa_${existing.displayName}_${Date.now()}.jpg`
-      ).replace(/[^a-zA-Z0-9._-]/g, "_");
-      const rawExt = (rawName.split(".").pop() || "jpg").toLowerCase();
-      const safeExt = ALLOWED_MEDIA_EXTENSIONS.has(rawExt) ? rawExt : "jpg";
-      const safeName = rawName.replace(/\.[^.]+$/, "") + "." + safeExt;
+          fileName ||
+          `santa_${existing.displayName}_${Date.now()}.jpg`
+      );
+      if (!validation.valid) {
+        return NextResponse.json(
+          { success: false, error: validation.error },
+          { status: 400 }
+        );
+      }
+      const safeName = validation.safeName;
 
       if (uploadedFile) {
         try {
           const bytes = await uploadedFile.arrayBuffer();
           const buffer = Buffer.from(bytes);
+          const uploadDir = path.join(process.cwd(), "public", "talents", "uploads");
+          fs.mkdirSync(uploadDir, { recursive: true });
           const uniqueFile = `${Date.now()}_${safeName}`;
-          const sbUrl = await uploadToSupabaseGallery(
-            `${existing.id}/${uniqueFile}`,
-            buffer,
-            uploadedFile.type || "image/jpeg"
-          );
-          if (sbUrl) {
-            resolvedUrl = sbUrl;
-          } else {
-            const uploadDir = path.join(process.cwd(), "public", "talents", "uploads");
-            fs.mkdirSync(uploadDir, { recursive: true });
-            fs.writeFileSync(path.join(uploadDir, uniqueFile), buffer);
-            resolvedUrl = `/talents/uploads/${uniqueFile}`;
-          }
+          fs.writeFileSync(path.join(uploadDir, uniqueFile), buffer);
+          resolvedUrl = `/talents/uploads/${uniqueFile}`;
         } catch {
           // fallback
         }
@@ -187,24 +195,11 @@ export async function PATCH(
           const matches = fileDataUrl.match(/^data:(image|video)\/([a-zA-Z0-9+.-]+);base64,(.+)$/);
           if (matches) {
             const buffer = Buffer.from(matches[3], "base64");
+            const uploadDir = path.join(process.cwd(), "public", "talents", "uploads");
+            fs.mkdirSync(uploadDir, { recursive: true });
             const uniqueFile = `${Date.now()}_${safeName}`;
-            const sbUrl = await uploadToSupabaseGallery(
-              `${existing.id}/${uniqueFile}`,
-              buffer,
-              `${matches[1]}/${matches[2]}`
-            );
-            if (sbUrl) {
-              resolvedUrl = sbUrl;
-            } else {
-              try {
-                const uploadDir = path.join(process.cwd(), "public", "talents", "uploads");
-                fs.mkdirSync(uploadDir, { recursive: true });
-                fs.writeFileSync(path.join(uploadDir, uniqueFile), buffer);
-                resolvedUrl = `/talents/uploads/${uniqueFile}`;
-              } catch {
-                resolvedUrl = fileDataUrl;
-              }
-            }
+            fs.writeFileSync(path.join(uploadDir, uniqueFile), buffer);
+            resolvedUrl = `/talents/uploads/${uniqueFile}`;
           } else {
             resolvedUrl = fileDataUrl;
           }

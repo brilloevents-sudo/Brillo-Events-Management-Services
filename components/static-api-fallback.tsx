@@ -9,6 +9,7 @@ import {
   SantaEventActivityTag,
 } from "@/lib/costing";
 import { renderEmailTemplate } from "@/lib/email-templates";
+import { evaluateSantaAvailabilityForDate } from "@/lib/santa-availability";
 import {
   AppRole,
   getPermissionsForRole,
@@ -1618,6 +1619,7 @@ export function StaticApiFallback() {
             if (parsedBody.height !== undefined) updated.height = parsedBody.height;
             if (parsedBody.nationality !== undefined) updated.nationality = parsedBody.nationality;
             if (parsedBody.phone !== undefined) updated.phone = parsedBody.phone;
+            if (parsedBody.address !== undefined) updated.address = parsedBody.address;
             if (parsedBody.bio !== undefined) updated.bio = parsedBody.bio;
             if (parsedBody.baseTalentFee !== undefined)
               updated.baseTalentFee = Number(parsedBody.baseTalentFee);
@@ -1867,11 +1869,66 @@ export function StaticApiFallback() {
         return jsonResponse({ success: true, booking, talents: await getMergedTalents() });
       }
       if (pathname === "/api/individual-bookings") return jsonResponse(snap.individualBookings);
+      if (pathname === "/api/public/availability") {
+        const dateParam = urlObj.searchParams.get("date") || "";
+        const locationParam =
+          urlObj.searchParams.get("location") || urlObj.searchParams.get("city") || "";
+        const allT = await getMergedTalents();
+        const allB = getMergedBookings();
+        const evaluation = evaluateSantaAvailabilityForDate(
+          allT,
+          dateParam,
+          locationParam,
+          allB
+        );
+        return jsonResponse({
+          success: true,
+          date: evaluation.summary.date,
+          location: evaluation.summary.locationQuery,
+          summary: evaluation.summary,
+          santas: evaluation.santas,
+        });
+      }
       if (pathname === "/api/talents") {
         const publicOnly = urlObj.searchParams.get("publicOnly") === "true";
         let allT = await getMergedTalents();
         if (publicOnly) {
-          allT = allT.filter((t: any) => Boolean(t.approvedForPublicDisplay));
+          const allB = getMergedBookings();
+          allT = allT
+            .filter((t: any) => Boolean(t.approvedForPublicDisplay))
+            .map((t: any) => {
+              const matchedBookings = allB.filter((b: any) => {
+                const taList = Array.isArray(b?.talentAssignments) ? b.talentAssignments : [];
+                return taList.some(
+                  (ta: any) =>
+                    ta?.talentId === t.id ||
+                    ta?.talent?.id === t.id ||
+                    (ta?.talent?.canonicalId && ta.talent.canonicalId === t.canonicalId)
+                );
+              });
+              const rawAssigns = [
+                ...(Array.isArray(t.assignments) ? t.assignments.map((a: any) => a?.booking || a) : []),
+                ...matchedBookings,
+              ];
+              return {
+                ...t,
+                publicSchedule: rawAssigns
+                  .filter(
+                    (b: any) =>
+                      b &&
+                      b.eventDate &&
+                      b.status !== "CANCELLED" &&
+                      b.status !== "DECLINED"
+                  )
+                  .map((b: any) => ({
+                    eventDate: b.eventDate,
+                    startTime: b.startTime || "14:00",
+                    endTime: b.endTime || "18:00",
+                    durationHours: b.durationHours || 4,
+                    status: b.status || "CONFIRMED",
+                  })),
+              };
+            });
         }
         return jsonResponse({ success: true, count: allT.length, talents: allT });
       }

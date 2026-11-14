@@ -165,6 +165,7 @@ export default function UnifiedRosterPage() {
     age: 62,
     height: "6'0\"",
     phone: "",
+    address: "",
     baseTalentFee: 12000,
     metroManilaRate: 18000,
     provincialRate: 23400,
@@ -360,6 +361,7 @@ export default function UnifiedRosterPage() {
       age: t.age || "",
       height: t.height || "",
       phone: t.phone || "",
+      address: t.address || "",
       baseTalentFee: Number(t.baseTalentFee || 12000),
       metroManilaRate: Number(t.metroManilaRate || 18000),
       provincialRate: Number(t.provincialRate || 23400),
@@ -1326,6 +1328,19 @@ export default function UnifiedRosterPage() {
                           className="w-full px-3 py-2 font-mono"
                         />
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold mb-1">
+                        Base Location &amp; Preferred Coverage Cities (Used for Client Proximity Recommendations)
+                      </label>
+                      <input
+                        type="text"
+                        value={editForm.address || ""}
+                        onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                        placeholder="e.g. Makati, BGC, Ortigas, Quezon City, Clark Pampanga"
+                        className="w-full px-3 py-2 rounded-lg border border-[#D6C7C9] bg-[#FAF7F5] text-[#1E1416]"
+                      />
                     </div>
 
                     <div>

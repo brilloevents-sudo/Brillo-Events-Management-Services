@@ -112,6 +112,43 @@ export async function getIndexedDBTalents(): Promise<any[]> {
 }
 
 /**
+ * Load all talent overrides from LocalStorage and IndexedDB into a lookup map keyed by id and canonicalId.
+ */
+export async function loadAllTalentsFromStorage(): Promise<Record<string, any>> {
+  const map: Record<string, any> = {};
+  if (typeof localStorage !== "undefined") {
+    try {
+      const raw = localStorage.getItem(LOCAL_STORAGE_EDITS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          for (const [k, val] of Object.entries(parsed)) {
+            if (val && typeof val === "object") {
+              const clean = sanitizeTalentMedia(val);
+              map[k] = clean;
+              if (clean.id) map[clean.id] = clean;
+              if (clean.canonicalId) map[clean.canonicalId] = clean;
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+
+  try {
+    const idbList = await getIndexedDBTalents();
+    for (const item of idbList) {
+      if (item && item.id) {
+        map[item.id] = item;
+        if (item.canonicalId) map[item.canonicalId] = item;
+      }
+    }
+  } catch {}
+
+  return map;
+}
+
+/**
  * Save a single talent record into IndexedDB and update LocalStorage metadata safely.
  * IndexedDB holds the full multi-megabyte base64 photos & videos for all Santas without a 5MB cap.
  */

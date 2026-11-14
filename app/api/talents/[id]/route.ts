@@ -137,6 +137,7 @@ export async function PATCH(
       height,
       nationality,
       phone,
+      address,
       bio,
       baseTalentFee,
       metroManilaRate,
@@ -371,6 +372,7 @@ export async function PATCH(
     if (height !== undefined) updates.height = height;
     if (nationality !== undefined) updates.nationality = nationality;
     if (phone !== undefined) updates.phone = phone;
+    if (address !== undefined) updates.address = address;
     if (bio !== undefined) updates.bio = bio;
     if (baseTalentFee !== undefined) updates.baseTalentFee = Number(baseTalentFee);
     if (metroManilaRate !== undefined) updates.metroManilaRate = Number(metroManilaRate);

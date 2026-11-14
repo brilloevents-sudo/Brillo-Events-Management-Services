@@ -12,6 +12,8 @@ import {
   MapPin,
   Calculator,
   Phone,
+  Star,
+  Clock,
 } from "lucide-react";
 import {
   SANTA_EVENT_ACTIVITIES,
@@ -20,6 +22,14 @@ import {
   SantaRateTerritory,
   SantaEventActivityTag,
 } from "@/lib/costing";
+import {
+  evaluateSantaAvailabilityForDate,
+  formatShortHolidayDate,
+} from "@/lib/santa-availability";
+import {
+  loadAllTalentsFromStorage,
+  subscribeToTalentUpdates,
+} from "@/lib/talent-storage";
 
 export default function RequestQuotePage() {
   return (
@@ -70,21 +80,48 @@ function RequestQuoteForm() {
   const [consentAgreed] = useState(true);
 
   useEffect(() => {
-    fetch("/api/talents?publicOnly=true")
-      .then((res) => res.json())
-      .then((d) => {
-        if (d.talents) {
-          setTalents(d.talents);
-          const initialTalent = searchParams.get("talent");
-          if (initialTalent) setTalentPreferenceId(initialTalent);
-        }
-      })
-      .catch(() => {});
+    async function loadPublicTalents() {
+      try {
+        const res = await fetch("/api/talents?publicOnly=true", { cache: "no-store" });
+        const d = await res.json();
+        const apiTalents = Array.isArray(d?.talents) ? d.talents : [];
+        const storedMap: Record<string, any> = await loadAllTalentsFromStorage().catch(
+          () => ({})
+        );
+        const merged = apiTalents
+          .map((t: any) => {
+            const override =
+              storedMap[t.id] || (t.canonicalId ? storedMap[t.canonicalId] : null);
+            if (!override) return t;
+            return {
+              ...t,
+              ...override,
+              images:
+                Array.isArray(override.images) &&
+                (override.images.length > 0 || override.explicitlyClearedImages)
+                  ? override.images
+                  : t.images,
+              publicSchedule: t.publicSchedule || override.publicSchedule || [],
+            };
+          })
+          .filter((t: any) => Boolean(t.approvedForPublicDisplay));
+
+        setTalents(merged);
+        const initialTalent = searchParams.get("talent");
+        if (initialTalent) setTalentPreferenceId(initialTalent);
+      } catch {}
+    }
+
+    loadPublicTalents();
+    const unsub = subscribeToTalentUpdates(() => {
+      loadPublicTalents();
+    });
 
     const pkg = searchParams.get("package");
     const tierParam = searchParams.get("tier");
     const typeParam = searchParams.get("type");
     const dateParam = searchParams.get("date");
+    const cityParam = searchParams.get("city") || searchParams.get("location");
 
     if (pkg === "provincial") setRateTerritory("OUT_OF_TOWN");
     if (pkg === "holiday") setRateTerritory("HOLIDAY");
@@ -105,6 +142,12 @@ function RequestQuoteForm() {
         setRateTerritory("HOLIDAY");
       }
     }
+
+    if (cityParam) {
+      setCity(cityParam);
+    }
+
+    return () => unsub();
   }, [searchParams]);
 
   // Automatically sync endTime when startTime or durationHours changes
@@ -801,27 +844,226 @@ function RequestQuoteForm() {
               </div>
             </div>
 
-            {/* STEP 6: SANTA PREFERENCE & NOTES */}
+            {/* STEP 6: SANTA PREFERENCE & LOCATION-BASED RECOMMENDATIONS */}
             <div className="pt-5 border-t border-[#EFE5DA] space-y-4">
-              <label className="block text-[#211619] font-bold text-sm">
-                6. Preferred Santa Performer &amp; Event Notes
-              </label>
-              <div>
-                <select
-                  value={talentPreferenceId}
-                  onChange={(e) => setTalentPreferenceId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-[#FFF8F0] border border-[#D8C9BA] rounded-xl text-[#211619] focus:outline-none focus:border-[#780D22]"
-                >
-                  <option value="">
-                    Recommend best available performer for {liveQuote.santaTierLabel}
-                  </option>
-                  {talents.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      Santa {t.displayName} ({t.nationality || "Real Beard"}, {t.height})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {(() => {
+                const combinedLocation = `${venueName} ${city}`.trim();
+                const evaluation = evaluateSantaAvailabilityForDate(
+                  talents,
+                  eventDate,
+                  combinedLocation
+                );
+                const evaluatedSantas = evaluation.santas;
+                const availableRecommended = evaluatedSantas.filter(
+                  (s) => s.isAvailableOnDate
+                );
+                const selectedSantaObj = evaluatedSantas.find(
+                  (s) => s.id === talentPreferenceId
+                );
+
+                return (
+                  <>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <label className="block text-[#211619] font-bold text-sm">
+                        6. Preferred Santa Performer &amp; Location Recommendations
+                      </label>
+                      {eventDate && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] font-bold">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>
+                            {evaluation.summary.availableCount} Available •{" "}
+                            {evaluation.summary.bookedCount} Booked on{" "}
+                            {formatShortHolidayDate(eventDate)}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Smart Location & Date Recommendation Strip */}
+                    {evaluatedSantas.length > 0 && (
+                      <div className="p-4 rounded-2xl bg-[#FFF8F0] border border-[#D6B36A]/70 space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-[#780D22]">
+                            <MapPin className="w-4 h-4 shrink-0" />
+                            <span>
+                              Recommended Available Santas Near{" "}
+                              <span className="underline">
+                                {venueName
+                                  ? `${venueName} (${city || "Metro Manila"})`
+                                  : city || "Metro Manila"}
+                              </span>
+                              {eventDate
+                                ? ` for ${formatShortHolidayDate(eventDate)}`
+                                : ""}
+                            </span>
+                          </div>
+                          <Link
+                            href={`/availability`}
+                            className="text-[11px] font-bold text-[#780D22] hover:underline"
+                          >
+                            Full Availability Calendar →
+                          </Link>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          {(availableRecommended.length > 0
+                            ? availableRecommended
+                            : evaluatedSantas
+                          )
+                            .slice(0, 6)
+                            .map((s) => {
+                              const isChosen = talentPreferenceId === s.id;
+                              return (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onClick={() =>
+                                    setTalentPreferenceId(
+                                      isChosen ? "" : s.id
+                                    )
+                                  }
+                                  className={`p-3 rounded-xl border text-left transition flex items-start gap-2.5 ${
+                                    isChosen
+                                      ? "bg-[#780D22] border-[#D6B36A] text-white shadow-md"
+                                      : s.isAvailableOnDate &&
+                                        s.locationMatch.isNearClient
+                                      ? "bg-white border-[#D6B36A] hover:border-[#780D22] text-[#211619]"
+                                      : "bg-white border-[#E8DCD0] hover:border-[#D6B36A] text-[#211619]"
+                                  }`}
+                                >
+                                  <img
+                                    src={s.primaryImageUrl}
+                                    alt={`Santa ${s.displayName}`}
+                                    className="w-12 h-14 rounded-lg object-cover border border-[#D6B36A]/50 shrink-0"
+                                  />
+                                  <div className="min-w-0 flex-1 space-y-1">
+                                    <div className="font-bold text-xs truncate">
+                                      Santa {s.displayName}
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {s.locationMatch.isNearClient && (
+                                        <span
+                                          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                            isChosen
+                                              ? "bg-black/30 text-[#F3D899]"
+                                              : "bg-[#780D22] text-[#F3D899]"
+                                          }`}
+                                        >
+                                          <Star className="w-2.5 h-2.5 fill-current" />
+                                          Near You
+                                        </span>
+                                      )}
+                                      {eventDate && (
+                                        <span
+                                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                            s.isAvailableOnDate
+                                              ? isChosen
+                                                ? "bg-emerald-500 text-white"
+                                                : "bg-emerald-100 text-emerald-800"
+                                              : "bg-amber-100 text-amber-900"
+                                          }`}
+                                        >
+                                          {s.isAvailableOnDate
+                                            ? "✓ Available"
+                                            : "● Booked"}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div
+                                      className={`text-[10px] truncate ${
+                                        isChosen
+                                          ? "text-white/80"
+                                          : "text-[#6E5D5F]"
+                                      }`}
+                                    >
+                                      📍 {s.baseCity}
+                                    </div>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <select
+                        value={talentPreferenceId}
+                        onChange={(e) => setTalentPreferenceId(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-[#FFF8F0] border border-[#D8C9BA] rounded-xl text-[#211619] focus:outline-none focus:border-[#780D22]"
+                      >
+                        <option value="">
+                          ★ Auto-Recommend Nearest Available Santa for{" "}
+                          {city || "Your Location"} ({liveQuote.santaTierLabel})
+                        </option>
+                        {evaluatedSantas.map((t) => {
+                          const statusTag = eventDate
+                            ? t.isAvailableOnDate
+                              ? t.locationMatch.isNearClient
+                                ? `★ Near ${city || "Your Area"} • Available on ${formatShortHolidayDate(
+                                    eventDate
+                                  )}`
+                                : `✓ Available on ${formatShortHolidayDate(
+                                    eventDate
+                                  )}`
+                              : `● Already Booked on ${formatShortHolidayDate(
+                                  eventDate
+                                )} (${
+                                  t.bookedSlots[0]?.timeRangeLabel || "Booked"
+                                })`
+                            : t.locationMatch.isNearClient
+                            ? `★ Recommended Near ${city || "Your Area"}`
+                            : `Covers: ${t.baseCity}`;
+
+                          return (
+                            <option key={t.id} value={t.id}>
+                              Santa {t.displayName} — {statusTag} (
+                              {t.nationality || "Real Beard"}
+                              {t.height ? `, ${t.height}` : ""})
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    {/* Alert if selected Santa is already booked on chosen date */}
+                    {eventDate &&
+                      selectedSantaObj &&
+                      !selectedSantaObj.isAvailableOnDate && (
+                        <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 space-y-2 text-xs">
+                          <div className="flex items-start gap-2 font-bold">
+                            <Clock className="w-4 h-4 text-amber-800 shrink-0 mt-0.5" />
+                            <span>
+                              Santa {selectedSantaObj.displayName} is already booked on{" "}
+                              {formatShortHolidayDate(eventDate)} (
+                              {selectedSantaObj.bookedSlots
+                                .map((s) => s.timeRangeLabel)
+                                .join(", ")}
+                              ).
+                            </span>
+                          </div>
+                          {selectedSantaObj.nextAvailableDates.length > 0 && (
+                            <div className="pl-6 flex flex-wrap items-center gap-1.5">
+                              <span className="text-[11px] font-semibold">
+                                Switch to Santa {selectedSantaObj.displayName}&apos;s next open date:
+                              </span>
+                              {selectedSantaObj.nextAvailableDates.map((nd) => (
+                                <button
+                                  key={nd.date}
+                                  type="button"
+                                  onClick={() => handleDateChange(nd.date)}
+                                  className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#780D22] text-[#211619] hover:text-white border border-amber-400 text-[10px] font-bold transition"
+                                >
+                                  📅 {nd.shortLabel}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                  </>
+                );
+              })()}
 
               <div>
                 <label className="block text-[#5C494E] font-medium mb-1">

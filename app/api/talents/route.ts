@@ -23,22 +23,24 @@ export async function GET(req: NextRequest) {
       include: {
         images: true,
         aliases: true,
-        assignments: auth.authorized
-          ? {
-              include: {
-                booking: {
-                  select: {
-                    id: true,
-                    bookingNumber: true,
-                    eventName: true,
-                    eventDate: true,
-                    mallOrVenue: true,
-                    status: true,
-                  },
-                },
+        assignments: {
+          include: {
+            booking: {
+              select: {
+                id: true,
+                bookingNumber: true,
+                eventName: true,
+                eventDate: true,
+                startTime: true,
+                endTime: true,
+                durationHours: true,
+                mallOrVenue: true,
+                city: true,
+                status: true,
               },
-            }
-          : false,
+            },
+          },
+        },
       },
       orderBy: { displayName: "asc" },
     });
@@ -53,6 +55,22 @@ export async function GET(req: NextRequest) {
           ...t,
           baseTalentFee: 0,
           phone: "",
+          publicSchedule: (t.assignments || [])
+            .filter(
+              (a: any) =>
+                a.status !== "CANCELLED" &&
+                a.status !== "DECLINED" &&
+                a.booking &&
+                a.booking.status !== "CANCELLED" &&
+                a.booking.status !== "DECLINED"
+            )
+            .map((a: any) => ({
+              eventDate: a.booking.eventDate,
+              startTime: a.booking.startTime || "14:00",
+              endTime: a.booking.endTime || "18:00",
+              durationHours: a.booking.durationHours || 4,
+              status: a.booking.status,
+            })),
           assignments: [],
         }));
 

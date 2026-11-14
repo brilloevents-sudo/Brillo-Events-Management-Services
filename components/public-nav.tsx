@@ -3,13 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Calendar, Sparkles, Menu, X, Phone, LogIn, User, ShieldCheck } from "lucide-react";
-import { useAuth } from "@/components/auth-context";
+import { Calendar, Sparkles, Menu, X, Phone } from "lucide-react";
 
 export function PublicNav() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user } = useAuth();
 
   const links = [
     { href: "/", label: "Home" },
@@ -20,19 +18,6 @@ export function PublicNav() {
     { href: "/#faq", label: "FAQs" },
     { href: "/availability", label: "Check Dates" },
   ];
-
-  const portalHref = !user
-    ? "/client-login"
-    : user.role === "CLIENT"
-    ? "/portal"
-    : "/admin";
-  const portalLabel = !user
-    ? "Client Portal"
-    : user.role === "CLIENT"
-    ? "My Portal"
-    : user.role === "CREATOR"
-    ? "Creator Hub"
-    : "Admin Hub";
 
   return (
     <header className="sticky top-0 z-50 bg-[#211619]/95 backdrop-blur-md border-b border-[#D6B36A]/25 font-body">
@@ -73,7 +58,7 @@ export function PublicNav() {
             })}
           </nav>
 
-          {/* Right CTAs & Protected Login Link */}
+          {/* Right CTAs */}
           <div className="hidden md:flex items-center space-x-3">
             <a
               href="tel:09278872343"
@@ -82,20 +67,6 @@ export function PublicNav() {
               <Phone className="w-3.5 h-3.5" />
               <span>0927 887 2343</span>
             </a>
-
-            <Link
-              href={portalHref}
-              className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#FFF8F0]/90 hover:text-[#D6B36A] px-3.5 py-2 rounded-xl border border-[#D6B36A]/35 hover:border-[#D6B36A] bg-white/5 transition"
-            >
-              {!user ? (
-                <LogIn className="w-3.5 h-3.5 text-[#D6B36A]" />
-              ) : user.role === "CLIENT" ? (
-                <User className="w-3.5 h-3.5 text-[#D6B36A]" />
-              ) : (
-                <ShieldCheck className="w-3.5 h-3.5 text-[#D6B36A]" />
-              )}
-              <span>{portalLabel}</span>
-            </Link>
 
             <Link
               href="/#inquiry-form"
@@ -146,13 +117,6 @@ export function PublicNav() {
               className="w-full text-center py-2.5 rounded-xl font-medium text-xs text-[#D6B36A] border border-[#D6B36A]/35"
             >
               Open Full Quotation Calculator
-            </Link>
-            <Link
-              href={portalHref}
-              onClick={() => setMobileMenuOpen(false)}
-              className="w-full text-center py-2.5 rounded-xl text-xs font-semibold text-[#FFF8F0] bg-white/5 border border-white/15"
-            >
-              {portalLabel}
             </Link>
           </div>
         </div>

@@ -11,8 +11,22 @@ export async function GET(request: NextRequest) {
 
     const where: any = {};
 
-    if (filter === "NEW") {
+    if (filter === "NEW" || filter === "NEW_LEAD") {
       where.status = { in: ["INQUIRY_RECEIVED", "NEW_INQUIRY", "TEMPORARY_HOLD", "HOLD_24H_ACTIVE"] };
+    } else if (filter === "BOOKED") {
+      where.status = {
+        in: [
+          "READY_FOR_DEPLOYMENT",
+          "CONFIRMED",
+          "ROSTER_LOCKED_DISPATCHED",
+          "EVENT_DELIVERED",
+          "DEPLOYED",
+        ],
+      };
+    } else if (filter === "COMPLETED") {
+      where.status = { in: ["FINANCIALLY_SETTLED", "COMPLETED", "SETTLED"] };
+    } else if (filter === "CANCELLED") {
+      where.status = { in: ["CANCELLED", "DECLINED", "EXPIRED"] };
     } else if (filter === "CORPORATE") {
       where.bookingType = { in: ["CORPORATE", "CORPORATE_MALL", "MALL_TOUR"] };
     } else if (filter === "PRIVATE") {
@@ -70,7 +84,7 @@ export async function GET(request: NextRequest) {
         payments: true,
       },
       orderBy: [{ pipelineStage: "asc" }, { createdAt: "desc" }],
-      take: 100,
+      take: 500,
     });
 
     return NextResponse.json({ success: true, leads });

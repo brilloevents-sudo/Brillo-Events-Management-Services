@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
   Search,
@@ -16,8 +16,10 @@ import {
   Clock,
   CheckCircle2,
   Sparkles,
-  Calculator,
   ExternalLink,
+  Filter,
+  Wand2,
+  ArrowUpDown,
 } from "lucide-react";
 import {
   normalizeToLifecycleState,
@@ -30,6 +32,149 @@ import {
   SantaRateTerritory,
   SantaEventActivityTag,
 } from "@/lib/costing";
+
+const PRESET_CUSTOM_TAGS = [
+  "New Lead",
+  "Booked",
+  "Priority VIP",
+  "Follow-Up Needed",
+  "50% DP Paid",
+  "Full Payment",
+  "Date Confirmed",
+  "Peak Holiday",
+];
+
+const CRM_STAGE_OPTIONS = [
+  {
+    value: "INQUIRY_RECEIVED",
+    shortBadge: "NEW LEAD",
+    pillLabel: "🟢 New Lead",
+    step: "Stage 1",
+    label: "1. New Lead (Inquiry Received)",
+    calendarStatus: "Confirming",
+    badgeColor: "bg-emerald-50 text-emerald-800 border-emerald-300",
+  },
+  {
+    value: "HOLD_24H_ACTIVE",
+    shortBadge: "24H HOLD",
+    pillLabel: "🟡 24h Hold",
+    step: "Stage 2",
+    label: "2. 24h Calendar Hold Active",
+    calendarStatus: "Confirming (24h Hold)",
+    badgeColor: "bg-amber-50 text-amber-900 border-amber-300",
+  },
+  {
+    value: "QUOTE_ISSUED",
+    shortBadge: "QUOTED",
+    pillLabel: "📄 Quoted",
+    step: "Stage 3",
+    label: "3. Official Quote Issued",
+    calendarStatus: "Confirming (Quoted)",
+    badgeColor: "bg-blue-50 text-blue-800 border-blue-300",
+  },
+  {
+    value: "CONTRACT_SENT",
+    shortBadge: "PENDING DP",
+    pillLabel: "✍️ Contract / Pending DP",
+    step: "Stage 3B",
+    label: "3B. Contract Sent / Pending DP",
+    calendarStatus: "Confirming (Contract Sent)",
+    badgeColor: "bg-purple-50 text-purple-800 border-purple-300",
+  },
+  {
+    value: "AWAITING_STAFF_SIGNOFF",
+    shortBadge: "SIGNOFF",
+    pillLabel: "⏳ Awaiting Signoff",
+    step: "Stage 4",
+    label: "4. Awaiting Dual-Gate Signoff",
+    calendarStatus: "Confirming (Signoff)",
+    badgeColor: "bg-orange-50 text-orange-900 border-orange-300",
+  },
+  {
+    value: "READY_FOR_DEPLOYMENT",
+    shortBadge: "BOOKED",
+    pillLabel: "✅ Booked / Confirmed",
+    step: "Stage 5",
+    label: "5. Booked • Confirmed & Dispatched",
+    calendarStatus: "Confirmed",
+    badgeColor: "bg-[#E8F5E9] text-[#1B5E20] border-[#A5D6A7]",
+  },
+  {
+    value: "FINANCIALLY_SETTLED",
+    shortBadge: "COMPLETED",
+    pillLabel: "🏆 Completed & Settled",
+    step: "Stage 6",
+    label: "6. Completed & Financially Settled",
+    calendarStatus: "Confirmed • Settled",
+    badgeColor: "bg-teal-50 text-teal-900 border-teal-300",
+  },
+  {
+    value: "CANCELLED",
+    shortBadge: "CANCELLED",
+    pillLabel: "❌ Cancelled",
+    step: "Closed",
+    label: "Cancelled / Released",
+    calendarStatus: "Cancelled",
+    badgeColor: "bg-rose-50 text-rose-800 border-rose-300",
+  },
+];
+
+function getStageOption(status?: string) {
+  const raw = String(status || "INQUIRY_RECEIVED").toUpperCase();
+  const direct = CRM_STAGE_OPTIONS.find((o) => o.value === raw);
+  if (direct) return direct;
+  const normalized = normalizeToLifecycleState(raw);
+  if (normalized === "ROSTER_LOCKED_DISPATCHED" || normalized === "EVENT_DELIVERED") {
+    return CRM_STAGE_OPTIONS.find((o) => o.value === "READY_FOR_DEPLOYMENT")!;
+  }
+  return (
+    CRM_STAGE_OPTIONS.find((o) => o.value === normalized) || CRM_STAGE_OPTIONS[0]
+  );
+}
+
+function formatShortDateLabel(dateInput?: string | Date | null): string {
+  if (!dateInput) return "TBD Date";
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return String(dateInput);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function toDateInputKey(dateInput?: string | Date | null): string {
+  if (!dateInput) return "";
+  if (typeof dateInput === "string" && /^\d{4}-\d{2}-\d{2}/.test(dateInput.trim())) {
+    return dateInput.trim().slice(0, 10);
+  }
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return "";
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(
+    d.getUTCDate()
+  ).padStart(2, "0")}`;
+}
+
+function buildAutoOrganizedDealName(params: {
+  eventDate?: string | Date | null;
+  status?: string;
+  venue?: string;
+  companyName?: string;
+  santaName?: string;
+  activityLabel?: string;
+}) {
+  const datePart = formatShortDateLabel(params.eventDate);
+  const stageOpt = getStageOption(params.status);
+  const venueOrClient =
+    (params.venue || "").trim() ||
+    (params.companyName || "").trim() ||
+    "Holiday Event";
+  const santaPart = params.santaName
+    ? `Santa ${params.santaName.replace(/^Santa\s+/i, "")}`
+    : params.activityLabel || "Santa Appearance";
+
+  return `[${datePart}] • [${stageOpt.shortBadge}] • ${venueOrClient} • ${santaPart}`;
+}
 
 function extractLeadTagsAndMeta(lead: any) {
   let meta: any = lead.ledgerMeta || {};
@@ -80,6 +225,27 @@ function extractLeadTagsAndMeta(lead: any) {
     lead.totalContractAmount || lead.clientQuotedAmount || pkg.totalQuotedRate
   );
 
+  const assignedSantaName =
+    lead.talentAssignments?.[0]?.talent?.displayName || "";
+  const customTags: string[] = Array.isArray(meta.customTags)
+    ? meta.customTags
+    : [];
+
+  const autoOrganizedTitle = buildAutoOrganizedDealName({
+    eventDate: lead.eventDate,
+    status: lead.status,
+    venue: lead.mallOrVenue,
+    companyName: lead.client?.companyName,
+    santaName: assignedSantaName,
+    activityLabel: pkg.eventActivityLabel,
+  });
+
+  const organizedDealName =
+    meta.organizedDealName ||
+    (lead.eventName && lead.eventName.startsWith("[")
+      ? lead.eventName
+      : autoOrganizedTitle);
+
   return {
     meta,
     santaTier,
@@ -93,68 +259,90 @@ function extractLeadTagsAndMeta(lead: any) {
     extraHourCharge: pkg.extraHourCharge,
     baseRate: pkg.baseRate,
     quotedAmount,
-    tags: meta.tags || pkg.tags,
+    tags: Array.from(new Set([...(meta.tags || pkg.tags || []), ...customTags])),
+    customTags,
+    organizedDealName,
+    autoOrganizedTitle,
   };
 }
 
-const CRM_STAGE_OPTIONS = [
-  {
-    value: "INQUIRY_RECEIVED",
-    step: "Stage 1",
-    label: "1. Inquiry Received (New Lead)",
-    calendarStatus: "Confirming",
-  },
-  {
-    value: "HOLD_24H_ACTIVE",
-    step: "Stage 2",
-    label: "2. 24h Calendar Hold Active",
-    calendarStatus: "Confirming (24h Hold)",
-  },
-  {
-    value: "QUOTE_ISSUED",
-    step: "Stage 3",
-    label: "3. Official Quote Issued",
-    calendarStatus: "Confirming (Quoted)",
-  },
-  {
-    value: "CONTRACT_SENT",
-    step: "Stage 3B",
-    label: "3B. Contract & E-Sign Sent",
-    calendarStatus: "Confirming (Contract Sent)",
-  },
-  {
-    value: "AWAITING_STAFF_SIGNOFF",
-    step: "Stage 4",
-    label: "4. Awaiting Dual-Gate Signoff",
-    calendarStatus: "Confirming (Signoff)",
-  },
-  {
-    value: "READY_FOR_DEPLOYMENT",
-    step: "Stage 5",
-    label: "5. Confirmed • Roster Locked & Dispatched",
-    calendarStatus: "Confirmed",
-  },
-  {
-    value: "FINANCIALLY_SETTLED",
-    step: "Stage 6",
-    label: "6. Financially Settled & Closed",
-    calendarStatus: "Confirmed • Settled",
-  },
-  {
-    value: "CANCELLED",
-    step: "Closed",
-    label: "Cancelled / Released",
-    calendarStatus: "Cancelled",
-  },
-];
+function matchesStatusTab(lead: any, statusTab: string): boolean {
+  if (statusTab === "ALL") return true;
+  const raw = String(lead.status || "INQUIRY_RECEIVED").toUpperCase();
+  const norm = normalizeToLifecycleState(raw);
+
+  if (statusTab === "NEW_LEAD") {
+    return (
+      raw === "INQUIRY_RECEIVED" ||
+      raw === "NEW_INQUIRY" ||
+      norm === "INQUIRY_RECEIVED"
+    );
+  }
+  if (statusTab === "QUOTED_HOLD") {
+    return (
+      raw === "HOLD_24H_ACTIVE" ||
+      raw === "TEMPORARY_HOLD" ||
+      raw === "QUOTE_ISSUED" ||
+      raw === "QUOTED" ||
+      norm === "HOLD_24H_ACTIVE" ||
+      norm === "QUOTE_ISSUED"
+    );
+  }
+  if (statusTab === "PENDING_DP") {
+    return (
+      raw === "CONTRACT_SENT" ||
+      raw === "CONTRACT_SIGNED_PENDING_DEPOSIT" ||
+      raw === "AWAITING_STAFF_SIGNOFF" ||
+      raw === "AWAITING_STAFF_APPROVAL" ||
+      norm === "CONTRACT_SENT" ||
+      norm === "AWAITING_STAFF_SIGNOFF"
+    );
+  }
+  if (statusTab === "BOOKED") {
+    return (
+      raw === "READY_FOR_DEPLOYMENT" ||
+      raw === "CONFIRMED" ||
+      raw === "ROSTER_LOCKED_DISPATCHED" ||
+      raw === "DEPLOYED" ||
+      norm === "ROSTER_LOCKED_DISPATCHED"
+    );
+  }
+  if (statusTab === "COMPLETED") {
+    return (
+      raw === "FINANCIALLY_SETTLED" ||
+      raw === "COMPLETED" ||
+      raw === "EVENT_DELIVERED" ||
+      norm === "FINANCIALLY_SETTLED" ||
+      norm === "EVENT_DELIVERED"
+    );
+  }
+  if (statusTab === "CANCELLED") {
+    return (
+      raw === "CANCELLED" ||
+      raw === "DECLINED" ||
+      raw === "EXPIRED" ||
+      norm === "CANCELLED"
+    );
+  }
+  return true;
+}
 
 export default function UnifiedCrmPipelinePage() {
   const [leads, setLeads] = useState<any[]>([]);
   const [talents, setTalents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"LIST" | "KANBAN">("LIST");
+
+  // Organized Filter States
+  const [statusTab, setStatusTab] = useState<string>("ALL");
+  const [monthFilter, setMonthFilter] = useState<string>("ALL_DATES");
+  const [specificDateFilter, setSpecificDateFilter] = useState<string>("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("ALL_CATEGORIES");
+  const [sortBy, setSortBy] = useState<
+    "NEWEST_LEAD" | "DATE_ASC" | "DATE_DESC" | "RATE_DESC"
+  >("NEWEST_LEAD");
   const [search, setSearch] = useState("");
-  const [activeFilter, setActiveFilter] = useState("ALL");
+
   const [selectedLead, setSelectedLead] = useState<any | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -181,6 +369,9 @@ export default function UnifiedCrmPipelinePage() {
   const [formVenue, setFormVenue] = useState<string>("");
   const [formCity, setFormCity] = useState<string>("Metro Manila");
   const [formEventName, setFormEventName] = useState<string>("");
+  const [formAutoNameEnabled, setFormAutoNameEnabled] = useState<boolean>(true);
+  const [formCustomTags, setFormCustomTags] = useState<string[]>(["New Lead"]);
+  const [formCustomTagInput, setFormCustomTagInput] = useState<string>("");
   const [formEventDate, setFormEventDate] = useState<string>("2026-11-15");
   const [formStartTime, setFormStartTime] = useState<string>("14:00");
   const [formEndTime, setFormEndTime] = useState<string>("17:00");
@@ -196,13 +387,13 @@ export default function UnifiedCrmPipelinePage() {
   const fetchCrmData = () => {
     setLoading(true);
     Promise.all([
-      fetch(`/api/leads?filter=${activeFilter}&search=${encodeURIComponent(search)}`).then(
-        (res) => res.json()
-      ),
-      fetch("/api/talents").then((res) => res.json()).catch(() => ({ talents: [] })),
+      fetch(`/api/leads?filter=ALL`).then((res) => res.json()),
+      fetch("/api/talents")
+        .then((res) => res.json())
+        .catch(() => ({ talents: [] })),
     ])
       .then(([d, tData]) => {
-        if (d.success && d.leads) setLeads(d.leads);
+        if (d.success && Array.isArray(d.leads)) setLeads(d.leads);
         if (tData?.talents) setTalents(tData.talents);
       })
       .catch(console.error)
@@ -211,7 +402,7 @@ export default function UnifiedCrmPipelinePage() {
 
   useEffect(() => {
     fetchCrmData();
-  }, [activeFilter, search]);
+  }, []);
 
   // Live rate card calculation inside modal
   const modalLivePkg = calculateSantaPackageQuote({
@@ -234,6 +425,45 @@ export default function UnifiedCrmPipelinePage() {
     modalLivePkg.totalQuotedRate,
   ]);
 
+  // Auto-update Organized Deal Name when formAutoNameEnabled is true
+  useEffect(() => {
+    if (!formAutoNameEnabled) return;
+    const selectedTalentObj = talents.find((t) => t.id === formTalentId);
+    const generated = buildAutoOrganizedDealName({
+      eventDate: formEventDate,
+      status: formStatus,
+      venue: formVenue,
+      companyName: formCompanyName,
+      santaName: selectedTalentObj?.displayName,
+      activityLabel: modalLivePkg.eventActivityLabel,
+    });
+    setFormEventName(generated);
+  }, [
+    formAutoNameEnabled,
+    formEventDate,
+    formStatus,
+    formVenue,
+    formCompanyName,
+    formTalentId,
+    modalLivePkg.eventActivityLabel,
+    talents,
+  ]);
+
+  const handleToggleCustomTag = (tag: string) => {
+    setFormCustomTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
+
+  const handleAddCustomTagInput = () => {
+    const clean = formCustomTagInput.trim();
+    if (!clean) return;
+    if (!formCustomTags.includes(clean)) {
+      setFormCustomTags((prev) => [...prev, clean]);
+    }
+    setFormCustomTagInput("");
+  };
+
   const openNewInquiryModal = () => {
     setEditingLeadId(null);
     setFormSantaTier("REAL_BEARD");
@@ -250,8 +480,10 @@ export default function UnifiedCrmPipelinePage() {
     setFormPhone("");
     setFormVenue("");
     setFormCity("Metro Manila");
-    setFormEventName("");
-    setFormEventDate("2026-11-15");
+    setFormAutoNameEnabled(true);
+    setFormCustomTags(["New Lead"]);
+    setFormCustomTagInput("");
+    setFormEventDate(specificDateFilter || "2026-11-15");
     setFormStartTime("14:00");
     setFormEndTime("17:00");
     setFormTalentId("");
@@ -263,12 +495,7 @@ export default function UnifiedCrmPipelinePage() {
   const openEditLeadModal = (lead: any, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const info = extractLeadTagsAndMeta(lead);
-    const dObj = new Date(lead.eventDate);
-    const dateStr = !isNaN(dObj.getTime())
-      ? `${dObj.getUTCFullYear()}-${String(dObj.getUTCMonth() + 1).padStart(2, "0")}-${String(
-          dObj.getUTCDate()
-        ).padStart(2, "0")}`
-      : "2026-11-15";
+    const dateStr = toDateInputKey(lead.eventDate) || "2026-11-15";
 
     setEditingLeadId(lead.id);
     setFormSantaTier(info.santaTier);
@@ -287,7 +514,14 @@ export default function UnifiedCrmPipelinePage() {
     setFormPhone(lead.client?.phone || "");
     setFormVenue(lead.mallOrVenue || "");
     setFormCity(lead.city || lead.locationCity || "Metro Manila");
-    setFormEventName(lead.eventName || "");
+    setFormAutoNameEnabled(false);
+    setFormEventName(info.organizedDealName || lead.eventName || "");
+    setFormCustomTags(
+      info.customTags.length > 0
+        ? info.customTags
+        : [getStageOption(lead.status).shortBadge === "BOOKED" ? "Booked" : "New Lead"]
+    );
+    setFormCustomTagInput("");
     setFormEventDate(dateStr);
     setFormStartTime(lead.startTime || "14:00");
     setFormEndTime(lead.endTime || "17:00");
@@ -307,6 +541,22 @@ export default function UnifiedCrmPipelinePage() {
     e.preventDefault();
     setSaving(true);
     try {
+      const selectedTalentObj = talents.find((t) => t.id === formTalentId);
+      const effectiveDealName =
+        formEventName.trim() ||
+        buildAutoOrganizedDealName({
+          eventDate: formEventDate,
+          status: formStatus,
+          venue: formVenue,
+          companyName: formCompanyName,
+          santaName: selectedTalentObj?.displayName,
+          activityLabel: modalLivePkg.eventActivityLabel,
+        });
+
+      const mergedTags = Array.from(
+        new Set([...(modalLivePkg.tags || []), ...formCustomTags])
+      );
+
       const ledgerMeta = {
         santaTier: modalLivePkg.santaTier,
         santaTierLabel: modalLivePkg.santaTierLabel,
@@ -318,14 +568,18 @@ export default function UnifiedCrmPipelinePage() {
         extraHours: modalLivePkg.extraHours,
         extraHourCharge: modalLivePkg.extraHourCharge,
         baseRate: modalLivePkg.baseRate,
-        tags: modalLivePkg.tags,
+        tags: mergedTags,
+        customTags: formCustomTags,
+        organizedDealName: effectiveDealName,
         dpStatus: formDepositPaid > 0 ? "Paid" : "Pending",
         collectiblesStatus:
           formQuotedAmount - formDepositPaid <= 0 && formQuotedAmount > 0
             ? "Collected"
             : "Pending",
         contractStatus:
-          formStatus === "READY_FOR_DEPLOYMENT" ? "Signed Contract" : "Quotation / Draft",
+          formStatus === "READY_FOR_DEPLOYMENT"
+            ? "Signed Contract"
+            : "Quotation / Draft",
       };
 
       const internalNotesEncoded = `CRM Quotation Record ||LEDGER_META:${JSON.stringify(
@@ -348,9 +602,9 @@ export default function UnifiedCrmPipelinePage() {
             phone: formPhone,
             mallOrVenue: formVenue,
             city: formCity,
-            bookingType: formActivityTag === "PRIVATE_PARTY" ? "PRIVATE" : "CORPORATE",
-            eventName:
-              formEventName || `${formVenue} — ${modalLivePkg.eventActivityLabel}`,
+            bookingType:
+              formActivityTag === "PRIVATE_PARTY" ? "PRIVATE" : "CORPORATE",
+            eventName: effectiveDealName,
             eventDate: formEventDate,
             startTime: formStartTime,
             endTime: formEndTime,
@@ -370,8 +624,9 @@ export default function UnifiedCrmPipelinePage() {
           }),
         });
         const data = await res.json();
-        if (!data.success) throw new Error(data.error || "Failed to update CRM lead");
-        showToast("Updated quotation & synced to Dashboard, Calendar & CRM!");
+        if (!data.success)
+          throw new Error(data.error || "Failed to update CRM deal");
+        showToast("Updated CRM deal & synced to Dashboard and Master Calendar!");
         if (selectedLead?.id === editingLeadId) {
           setSelectedLead(data.booking);
         }
@@ -380,13 +635,15 @@ export default function UnifiedCrmPipelinePage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            clientName: formContactPerson || formCompanyName || "Client Contact",
+            clientName:
+              formContactPerson || formCompanyName || "Client Contact",
             companyName: formCompanyName || formVenue,
             email: formEmail || "events@client.local",
             phone: formPhone || "0917 000 0000",
-            bookingType: formActivityTag === "PRIVATE_PARTY" ? "PRIVATE" : "CORPORATE",
-            eventName:
-              formEventName || `${formVenue} — ${modalLivePkg.eventActivityLabel}`,
+            bookingType:
+              formActivityTag === "PRIVATE_PARTY" ? "PRIVATE" : "CORPORATE",
+            eventName: effectiveDealName,
+            organizedDealName: effectiveDealName,
             eventDate: formEventDate,
             startTime: formStartTime,
             endTime: formEndTime,
@@ -399,15 +656,21 @@ export default function UnifiedCrmPipelinePage() {
             rateTerritory: formRateTerritory,
             eventActivityTag: formActivityTag,
             clientQuotedAmount: formQuotedAmount,
+            depositPaid: formDepositPaid,
+            agreedTalentFee: formAgreedTf,
+            status: formStatus,
+            customTags: formCustomTags,
+            ledgerMeta,
             specialRequests: formNotes,
             talentPreferenceId: formTalentId || undefined,
             consentAgreed: true,
           }),
         });
         const data = await res.json();
-        if (!data.success) throw new Error(data.error || "Failed to create quotation");
+        if (!data.success)
+          throw new Error(data.error || "Failed to create CRM deal");
         showToast(
-          `Created Quotation ${data.bookingNumber} — Live on Dashboard, Calendar & CRM!`
+          `Created CRM Deal ${data.bookingNumber} (${getStageOption(formStatus).shortBadge})!`
         );
       }
 
@@ -427,6 +690,23 @@ export default function UnifiedCrmPipelinePage() {
   ) => {
     if (e) e.stopPropagation();
     try {
+      const info = extractLeadTagsAndMeta(lead);
+      const assignedSantaName =
+        lead.talentAssignments?.[0]?.talent?.displayName || "";
+      const updatedOrganizedName = buildAutoOrganizedDealName({
+        eventDate: lead.eventDate,
+        status: newStatus,
+        venue: lead.mallOrVenue,
+        companyName: lead.client?.companyName,
+        santaName: assignedSantaName,
+        activityLabel: info.eventActivityLabel,
+      });
+
+      const updatedLedgerMeta = {
+        ...info.meta,
+        organizedDealName: updatedOrganizedName,
+      };
+
       const res = await fetch(`/api/bookings/${lead.id}`, {
         method: "PATCH",
         headers: {
@@ -436,11 +716,14 @@ export default function UnifiedCrmPipelinePage() {
         body: JSON.stringify({
           isCalendarDirectEdit: true,
           status: newStatus,
+          eventName: updatedOrganizedName,
+          ledgerMeta: updatedLedgerMeta,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        showToast(`Moved ${lead.bookingNumber} → ${newStatus.replace(/_/g, " ")}`);
+        const opt = getStageOption(newStatus);
+        showToast(`Updated ${lead.bookingNumber} → ${opt.shortBadge}`);
         if (selectedLead?.id === lead.id) {
           setSelectedLead(data.booking);
         }
@@ -453,7 +736,13 @@ export default function UnifiedCrmPipelinePage() {
 
   const handleDeleteLead = async (lead: any, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!confirm(`Delete quotation / booking ${lead.bookingNumber} (${lead.mallOrVenue})?`))
+    if (
+      !confirm(
+        `Delete CRM deal ${lead.bookingNumber || ""} (${
+          lead.mallOrVenue || lead.eventName || "Deal"
+        })?`
+      )
+    )
       return;
     try {
       const res = await fetch(`/api/bookings/${lead.id}`, {
@@ -462,7 +751,7 @@ export default function UnifiedCrmPipelinePage() {
       });
       const data = await res.json();
       if (data.success) {
-        showToast(`Deleted ${lead.bookingNumber}`);
+        showToast(`Deleted ${lead.bookingNumber || "CRM Deal"}`);
         if (selectedLead?.id === lead.id) setSelectedLead(null);
         setIsModalOpen(false);
         fetchCrmData();
@@ -472,50 +761,180 @@ export default function UnifiedCrmPipelinePage() {
     }
   };
 
+  // Compute live counts for each Status Tab
+  const statusCounts = useMemo(() => {
+    return {
+      ALL: leads.length,
+      NEW_LEAD: leads.filter((l) => matchesStatusTab(l, "NEW_LEAD")).length,
+      QUOTED_HOLD: leads.filter((l) => matchesStatusTab(l, "QUOTED_HOLD")).length,
+      PENDING_DP: leads.filter((l) => matchesStatusTab(l, "PENDING_DP")).length,
+      BOOKED: leads.filter((l) => matchesStatusTab(l, "BOOKED")).length,
+      COMPLETED: leads.filter((l) => matchesStatusTab(l, "COMPLETED")).length,
+      CANCELLED: leads.filter((l) => matchesStatusTab(l, "CANCELLED")).length,
+    };
+  }, [leads]);
+
+  // Apply Status Tab + Month/Date Filter + Category Filter + Search + Sort
+  const filteredLeads = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    const list = leads.filter((lead) => {
+      // 1. Status Tab
+      if (!matchesStatusTab(lead, statusTab)) return false;
+
+      // 2. Specific Date Filter
+      const dateKey = toDateInputKey(lead.eventDate);
+      if (specificDateFilter && dateKey !== specificDateFilter) {
+        return false;
+      }
+
+      // 3. Month / Season Filter
+      if (monthFilter !== "ALL_DATES") {
+        if (monthFilter === "OCT" && !dateKey.includes("-10-")) return false;
+        if (monthFilter === "NOV" && !dateKey.includes("-11-")) return false;
+        if (monthFilter === "DEC" && !dateKey.includes("-12-")) return false;
+        if (
+          monthFilter === "PEAK_DEC" &&
+          !["-12-24", "-12-25", "-12-30", "-12-31"].some((s) =>
+            dateKey.includes(s)
+          )
+        ) {
+          return false;
+        }
+        if (monthFilter === "UPCOMING") {
+          const todayKey = new Date().toISOString().slice(0, 10);
+          if (dateKey < todayKey) return false;
+        }
+      }
+
+      // 4. Category / Tier Filter
+      const info = extractLeadTagsAndMeta(lead);
+      if (categoryFilter === "REAL_BEARD" && info.santaTier !== "REAL_BEARD") {
+        return false;
+      }
+      if (categoryFilter === "FAKE_BEARD" && info.santaTier !== "FAKE_BEARD") {
+        return false;
+      }
+      if (
+        categoryFilter === "SANTA_AND_ELVES" &&
+        info.santaTier !== "SANTA_AND_ELVES"
+      ) {
+        return false;
+      }
+      if (
+        categoryFilter === "CORPORATE" &&
+        String(lead.bookingType || "CORPORATE").toUpperCase().includes("PRIVATE")
+      ) {
+        return false;
+      }
+      if (
+        categoryFilter === "PRIVATE" &&
+        !String(lead.bookingType || "").toUpperCase().includes("PRIVATE")
+      ) {
+        return false;
+      }
+
+      // 5. Search Query
+      if (q) {
+        const assignedSanta =
+          lead.talentAssignments?.[0]?.talent?.displayName || "";
+        const hay = [
+          lead.bookingNumber,
+          lead.mallOrVenue,
+          lead.eventName,
+          info.organizedDealName,
+          lead.city,
+          lead.client?.companyName,
+          lead.client?.primaryContact,
+          assignedSanta,
+          dateKey,
+          formatShortDateLabel(lead.eventDate),
+          getStageOption(lead.status).shortBadge,
+          ...(info.tags || []),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        if (!hay.includes(q)) return false;
+      }
+
+      return true;
+    });
+
+    // 6. Sort Order
+    list.sort((a, b) => {
+      if (sortBy === "DATE_ASC") {
+        return toDateInputKey(a.eventDate).localeCompare(
+          toDateInputKey(b.eventDate)
+        );
+      }
+      if (sortBy === "DATE_DESC") {
+        return toDateInputKey(b.eventDate).localeCompare(
+          toDateInputKey(a.eventDate)
+        );
+      }
+      if (sortBy === "RATE_DESC") {
+        const rateA = extractLeadTagsAndMeta(a).quotedAmount;
+        const rateB = extractLeadTagsAndMeta(b).quotedAmount;
+        return rateB - rateA;
+      }
+      // Default: NEWEST_LEAD (New Leads & newly created bookings at the top, then by date)
+      const isNewA =
+        String(a.id).startsWith("bk_") ||
+        matchesStatusTab(a, "NEW_LEAD") ||
+        matchesStatusTab(a, "QUOTED_HOLD");
+      const isNewB =
+        String(b.id).startsWith("bk_") ||
+        matchesStatusTab(b, "NEW_LEAD") ||
+        matchesStatusTab(b, "QUOTED_HOLD");
+      if (isNewA !== isNewB) return isNewA ? -1 : 1;
+      return toDateInputKey(a.eventDate).localeCompare(
+        toDateInputKey(b.eventDate)
+      );
+    });
+
+    return list;
+  }, [
+    leads,
+    statusTab,
+    monthFilter,
+    specificDateFilter,
+    categoryFilter,
+    search,
+    sortBy,
+  ]);
+
   const kanbanColumns = [
     {
-      id: "INQUIRY_RECEIVED",
-      title: "1. Inquiry Received",
-      subtitle: "New quotations from funnel",
-      items: leads.filter(
-        (l) => normalizeToLifecycleState(l.status) === "INQUIRY_RECEIVED"
-      ),
+      id: "NEW_LEAD",
+      title: "1. 🟢 New Leads",
+      subtitle: "Fresh inquiries & date checks",
+      items: filteredLeads.filter((l) => matchesStatusTab(l, "NEW_LEAD")),
     },
     {
-      id: "HOLD_24H_ACTIVE",
-      title: "2. 24h Calendar Hold",
-      subtitle: "Date soft-held on calendar",
-      items: leads.filter(
-        (l) => normalizeToLifecycleState(l.status) === "HOLD_24H_ACTIVE"
-      ),
+      id: "QUOTED_HOLD",
+      title: "2. 🟡 Quoted & 24h Hold",
+      subtitle: "Date soft-held / quote sent",
+      items: filteredLeads.filter((l) => matchesStatusTab(l, "QUOTED_HOLD")),
     },
     {
-      id: "QUOTE_ISSUED",
-      title: "3. Quote & Contract",
-      subtitle: "Official quote / MOA sent",
-      items: leads.filter((l) =>
-        ["QUOTE_ISSUED", "CONTRACT_SENT", "CONTRACT_SIGNED_PENDING_DEPOSIT"].includes(
-          normalizeToLifecycleState(l.status)
-        )
-      ),
+      id: "PENDING_DP",
+      title: "3. 📜 Contract / Pending DP",
+      subtitle: "Awaiting 50% DP & signoff",
+      items: filteredLeads.filter((l) => matchesStatusTab(l, "PENDING_DP")),
     },
     {
-      id: "AWAITING_STAFF_SIGNOFF",
-      title: "4. Awaiting Signoff",
-      subtitle: "DP check & Dual-Gate review",
-      items: leads.filter(
-        (l) => normalizeToLifecycleState(l.status) === "AWAITING_STAFF_SIGNOFF"
-      ),
+      id: "BOOKED",
+      title: "4. ✅ Booked & Confirmed",
+      subtitle: "Locked on Master Calendar",
+      items: filteredLeads.filter((l) => matchesStatusTab(l, "BOOKED")),
     },
     {
-      id: "ROSTER_LOCKED_DISPATCHED",
-      title: "5. Confirmed & Locked",
-      subtitle: "Confirmed on Master Calendar",
-      items: leads.filter((l) =>
-        ["ROSTER_LOCKED_DISPATCHED", "EVENT_DELIVERED", "FINANCIALLY_SETTLED"].includes(
-          normalizeToLifecycleState(l.status)
-        )
-      ),
+      id: "COMPLETED",
+      title: "5. 🏆 Completed & Settled",
+      subtitle: "Delivered & fully collected",
+      items: filteredLeads.filter((l) => matchesStatusTab(l, "COMPLETED")),
     },
   ];
 
@@ -531,16 +950,16 @@ export default function UnifiedCrmPipelinePage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-[#E8DFE0]">
         <div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
             <span className="badge-esign px-2.5 py-0.5 rounded text-[10px] font-mono">
-              STAGE 1 • COMMERCIAL INTAKE &amp; QUOTATION PIPELINE
+              ORGANIZED DEAL BOARD • DATES • NEW LEADS • BOOKED
             </span>
             <h1 className="page-title text-2xl font-serif tracking-tight">
-              Leads &amp; CRM Pipeline
+              CRM Deals, Dates &amp; Booking Pipeline
             </h1>
           </div>
           <p className="page-subtitle text-xs mt-1">
-            Every Quotation Request automatically updates your Executive Dashboard, Master Calendar, and CRM with live tags and status controls.
+            Organized by Event Date, Deal Status (New Lead, Quoted/Hold, Pending DP, Booked, Completed), Venue, and Assigned Santa.
           </p>
         </div>
 
@@ -587,130 +1006,192 @@ export default function UnifiedCrmPipelinePage() {
             className="btn-primary inline-flex items-center px-3.5 py-2 rounded-lg text-xs font-semibold transition"
           >
             <Plus className="w-3.5 h-3.5 mr-1" />
-            + New Quotation / Lead
+            + New CRM Deal / Lead
           </button>
         </div>
       </div>
 
-      {/* Official Rate Card & Sequence Flow Reference Bar */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 text-xs">
-        {/* Real Beard Rate Card */}
-        <div className="lg:col-span-4 dashboard-card p-4 border-l-4 border-l-[#9B1B30] space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="font-bold text-[#1E1416] flex items-center space-x-1.5">
-              <span>🎅 Real Beard Santa Claus</span>
-            </span>
-            <span className="badge-esign px-2 py-0.5 rounded text-[10px] font-mono">
-              Limited Talents
-            </span>
-          </div>
-          <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-[11px]">
-            <div className="p-2 rounded bg-[#FAF7F5] border border-[#E8DFE0]">
-              <span className="text-[9px] text-[#756568] uppercase block">Metro Manila</span>
-              <strong className="text-[#1E1416]">₱24,000</strong>
-            </div>
-            <div className="p-2 rounded bg-[#FAF7F5] border border-[#E8DFE0]">
-              <span className="text-[9px] text-[#756568] uppercase block">Holiday Rate</span>
-              <strong className="text-[#9B1B30]">₱26,000</strong>
-            </div>
-            <div className="p-2 rounded bg-[#FAF7F5] border border-[#E8DFE0]">
-              <span className="text-[9px] text-[#756568] uppercase block">Out of Town</span>
-              <strong className="text-[#9B1B30]">₱26,000</strong>
-            </div>
-          </div>
-          <div className="text-[10px] text-[#6E5D5F] flex items-center justify-between pt-1">
-            <span>Min 3 HRS • Meet &amp; Greet • Launch • Shoot • Party</span>
-            <strong className="text-[#9B1B30] font-mono">+₱3,000 / hr</strong>
-          </div>
-        </div>
-
-        {/* Fake Beard Rate Card */}
-        <div className="lg:col-span-4 dashboard-card p-4 border-l-4 border-l-[#C68A12] space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="font-bold text-[#1E1416]">🎭 Fake Beard Santa Claus</span>
-            <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 text-[10px] font-mono font-semibold">
-              Standard Roster
-            </span>
-          </div>
-          <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-[11px]">
-            <div className="p-2 rounded bg-[#FAF7F5] border border-[#E8DFE0]">
-              <span className="text-[9px] text-[#756568] uppercase block">Metro Manila</span>
-              <strong className="text-[#1E1416]">₱15,000</strong>
-            </div>
-            <div className="p-2 rounded bg-[#FAF7F5] border border-[#E8DFE0]">
-              <span className="text-[9px] text-[#756568] uppercase block">Holiday Rate</span>
-              <strong className="text-[#C68A12]">₱18,000</strong>
-            </div>
-            <div className="p-2 rounded bg-[#FAF7F5] border border-[#E8DFE0]">
-              <span className="text-[9px] text-[#756568] uppercase block">Out of Town</span>
-              <strong className="text-[#C68A12]">₱18,000</strong>
-            </div>
-          </div>
-          <div className="text-[10px] text-[#6E5D5F] flex items-center justify-between pt-1">
-            <span>Min 3 HRS • Meet &amp; Greet • Launch • Shoot • Party</span>
-            <strong className="text-[#C68A12] font-mono">+₱3,000 / hr</strong>
-          </div>
-        </div>
-
-        {/* Operational Sequence Guide */}
-        <div className="lg:col-span-4 dashboard-card p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="font-bold text-[#1E1416]">
-              ⚡ Live Sequence &amp; Sync Flow
-            </span>
-            <span className="text-[10px] font-mono text-emerald-700 font-semibold">
-              Auto-Synced
-            </span>
-          </div>
-          <ol className="text-[11px] text-[#4A3A3D] space-y-1 font-medium">
-            <li>
-              <strong className="text-[#9B1B30]">1. Request Quote:</strong> Auto-computes rate &amp; adds to CRM, Dashboard &amp; Calendar (<code className="text-[10px]">Confirming</code>).
-            </li>
-            <li>
-              <strong className="text-[#C68A12]">2. Hold / Quote / MOA:</strong> Lock 24h calendar hold &amp; issue formal quotation/contract.
-            </li>
-            <li>
-              <strong className="text-emerald-700">3. Confirm &amp; Dispatch:</strong> Verify 50% DP → Switches Calendar row to <code className="text-[10px]">Confirmed</code>!
-            </li>
-          </ol>
-        </div>
-      </div>
-
-      {/* Filter Tabs & Search Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex flex-wrap gap-1.5">
+      {/* =====================================================================
+          ROW 1: CLEAN STATUS PIPELINE TABS WITH LIVE COUNTS
+         ===================================================================== */}
+      <div className="dashboard-card p-4 space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
           {[
-            { id: "ALL", label: "All Deals" },
-            { id: "NEW", label: "1. New Inquiries & Holds" },
-            { id: "FOLLOW_UP", label: "2. Quoted / Pending DP" },
-            { id: "REAL_BEARD", label: "🎅 Real Beard (₱24k–₱26k)" },
-            { id: "FAKE_BEARD", label: "🎭 Fake Beard (₱15k–₱18k)" },
-            { id: "CORPORATE", label: "Corporate & Malls" },
-            { id: "PRIVATE", label: "Private Parties" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveFilter(tab.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                activeFilter === tab.id
-                  ? "bg-[#9B1B30] text-white shadow-sm"
-                  : "bg-white border border-[#E8DFE0] text-[#4A3A3D] hover:border-[#9B1B30]"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+            { id: "ALL", label: "All CRM Deals", count: statusCounts.ALL },
+            {
+              id: "NEW_LEAD",
+              label: "🟢 New Lead",
+              count: statusCounts.NEW_LEAD,
+            },
+            {
+              id: "QUOTED_HOLD",
+              label: "🟡 Quoted / 24h Hold",
+              count: statusCounts.QUOTED_HOLD,
+            },
+            {
+              id: "PENDING_DP",
+              label: "📜 Contract / Pending DP",
+              count: statusCounts.PENDING_DP,
+            },
+            {
+              id: "BOOKED",
+              label: "✅ Booked / Confirmed",
+              count: statusCounts.BOOKED,
+            },
+            {
+              id: "COMPLETED",
+              label: "🏆 Completed / Settled",
+              count: statusCounts.COMPLETED,
+            },
+            {
+              id: "CANCELLED",
+              label: "❌ Cancelled",
+              count: statusCounts.CANCELLED,
+            },
+          ].map((tab) => {
+            const active = statusTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setStatusTab(tab.id)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 border ${
+                  active
+                    ? "bg-[#9B1B30] text-white border-[#9B1B30] shadow-sm"
+                    : "bg-[#FAF7F5] border-[#E8DFE0] text-[#4A3A3D] hover:border-[#9B1B30] hover:text-[#1E1416]"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
+                    active
+                      ? "bg-white/20 text-white"
+                      : "bg-white border border-[#E8DFE0] text-[#9B1B30]"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="relative w-full sm:w-64">
-          <Search className="w-3.5 h-3.5 text-[#756568] absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search lead, venue, tag..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-[#D6C7C9] rounded-lg"
-          />
+        {/* ===================================================================
+            ROW 2: DATE / MONTH FILTER + SPECIFIC DATE PICKER + CATEGORY + SORT
+           =================================================================== */}
+        <div className="pt-3 border-t border-[#E8DFE0] flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs">
+          {/* Month & Holiday Date Pills */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-bold text-[#756568] mr-1 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-[#9B1B30]" />
+              <span>Dates:</span>
+            </span>
+            {[
+              { id: "ALL_DATES", label: "All Dates" },
+              { id: "UPCOMING", label: "📅 Upcoming" },
+              { id: "OCT", label: "October" },
+              { id: "NOV", label: "November" },
+              { id: "DEC", label: "December" },
+              { id: "PEAK_DEC", label: "🎄 Peak Dec 24–25" },
+            ].map((m) => {
+              const active = monthFilter === m.id && !specificDateFilter;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    setMonthFilter(m.id);
+                    setSpecificDateFilter("");
+                  }}
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition border ${
+                    active
+                      ? "bg-[#1E1416] text-[#F3D899] border-[#1E1416]"
+                      : "bg-white border-[#D6C7C9] text-[#4A3A3D] hover:border-[#9B1B30]"
+                  }`}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+
+            {/* Exact Event Date Picker */}
+            <div className="inline-flex items-center gap-1 bg-white border border-[#D6C7C9] rounded-lg px-2 py-1">
+              <span className="text-[10px] font-mono text-[#756568]">
+                Pick Date:
+              </span>
+              <input
+                type="date"
+                value={specificDateFilter}
+                onChange={(e) => {
+                  setSpecificDateFilter(e.target.value);
+                  if (e.target.value) setMonthFilter("ALL_DATES");
+                }}
+                className="text-[11px] font-mono text-[#1E1416] bg-transparent focus:outline-none"
+              />
+              {specificDateFilter && (
+                <button
+                  type="button"
+                  onClick={() => setSpecificDateFilter("")}
+                  className="text-[#9B1B30] hover:underline text-[10px] font-bold ml-1"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Right Controls: Category Filter + Sort + Search */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-1 bg-white border border-[#D6C7C9] rounded-lg px-2.5 py-1.5">
+              <Filter className="w-3 h-3 text-[#9B1B30]" />
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="text-xs bg-transparent text-[#1E1416] font-semibold focus:outline-none"
+              >
+                <option value="ALL_CATEGORIES">All Santa Tiers &amp; Events</option>
+                <option value="REAL_BEARD">🎅 Real Beard (₱24k–₱26k)</option>
+                <option value="FAKE_BEARD">🎭 Fake Beard (₱15k–₱18k)</option>
+                <option value="SANTA_AND_ELVES">🎅🧝 Santa + 2 Elves (₱32k)</option>
+                <option value="CORPORATE">🏢 Corporate &amp; Shopping Malls</option>
+                <option value="PRIVATE">🏠 Private &amp; Family Parties</option>
+              </select>
+            </div>
+
+            <div className="inline-flex items-center gap-1 bg-white border border-[#D6C7C9] rounded-lg px-2.5 py-1.5">
+              <ArrowUpDown className="w-3 h-3 text-[#9B1B30]" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="text-xs bg-transparent text-[#1E1416] font-semibold focus:outline-none"
+              >
+                <option value="NEWEST_LEAD">Sort: New Leads First</option>
+                <option value="DATE_ASC">Sort: Event Date (Earliest)</option>
+                <option value="DATE_DESC">Sort: Event Date (Latest)</option>
+                <option value="RATE_DESC">Sort: Highest Package Rate</option>
+              </select>
+            </div>
+
+            <div className="relative w-full sm:w-60">
+              <Search className="w-3.5 h-3.5 text-[#756568] absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search deal, date, Santa, venue..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-[#D6C7C9] rounded-lg"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[#756568] hover:text-[#1E1416]"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -718,15 +1199,22 @@ export default function UnifiedCrmPipelinePage() {
       {viewMode === "KANBAN" ? (
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
           {kanbanColumns.map((col) => (
-            <div key={col.id} className="dashboard-card p-3 flex flex-col space-y-3">
+            <div
+              key={col.id}
+              className="dashboard-card p-3 flex flex-col space-y-3"
+            >
               <div className="border-b border-[#E8DFE0] pb-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#1E1416]">{col.title}</span>
+                  <span className="text-xs font-bold text-[#1E1416]">
+                    {col.title}
+                  </span>
                   <span className="badge-esign px-2 py-0.5 rounded-full text-[10px] font-mono">
                     {col.items.length}
                   </span>
                 </div>
-                <p className="text-[10px] text-[#756568] mt-0.5">{col.subtitle}</p>
+                <p className="text-[10px] text-[#756568] mt-0.5">
+                  {col.subtitle}
+                </p>
               </div>
 
               <div className="space-y-2.5 max-h-[560px] overflow-y-auto pr-1">
@@ -737,24 +1225,47 @@ export default function UnifiedCrmPipelinePage() {
                 ) : (
                   col.items.map((lead) => {
                     const info = extractLeadTagsAndMeta(lead);
+                    const stageOpt = getStageOption(lead.status);
+                    const assignedSanta = lead.talentAssignments?.[0]?.talent;
                     return (
                       <div
                         key={lead.id}
                         onClick={() => setSelectedLead(lead)}
-                        className="p-3 rounded-lg bg-[#FCF9F8] border border-[#E8DFE0] hover:border-[#9B1B30] cursor-pointer transition space-y-2 text-xs"
+                        className="p-3 rounded-xl bg-[#FCF9F8] border border-[#E8DFE0] hover:border-[#9B1B30] cursor-pointer transition space-y-2 text-xs"
                       >
                         <div className="flex items-center justify-between font-mono text-[10px]">
-                          <span className="font-bold text-[#9B1B30]">
-                            {lead.bookingNumber}
+                          <span
+                            className={`px-1.5 py-0.5 rounded font-bold border ${stageOpt.badgeColor}`}
+                          >
+                            {stageOpt.shortBadge}
                           </span>
-                          <span className="font-bold text-[#1E1416]">
+                          <span className="font-bold text-[#9B1B30]">
                             ₱{info.quotedAmount.toLocaleString()}
                           </span>
                         </div>
-                        <div className="font-bold text-[#1E1416] truncate">
-                          {lead.mallOrVenue}
+
+                        <div className="font-bold text-[#1E1416] text-xs leading-snug">
+                          {info.organizedDealName}
                         </div>
+
+                        <div className="text-[11px] text-[#4A3A3D] flex items-center justify-between">
+                          <span className="truncate">{lead.mallOrVenue}</span>
+                          {assignedSanta && (
+                            <span className="text-[10px] font-mono text-emerald-700 font-bold shrink-0">
+                              🎅 {assignedSanta.displayName}
+                            </span>
+                          )}
+                        </div>
+
                         <div className="flex flex-wrap gap-1">
+                          {info.customTags.map((ct: string, idx: number) => (
+                            <span
+                              key={idx}
+                              className="px-1.5 py-0.5 rounded bg-[#1E1416] text-[#F3D899] text-[9px] font-mono font-semibold"
+                            >
+                              {ct}
+                            </span>
+                          ))}
                           <span
                             className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold ${
                               info.santaTier === "REAL_BEARD"
@@ -762,33 +1273,37 @@ export default function UnifiedCrmPipelinePage() {
                                 : "bg-stone-100 text-stone-700 border border-stone-300"
                             }`}
                           >
-                            {info.santaTier === "REAL_BEARD" ? "🎅 Real Beard" : "🎭 Fake Beard"}
-                          </span>
-                          <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 text-[9px] font-mono">
-                            {info.eventActivityLabel}
-                          </span>
-                          <span className="px-1.5 py-0.5 rounded bg-white border border-[#E8DFE0] text-[#4A3A3D] text-[9px] font-mono">
-                            {info.durationHours}h
+                            {info.santaTier === "REAL_BEARD"
+                              ? "🎅 Real Beard"
+                              : info.santaTier === "SANTA_AND_ELVES"
+                              ? "🎅🧝 Santa + Elves"
+                              : "🎭 Fake Beard"}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between pt-1 border-t border-[#E8DFE0]">
-                          <div className="text-[10px] text-[#756568] flex items-center space-x-1">
-                            <Calendar className="w-3 h-3 text-[#C68A12]" />
-                            <span>
-                              {new Date(lead.eventDate).toLocaleDateString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                              })}
-                            </span>
+
+                        <div className="flex items-center justify-between pt-1.5 border-t border-[#E8DFE0]">
+                          <div className="text-[10px] font-mono text-[#1E1416] font-semibold flex items-center space-x-1">
+                            <Calendar className="w-3 h-3 text-[#9B1B30]" />
+                            <span>{formatShortDateLabel(lead.eventDate)}</span>
                           </div>
-                          <button
-                            type="button"
-                            onClick={(e) => openEditLeadModal(lead, e)}
-                            className="px-2 py-0.5 rounded bg-white border border-[#D6C7C9] text-[#1E1416] hover:border-[#9B1B30] text-[10px] font-semibold flex items-center space-x-1"
-                          >
-                            <Pencil className="w-2.5 h-2.5 text-[#9B1B30]" />
-                            <span>Edit</span>
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => openEditLeadModal(lead, e)}
+                              className="px-2 py-0.5 rounded bg-white border border-[#D6C7C9] text-[#1E1416] hover:border-[#9B1B30] text-[10px] font-semibold flex items-center space-x-1"
+                            >
+                              <Pencil className="w-2.5 h-2.5 text-[#9B1B30]" />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteLead(lead, e)}
+                              className="p-1 rounded bg-white border border-[#D6C7C9] text-rose-700 hover:bg-rose-50"
+                              title="Delete deal"
+                            >
+                              <Trash2 className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -799,39 +1314,50 @@ export default function UnifiedCrmPipelinePage() {
           ))}
         </div>
       ) : (
-        /* VIEW MODE: LIST TABLE */
+        /* VIEW MODE: ORGANIZED LIST TABLE */
         <div className="dashboard-card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-[#FCF9F8] border-b border-[#E8DFE0] text-[10px] font-mono uppercase tracking-wider text-[#756568]">
-                  <th className="py-3 px-4 font-semibold">Lead ID &amp; Event</th>
-                  <th className="py-3 px-4 font-semibold">Client / Agency</th>
-                  <th className="py-3 px-4 font-semibold">Package Tags &amp; Tier</th>
-                  <th className="py-3 px-4 font-semibold">Target Date &amp; Hrs</th>
+                  <th className="py-3 px-4 font-semibold">
+                    Organized Deal Name (Date • Status • Venue • Santa)
+                  </th>
+                  <th className="py-3 px-4 font-semibold">
+                    Event Date &amp; Time
+                  </th>
+                  <th className="py-3 px-4 font-semibold">
+                    Client &amp; Assigned Santa
+                  </th>
+                  <th className="py-3 px-4 font-semibold">
+                    Package &amp; Custom Tags
+                  </th>
                   <th className="py-3 px-4 font-semibold">Quoted Rate</th>
-                  <th className="py-3 px-4 font-semibold">Status &amp; Sequence</th>
-                  <th className="py-3 px-4 font-semibold text-right">Actions</th>
+                  <th className="py-3 px-4 font-semibold">
+                    Pipeline Status (New Lead / Booked)
+                  </th>
+                  <th className="py-3 px-4 font-semibold text-right">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E8DFE0]">
                 {loading ? (
                   <tr>
                     <td colSpan={7} className="py-8 text-center text-[#756568]">
-                      Loading CRM leads &amp; quotations...
+                      Loading organized CRM deals &amp; schedule...
                     </td>
                   </tr>
-                ) : leads.length === 0 ? (
+                ) : filteredLeads.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-8 text-center text-[#756568]">
-                      No leads found matching current filter.
+                      No CRM deals match the selected status or date filter.
                     </td>
                   </tr>
                 ) : (
-                  leads.map((lead) => {
-                    const st = normalizeToLifecycleState(lead.status);
-                    const meta = LIFECYCLE_METADATA[st];
+                  filteredLeads.map((lead) => {
                     const info = extractLeadTagsAndMeta(lead);
+                    const stageOpt = getStageOption(lead.status);
                     const assignedSanta = lead.talentAssignments?.[0]?.talent;
 
                     return (
@@ -840,37 +1366,78 @@ export default function UnifiedCrmPipelinePage() {
                         onClick={() => setSelectedLead(lead)}
                         className="hover:bg-[#F4ECEE]/60 cursor-pointer transition"
                       >
-                        <td className="py-3 px-4">
-                          <span className="font-mono text-[11px] text-[#9B1B30] font-bold block">
-                            {lead.bookingNumber}
-                          </span>
-                          <span className="font-semibold text-[#1E1416] block mt-0.5">
-                            {lead.mallOrVenue}
-                          </span>
-                          <span className="text-[11px] text-[#756568] block">
-                            {lead.eventName}
-                          </span>
+                        {/* Column 1: Organized Deal Name */}
+                        <td className="py-3.5 px-4 max-w-[320px]">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono text-[10px] text-[#9B1B30] font-bold">
+                              {lead.bookingNumber}
+                            </span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border ${stageOpt.badgeColor}`}
+                            >
+                              {stageOpt.shortBadge}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-[#FAF7F5] border border-[#D6C7C9] text-[#1E1416] text-[9px] font-mono font-semibold">
+                              📅 {formatShortDateLabel(lead.eventDate)}
+                            </span>
+                          </div>
+
+                          <div className="font-bold text-[#1E1416] text-xs mt-1 leading-snug">
+                            {info.organizedDealName}
+                          </div>
+
+                          <div className="text-[11px] text-[#756568] mt-0.5 truncate">
+                            📍 Venue: <strong className="text-[#4A3A3D]">{lead.mallOrVenue}</strong>
+                            {lead.city ? ` (${lead.city})` : ""}
+                          </div>
                         </td>
 
-                        <td className="py-3 px-4">
+                        {/* Column 2: Event Date & Time */}
+                        <td className="py-3.5 px-4 font-mono text-[#4A3A3D] whitespace-nowrap">
+                          <div className="font-bold text-[#1E1416] flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-[#9B1B30]" />
+                            <span>{formatShortDateLabel(lead.eventDate)}</span>
+                          </div>
+                          <div className="text-[10px] text-[#756568] mt-0.5">
+                            {lead.startTime || "14:00"}–{lead.endTime || "17:00"} (
+                            {info.durationHours} hrs)
+                          </div>
+                        </td>
+
+                        {/* Column 3: Client & Assigned Santa */}
+                        <td className="py-3.5 px-4">
                           <span className="text-[#1E1416] font-semibold block">
                             {lead.client?.companyName ||
                               lead.client?.primaryContact ||
                               "Direct Client"}
                           </span>
                           <span className="text-[11px] text-[#756568] block">
-                            {lead.client?.primaryContact || lead.client?.email || ""}
+                            {lead.client?.primaryContact ||
+                              lead.client?.email ||
+                              ""}
                           </span>
-                          {assignedSanta && (
-                            <span className="text-[10px] font-mono text-emerald-700 font-semibold block mt-0.5">
+                          {assignedSanta ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-mono text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-semibold mt-1">
                               🎅 Santa {assignedSanta.displayName}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-mono text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-semibold mt-1">
+                              🎅 Unassigned / TBD
                             </span>
                           )}
                         </td>
 
-                        {/* Package & Beard Tags */}
-                        <td className="py-3 px-4">
+                        {/* Column 4: Package & Custom Tags */}
+                        <td className="py-3.5 px-4">
                           <div className="flex flex-wrap gap-1 max-w-[230px]">
+                            {info.customTags.map((ct: string, idx: number) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-0.5 rounded bg-[#1E1416] text-[#F3D899] text-[10px] font-mono font-semibold"
+                              >
+                                ★ {ct}
+                              </span>
+                            ))}
                             <span
                               className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold border ${
                                 info.santaTier === "REAL_BEARD"
@@ -879,56 +1446,92 @@ export default function UnifiedCrmPipelinePage() {
                               }`}
                             >
                               {info.santaTier === "REAL_BEARD"
-                                ? "🎅 Real Beard • Limited"
+                                ? "🎅 Real Beard"
+                                : info.santaTier === "SANTA_AND_ELVES"
+                                ? "🎅🧝 Santa + 2 Elves"
                                 : "🎭 Fake Beard"}
                             </span>
                             <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 text-[10px] font-mono font-medium">
                               {info.eventActivityLabel}
                             </span>
-                            <span className="px-2 py-0.5 rounded bg-white border border-[#E8DFE0] text-[#4A3A3D] text-[10px] font-mono">
-                              {info.rateTerritoryLabel}
-                            </span>
                           </div>
                         </td>
 
-                        <td className="py-3 px-4 font-mono text-[#4A3A3D]">
-                          <div className="font-semibold text-[#1E1416]">
-                            {new Date(lead.eventDate).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            })}
-                          </div>
-                          <div className="text-[10px] text-[#756568]">
-                            {lead.startTime || "14:00"}–{lead.endTime || "17:00"} (
-                            {info.durationHours} hrs)
-                          </div>
-                        </td>
-
-                        <td className="py-3 px-4 font-mono">
+                        {/* Column 5: Quoted Rate */}
+                        <td className="py-3.5 px-4 font-mono whitespace-nowrap">
                           <div className="font-bold text-[#9B1B30] text-sm">
                             ₱{info.quotedAmount.toLocaleString()}
                           </div>
                           <div className="text-[10px] text-[#756568]">
-                            {info.extraHours > 0
+                            {Number(lead.depositPaid || 0) > 0
+                              ? `DP Paid: ₱${Number(lead.depositPaid).toLocaleString()}`
+                              : info.extraHours > 0
                               ? `Base ₱${info.baseRate.toLocaleString()} + ₱${info.extraHourCharge.toLocaleString()}`
                               : `Min 3 Hrs Base`}
                           </div>
                         </td>
 
-                        <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
-                          <div className="space-y-1">
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${meta.badgeClass}`}
-                            >
-                              {meta.label}
-                            </span>
+                        {/* Column 6: Quick Status Switcher (New Lead / Quoted / Booked) */}
+                        <td
+                          className="py-3.5 px-4"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="space-y-1.5 min-w-[175px]">
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleQuickStatusUpdate(
+                                    lead,
+                                    "INQUIRY_RECEIVED"
+                                  )
+                                }
+                                className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border transition ${
+                                  stageOpt.value === "INQUIRY_RECEIVED"
+                                    ? "bg-emerald-600 text-white border-emerald-700"
+                                    : "bg-white text-[#4A3A3D] border-[#D6C7C9] hover:border-emerald-600"
+                                }`}
+                              >
+                                New Lead
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleQuickStatusUpdate(lead, "QUOTE_ISSUED")
+                                }
+                                className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border transition ${
+                                  stageOpt.value === "QUOTE_ISSUED" ||
+                                  stageOpt.value === "HOLD_24H_ACTIVE"
+                                    ? "bg-amber-500 text-white border-amber-600"
+                                    : "bg-white text-[#4A3A3D] border-[#D6C7C9] hover:border-amber-500"
+                                }`}
+                              >
+                                Quoted
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleQuickStatusUpdate(
+                                    lead,
+                                    "READY_FOR_DEPLOYMENT"
+                                  )
+                                }
+                                className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border transition ${
+                                  stageOpt.value === "READY_FOR_DEPLOYMENT"
+                                    ? "bg-[#1B5E20] text-white border-[#1B5E20]"
+                                    : "bg-white text-[#4A3A3D] border-[#D6C7C9] hover:border-[#1B5E20]"
+                                }`}
+                              >
+                                Booked ✓
+                              </button>
+                            </div>
+
                             <select
-                              value={lead.status || "INQUIRY_RECEIVED"}
+                              value={stageOpt.value}
                               onChange={(e) =>
                                 handleQuickStatusUpdate(lead, e.target.value)
                               }
-                              className="block w-full text-[10px] px-2 py-1 rounded bg-[#FAF7F5] border border-[#D6C7C9] text-[#1E1416] font-medium"
+                              className="block w-full text-[10px] px-2 py-1 rounded bg-[#FAF7F5] border border-[#D6C7C9] text-[#1E1416] font-semibold"
                             >
                               {CRM_STAGE_OPTIONS.map((opt) => (
                                 <option key={opt.value} value={opt.value}>
@@ -939,8 +1542,9 @@ export default function UnifiedCrmPipelinePage() {
                           </div>
                         </td>
 
+                        {/* Column 7: Actions */}
                         <td
-                          className="py-3 px-4 text-right whitespace-nowrap space-x-1.5"
+                          className="py-3.5 px-4 text-right whitespace-nowrap space-x-1.5"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <button
@@ -949,7 +1553,7 @@ export default function UnifiedCrmPipelinePage() {
                             className="inline-flex items-center px-2.5 py-1 text-[11px] font-semibold rounded bg-white text-[#1E1416] border border-[#D6C7C9] hover:border-[#9B1B30] transition"
                           >
                             <Pencil className="w-3 h-3 mr-1 text-[#9B1B30]" />
-                            Edit
+                            Edit / Rename
                           </button>
                           <Link
                             href={`/admin/quotes?bookingId=${lead.id}`}
@@ -957,6 +1561,14 @@ export default function UnifiedCrmPipelinePage() {
                           >
                             Quote →
                           </Link>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteLead(lead, e)}
+                            className="inline-flex items-center p-1.5 text-[11px] font-semibold rounded bg-white text-rose-700 border border-[#D6C7C9] hover:bg-rose-50 hover:border-rose-300 transition"
+                            title="Delete Deal"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </td>
                       </tr>
                     );
@@ -983,10 +1595,12 @@ export default function UnifiedCrmPipelinePage() {
                       <span className="font-mono text-xs text-[#9B1B30] font-bold">
                         {selectedLead.bookingNumber}
                       </span>
-                      <h2 className="text-xl font-serif font-bold text-[#1E1416]">
-                        {selectedLead.mallOrVenue}
+                      <h2 className="text-lg font-serif font-bold text-[#1E1416] mt-0.5">
+                        {info.organizedDealName}
                       </h2>
-                      <p className="text-xs text-[#756568]">{selectedLead.eventName}</p>
+                      <p className="text-xs text-[#756568] mt-0.5">
+                        📍 Venue: {selectedLead.mallOrVenue}
+                      </p>
                     </div>
                     <div className="flex items-center space-x-1.5">
                       <button
@@ -1034,7 +1648,9 @@ export default function UnifiedCrmPipelinePage() {
                       </strong>
                       <span className="text-[11px] text-[#756568]">
                         {selectedLead.client?.primaryContact || ""}{" "}
-                        {selectedLead.client?.phone ? `• ${selectedLead.client.phone}` : ""}
+                        {selectedLead.client?.phone
+                          ? `• ${selectedLead.client.phone}`
+                          : ""}
                       </span>
                     </div>
                     <div className="p-3 rounded-lg bg-[#FCF9F8] border border-[#E8DFE0]">
@@ -1042,11 +1658,12 @@ export default function UnifiedCrmPipelinePage() {
                         Event Date &amp; Duration
                       </span>
                       <strong className="text-[#1E1416] block mt-0.5">
-                        {new Date(selectedLead.eventDate).toLocaleDateString()}
+                        {formatShortDateLabel(selectedLead.eventDate)}
                       </strong>
                       <span className="text-[11px] text-[#756568] font-mono">
-                        {selectedLead.startTime || "14:00"}–{selectedLead.endTime || "17:00"} (
-                        {info.durationHours} hrs)
+                        {selectedLead.startTime || "14:00"}–
+                        {selectedLead.endTime || "17:00"} ({info.durationHours}{" "}
+                        hrs)
                       </span>
                     </div>
                     <div className="p-3 rounded-lg bg-[#FCF9F8] border border-[#E8DFE0]">
@@ -1082,20 +1699,24 @@ export default function UnifiedCrmPipelinePage() {
                       1-Click Status Progression (Updates Calendar &amp; Dashboard)
                     </span>
                     <div className="grid grid-cols-2 gap-2">
-                      {CRM_STAGE_OPTIONS.slice(0, 6).map((opt) => {
-                        const isCurrent = selectedLead.status === opt.value;
+                      {CRM_STAGE_OPTIONS.map((opt) => {
+                        const isCurrent =
+                          getStageOption(selectedLead.status).value ===
+                          opt.value;
                         return (
                           <button
                             key={opt.value}
                             type="button"
-                            onClick={() => handleQuickStatusUpdate(selectedLead, opt.value)}
+                            onClick={() =>
+                              handleQuickStatusUpdate(selectedLead, opt.value)
+                            }
                             className={`p-2 rounded-lg border text-left text-[11px] font-semibold transition ${
                               isCurrent
                                 ? "bg-[#9B1B30] text-white border-[#9B1B30]"
                                 : "bg-white text-[#1E1416] border-[#D6C7C9] hover:border-[#9B1B30]"
                             }`}
                           >
-                            <div>{opt.label}</div>
+                            <div>{opt.pillLabel}</div>
                             <div
                               className={`text-[9px] font-mono ${
                                 isCurrent ? "text-rose-100" : "text-[#756568]"
@@ -1137,19 +1758,25 @@ export default function UnifiedCrmPipelinePage() {
         </div>
       )}
 
-      {/* CREATE / EDIT QUOTATION & CRM LEAD MODAL */}
+      {/* =====================================================================
+          CREATE / EDIT ORGANIZED CRM DEAL & QUOTATION MODAL
+         ===================================================================== */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="dashboard-card w-full max-w-3xl p-6 space-y-5 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-[#E8DFE0] pb-3">
               <div>
                 <span className="badge-esign px-2 py-0.5 rounded text-[10px] font-mono">
-                  {editingLeadId ? "EDIT QUOTATION & CRM LEAD" : "NEW QUOTATION & CRM INQUIRY"}
+                  {editingLeadId
+                    ? "EDIT & ORGANIZE CRM DEAL"
+                    : "CREATE ORGANIZED CRM DEAL / LEAD"}
                 </span>
                 <h2 className="text-lg font-serif font-bold text-[#1E1416] mt-1">
                   {editingLeadId
-                    ? `Edit Quotation & Sync (${formVenue || "Deal"})`
-                    : "Create New Santa Quotation (Syncs to Dashboard, Calendar & CRM)"}
+                    ? `Organize Deal Name, Dates & Status (${
+                        formVenue || "Deal"
+                      })`
+                    : "Create Organized CRM Deal (New Lead / Quoted / Booked)"}
                 </h2>
               </div>
               <button
@@ -1162,6 +1789,166 @@ export default function UnifiedCrmPipelinePage() {
             </div>
 
             <form onSubmit={handleSaveLeadModal} className="space-y-4 text-xs">
+              {/* SECTION A: ORGANIZED CRM DEAL NAME, STATUS & CUSTOM TAGS */}
+              <div className="p-4 rounded-xl bg-[#FCF9F8] border-2 border-[#9B1B30]/30 space-y-3.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <label className="font-bold text-[#1E1416] text-xs flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-[#9B1B30]" />
+                    <span>
+                      Organized CRM Deal Name (Date • Status • Venue • Santa)
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const selectedTalentObj = talents.find(
+                        (t) => t.id === formTalentId
+                      );
+                      const generated = buildAutoOrganizedDealName({
+                        eventDate: formEventDate,
+                        status: formStatus,
+                        venue: formVenue,
+                        companyName: formCompanyName,
+                        santaName: selectedTalentObj?.displayName,
+                        activityLabel: modalLivePkg.eventActivityLabel,
+                      });
+                      setFormEventName(generated);
+                      setFormAutoNameEnabled(true);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#9B1B30] text-white text-[11px] font-semibold hover:bg-[#7A1526] transition"
+                  >
+                    <Wand2 className="w-3 h-3" />
+                    <span>Auto-Format Deal Name</span>
+                  </button>
+                </div>
+
+                <input
+                  type="text"
+                  value={formEventName}
+                  onChange={(e) => {
+                    setFormAutoNameEnabled(false);
+                    setFormEventName(e.target.value);
+                  }}
+                  placeholder="[Nov 16, 2026] • [NEW LEAD] • SM Megamall • Santa Edwin"
+                  className="w-full px-3.5 py-2.5 font-semibold text-xs bg-white border border-[#D6C7C9] rounded-lg text-[#1E1416]"
+                />
+
+                {/* Quick Pipeline Status Pills (New Lead / Quoted / Booked / etc.) */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-bold text-[#4A3A3D] block">
+                    Select Deal Stage (New Lead, 24h Hold, Quoted, Booked, etc.):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CRM_STAGE_OPTIONS.map((opt) => {
+                      const active = formStatus === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => {
+                            setFormStatus(opt.value);
+                            if (opt.value === "READY_FOR_DEPLOYMENT") {
+                              setFormCustomTags((prev) =>
+                                Array.from(
+                                  new Set([
+                                    ...prev.filter((t) => t !== "New Lead"),
+                                    "Booked",
+                                  ])
+                                )
+                              );
+                            } else if (opt.value === "INQUIRY_RECEIVED") {
+                              setFormCustomTags((prev) =>
+                                Array.from(
+                                  new Set([
+                                    ...prev.filter((t) => t !== "Booked"),
+                                    "New Lead",
+                                  ])
+                                )
+                              );
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition ${
+                            active
+                              ? "bg-[#9B1B30] text-white border-[#9B1B30] shadow-xs"
+                              : "bg-white text-[#1E1416] border-[#D6C7C9] hover:border-[#9B1B30]"
+                          }`}
+                        >
+                          {opt.pillLabel}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Custom CRM Tags & Labels */}
+                <div className="space-y-1.5 pt-2 border-t border-[#E8DFE0]">
+                  <span className="text-[11px] font-bold text-[#4A3A3D] flex items-center gap-1">
+                    <Tag className="w-3 h-3 text-[#9B1B30]" />
+                    <span>
+                      Custom CRM Labels &amp; Status Tags (Click to Toggle or Add Your Own):
+                    </span>
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PRESET_CUSTOM_TAGS.map((tag) => {
+                      const active = formCustomTags.includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => handleToggleCustomTag(tag)}
+                          className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border transition ${
+                            active
+                              ? "bg-[#1E1416] text-[#F3D899] border-[#1E1416]"
+                              : "bg-white text-[#6E5D5F] border-[#D6C7C9] hover:border-[#1E1416]"
+                          }`}
+                        >
+                          {active ? `✓ ${tag}` : `+ ${tag}`}
+                        </button>
+                      );
+                    })}
+                    {formCustomTags
+                      .filter((t) => !PRESET_CUSTOM_TAGS.includes(t))
+                      .map((custom) => (
+                        <span
+                          key={custom}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#9B1B30] text-white text-[10px] font-mono font-bold"
+                        >
+                          <span>{custom}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCustomTag(custom)}
+                            className="hover:opacity-75"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="text"
+                      value={formCustomTagInput}
+                      onChange={(e) => setFormCustomTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddCustomTagInput();
+                        }
+                      }}
+                      placeholder="Add custom label (e.g. Call Back Nov 18, VIP Mall, Confirmed DP)..."
+                      className="flex-1 px-3 py-1.5 text-[11px] bg-white border border-[#D6C7C9] rounded-lg"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCustomTagInput}
+                      className="px-3 py-1.5 rounded-lg bg-[#1E1416] text-[#F3D899] text-[11px] font-semibold"
+                    >
+                      + Add Tag
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* 1. Santa Beard Tier & Activity Tag */}
               <div className="p-4 rounded-xl bg-[#FAF7F5] border border-[#E8DFE0] space-y-3">
                 <div className="flex items-center justify-between">
@@ -1259,7 +2046,9 @@ export default function UnifiedCrmPipelinePage() {
                     <select
                       value={formRateTerritory}
                       onChange={(e) => {
-                        setFormRateTerritory(e.target.value as SantaRateTerritory);
+                        setFormRateTerritory(
+                          e.target.value as SantaRateTerritory
+                        );
                         setFormAutoCalculatePrice(true);
                       }}
                       className="w-full px-3 py-2"
@@ -1299,7 +2088,9 @@ export default function UnifiedCrmPipelinePage() {
                     <select
                       value={formActivityTag}
                       onChange={(e) =>
-                        setFormActivityTag(e.target.value as SantaEventActivityTag)
+                        setFormActivityTag(
+                          e.target.value as SantaEventActivityTag
+                        )
                       }
                       className="w-full px-3 py-2"
                     >
@@ -1335,16 +2126,20 @@ export default function UnifiedCrmPipelinePage() {
                 {/* Live Rate Computation Bar */}
                 <div className="p-3 rounded-lg bg-white border border-[#E8DFE0] flex flex-wrap items-center justify-between gap-2 font-mono">
                   <div className="text-[11px] text-[#4A3A3D]">
-                    Base (3h): <strong>₱{modalLivePkg.baseRate.toLocaleString()}</strong>
+                    Base (3h):{" "}
+                    <strong>₱{modalLivePkg.baseRate.toLocaleString()}</strong>
                     {modalLivePkg.extraHours > 0 && (
                       <span className="text-[#9B1B30] ml-2">
                         + Extra ({modalLivePkg.extraHours}h × ₱3,000):{" "}
-                        <strong>+₱{modalLivePkg.extraHourCharge.toLocaleString()}</strong>
+                        <strong>
+                          +₱{modalLivePkg.extraHourCharge.toLocaleString()}
+                        </strong>
                       </span>
                     )}
                   </div>
                   <div className="text-sm font-bold text-[#9B1B30]">
-                    Computed Package: ₱{modalLivePkg.totalQuotedRate.toLocaleString()}
+                    Computed Package: ₱
+                    {modalLivePkg.totalQuotedRate.toLocaleString()}
                   </div>
                 </div>
               </div>
@@ -1552,8 +2347,8 @@ export default function UnifiedCrmPipelinePage() {
                     {saving
                       ? "Saving..."
                       : editingLeadId
-                      ? "Save Changes & Sync All Views"
-                      : "Create Quotation & Sync All Views"}
+                      ? "Save Organized Deal & Sync All Views"
+                      : "Create Organized Deal & Sync All Views"}
                   </button>
                 </div>
               </div>

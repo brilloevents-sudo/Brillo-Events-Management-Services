@@ -845,7 +845,13 @@ export function StaticApiFallback() {
         const refNum = `BR-2026-Q${Math.floor(100 + Math.random() * 900)}`;
         const tok = `req_${Date.now().toString(36)}`;
 
+        const requestedStatus = parsedBody.status || "INQUIRY_RECEIVED";
+        const dpPaid = Number(parsedBody.depositPaid || 0);
+        const customTags = Array.isArray(parsedBody.customTags) ? parsedBody.customTags : [];
+        const organizedDealName = parsedBody.organizedDealName || parsedBody.eventName || "";
+
         const ledgerMeta = {
+          ...(parsedBody.ledgerMeta || {}),
           santaTier: pkg.santaTier,
           santaTierLabel: pkg.santaTierLabel,
           rateTerritory: pkg.rateTerritory,
@@ -856,10 +862,16 @@ export function StaticApiFallback() {
           extraHours: pkg.extraHours,
           extraHourCharge: pkg.extraHourCharge,
           baseRate: pkg.baseRate,
-          tags: pkg.tags,
-          dpStatus: "Pending",
-          collectiblesStatus: "Pending",
-          contractStatus: "Quotation Requested",
+          tags: Array.from(new Set([...(pkg.tags || []), ...customTags])),
+          customTags,
+          organizedDealName,
+          dpStatus: dpPaid > 0 ? "Paid" : "Pending",
+          collectiblesStatus:
+            contractAmt - dpPaid <= 0 && contractAmt > 0 ? "Collected" : "Pending",
+          contractStatus:
+            requestedStatus === "READY_FOR_DEPLOYMENT"
+              ? "Signed Contract"
+              : "Quotation Requested",
         };
 
         const combinedRequests = [
@@ -874,7 +886,10 @@ export function StaticApiFallback() {
           bookingNumber: refNum,
           secureToken: tok,
           bookingType: parsedBody.bookingType || "CORPORATE",
-          eventName: parsedBody.eventName || `${effectiveVenue} — ${pkg.eventActivityLabel}`,
+          eventName:
+            organizedDealName ||
+            parsedBody.eventName ||
+            `${effectiveVenue} — ${pkg.eventActivityLabel}`,
           eventDate: isoDate,
           startTime: parsedBody.startTime || "14:00",
           endTime: parsedBody.endTime || "17:00",
@@ -886,15 +901,18 @@ export function StaticApiFallback() {
           locationCity: effectiveCity,
           isProvincial: pkg.rateTerritory === "OUT_OF_TOWN",
           isHoliday: pkg.rateTerritory === "HOLIDAY",
-          status: "INQUIRY_RECEIVED",
-          pipelineStage: 1,
+          status: requestedStatus,
+          pipelineStage: requestedStatus === "READY_FOR_DEPLOYMENT" ? 3 : 1,
           totalContractAmount: contractAmt,
           clientQuotedAmount: contractAmt,
           depositRequired: dpRequired,
-          depositPaid: 0,
-          balanceDue: contractAmt,
-          totalDirectCost: tfAmt,
-          projectedGrossProfit: Math.max(0, contractAmt - tfAmt),
+          depositPaid: dpPaid,
+          balanceDue: Math.max(0, contractAmt - dpPaid),
+          totalDirectCost: Number(parsedBody.agreedTalentFee || tfAmt),
+          projectedGrossProfit: Math.max(
+            0,
+            contractAmt - Number(parsedBody.agreedTalentFee || tfAmt)
+          ),
           internalNotes: `${
             parsedBody.notes || `Quotation Request from ${effectiveContact}`
           } ||LEDGER_META:${JSON.stringify(ledgerMeta)}`,
@@ -1968,11 +1986,31 @@ export function StaticApiFallback() {
           return 0;
         });
 
-        if (filter === "NEW") {
+        if (filter === "NEW" || filter === "NEW_LEAD") {
           allLeads = allLeads.filter((l: any) =>
             ["INQUIRY_RECEIVED", "NEW_INQUIRY", "TEMPORARY_HOLD", "HOLD_24H_ACTIVE"].includes(
               (l.status || "").toUpperCase()
             )
+          );
+        } else if (filter === "BOOKED") {
+          allLeads = allLeads.filter((l: any) =>
+            [
+              "READY_FOR_DEPLOYMENT",
+              "CONFIRMED",
+              "ROSTER_LOCKED_DISPATCHED",
+              "EVENT_DELIVERED",
+              "DEPLOYED",
+            ].includes((l.status || "").toUpperCase())
+          );
+        } else if (filter === "COMPLETED") {
+          allLeads = allLeads.filter((l: any) =>
+            ["FINANCIALLY_SETTLED", "COMPLETED", "SETTLED"].includes(
+              (l.status || "").toUpperCase()
+            )
+          );
+        } else if (filter === "CANCELLED") {
+          allLeads = allLeads.filter((l: any) =>
+            ["CANCELLED", "DECLINED", "EXPIRED"].includes((l.status || "").toUpperCase())
           );
         } else if (filter === "FOLLOW_UP") {
           allLeads = allLeads.filter((l: any) =>
